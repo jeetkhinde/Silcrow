@@ -1,0 +1,16 @@
+[package]
+name = "rhtml-router"
+version = "0.1.0"
+edition = "2021"
+authors = ["RHTML Contributors"]
+license = "MIT"
+description = "File-based routing for Rust web frameworks with support for dynamic segments, catch-all routes, and optional parameters"
+repository = "https://github.com/jeetkhinde/RHTML"
+keywords = ["router", "web", "file-based", "routing", "framework-agnostic"]
+categories = ["web-programming"]
+readme = "README.md"
+
+[dependencies]
+# No external dependencies! Only uses std library
+
+[dev-dependencies]

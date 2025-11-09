@@ -1,0 +1,82 @@
+# RHTML Configuration File
+# This file is optional - RHTML works with sensible defaults if this file is missing
+
+[project]
+name = "rhtml-app"
+version = "0.1.0"
+# author = "Your Name"
+
+[server]
+# Server port (default: 3000)
+port = 3000
+# Server host (default: 127.0.0.1)
+host = "127.0.0.1"
+# Number of worker threads (default: 4)
+workers = 4
+
+[routing]
+# Directory containing page files (default: "pages")
+# You can change this to "app" for Next.js-style structure
+pages_dir = "pages"
+
+# Directory containing component files (default: "components")
+# You can change this to "ui" or "widgets" if you prefer
+components_dir = "components"
+
+# Whether routes are case-insensitive (default: true)
+# Set to false if you want /About and /about to be different routes
+case_insensitive = true
+
+# Base path for all routes (optional)
+# Example: base_path = "/api" would prefix all routes with /api
+# base_path = ""
+
+# Whether to enforce trailing slashes (default: false)
+trailing_slash = false
+
+[build]
+# Output directory for production builds (default: "dist")
+output_dir = "dist"
+# Static assets directory (default: "static")
+static_dir = "static"
+# Minify HTML in production (default: false)
+minify_html = false
+# Minify CSS in production (default: false)
+minify_css = false
+
+[dev]
+# Enable hot reload in development (default: true)
+hot_reload = true
+# Development server port (default: 3000)
+port = 3000
+# Automatically open browser on startup (default: false)
+open_browser = false
+# Paths to watch for changes (default: ["pages", "components", "static"])
+watch_paths = ["pages", "components", "static"]
+
+# ============================================================================
+# EXAMPLES: Common Configuration Patterns
+# ============================================================================
+
+# Next.js-style structure:
+# [routing]
+# pages_dir = "app"
+# components_dir = "components"
+
+# Hugo-style structure:
+# [routing]
+# pages_dir = "content"
+# components_dir = "layouts"
+
+# Custom structure:
+# [routing]
+# pages_dir = "routes"
+# components_dir = "ui"
+
+# Case-sensitive routing (exact URL matching):
+# [routing]
+# case_insensitive = false
+
+# Mount app under a base path:
+# [routing]
+# base_path = "/api"
