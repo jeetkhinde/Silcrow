@@ -313,21 +313,23 @@ css! {
 
 ## HTTP Verb Macros
 
-Define route handlers with HTTP verb macros.
+Define route handlers with HTTP verb macros (`get!`, `post!`, `put!`, `patch!`, `delete!`).
+
+**📖 Complete documentation:** See [HTTP Handlers Guide](./http/HTTP_HANDLERS_GUIDE.md) for detailed routing guide, path parameters, query parameters, response builders, and best practices.
 
 ### Available Macros
 
-- `#[get]` - GET requests
-- `#[post]` - POST requests
-- `#[put]` - PUT requests
-- `#[patch]` - PATCH requests
-- `#[delete]` - DELETE requests
+- `get!` - GET requests
+- `post!` - POST requests
+- `put!` - PUT requests
+- `patch!` - PATCH requests
+- `delete!` - DELETE requests
 
 ### Basic Handler
 
 ```rust
-#[get]
-fn list_users() -> OkResponse {
+get! {
+    fn list_users() -> OkResponse {
     let users = db::get_users()?;
     Ok().render(users_page, users)
 }
@@ -336,14 +338,14 @@ fn list_users() -> OkResponse {
 ### With Path Parameters
 
 ```rust
-#[get(":id")]
-fn get_user(id: i32) -> OkResponse {
+get!(":id") {
+    fn get_user(id: i32) -> OkResponse {
     let user = db::get_user(id)?;
     Ok().render(user_detail, user)
 }
 
-#[delete(":id")]
-fn delete_user(id: i32) -> OkResponse {
+delete!(":id") {
+    fn delete_user(id: i32) -> OkResponse {
     db::delete_user(id)?;
     Ok().toast("User deleted!")
 }
@@ -352,8 +354,8 @@ fn delete_user(id: i32) -> OkResponse {
 ### With Query Parameters
 
 ```rust
-#[get("partial=stats")]
-fn user_stats() -> OkResponse {
+get!("partial=stats") {
+    fn user_stats() -> OkResponse {
     let stats = calculate_stats()?;
     Ok().render(stats_component, stats)
 }
@@ -373,8 +375,8 @@ fn user_stats() -> OkResponse {
 ### Ok() - Success Response
 
 ```rust
-#[post]
-fn create_user(req: CreateUserRequest) -> OkResponse {
+post! {
+    fn create_user(req: CreateUserRequest) -> OkResponse {
     let user = db::create_user(req)?;
 
     Ok()
@@ -396,8 +398,8 @@ fn create_user(req: CreateUserRequest) -> OkResponse {
 ### Error() - Error Response
 
 ```rust
-#[post]
-fn create_user(req: CreateUserRequest) -> Result<OkResponse, ErrorResponse> {
+post! {
+    fn create_user(req: CreateUserRequest) -> Result<OkResponse, ErrorResponse> {
     let errors = validate(&req);
 
     if !errors.is_empty() {
@@ -422,8 +424,8 @@ fn create_user(req: CreateUserRequest) -> Result<OkResponse, ErrorResponse> {
 ### Redirect() - Redirect Response
 
 ```rust
-#[post]
-fn login(req: LoginRequest) -> RedirectResponse {
+post! {
+    fn login(req: LoginRequest) -> RedirectResponse {
     if authenticate(&req) {
         Redirect()
             .to("/dashboard")
@@ -484,8 +486,8 @@ fn create_task(req: CreateTaskRequest) -> OkResponse {
 }
 
 // DELETE /tasks/:id
-#[delete(":id")]
-fn delete_task(id: i32) -> OkResponse {
+delete!(":id") {
+    fn delete_task(id: i32) -> OkResponse {
     db::delete_task(id)?;
 
     Ok()

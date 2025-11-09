@@ -55,7 +55,7 @@ fn user_list(users: Vec<&str>) -> Html {
 
 ### 1. HTTP Handlers with Macros
 
-Use HTTP verb macros to define route handlers:
+Use HTTP verb macros (`get!`, `post!`, `put!`, `patch!`, `delete!`) to define route handlers:
 
 ```rust
 // GET /users
@@ -73,12 +73,14 @@ fn create(req: CreateUserRequest) -> OkResponse {
 }
 
 // DELETE /users/:id
-#[delete(":id")]
-fn delete(id: i32) -> OkResponse {
+delete!(":id") {
+    fn delete(id: i32) -> OkResponse {
     db::delete_user(id)?;
     Ok().toast("Deleted!")
 }
 ```
+
+**Learn more:** See [HTTP Handlers Guide](./docs/http/HTTP_HANDLERS_GUIDE.md) for complete documentation on routing, path parameters, query parameters, and response builders.
 
 ### 2. Pure UI Functions
 
@@ -178,8 +180,8 @@ fn create(req: CreateUserRequest) -> rhtmx::OkResponse {
         .toast("User created!")
 }
 
-#[delete(":id")]
-fn delete(id: i32) -> rhtmx::OkResponse {
+delete!(":id") {
+    fn delete(id: i32) -> rhtmx::OkResponse {
     db::delete_user(id)?;
 
     Ok()
@@ -349,8 +351,11 @@ rhtmx::Html(__html)
 
 ## 🎓 Learn More
 
+- **HTTP Handlers**: [Complete Guide](./docs/http/HTTP_HANDLERS_GUIDE.md) · [Quick Ref](./docs/http/HTTP_HANDLERS_QUICK_REF.md) · [Summary](./docs/http/HTTP_HANDLERS_SUMMARY.md)
+- **Layouts**: [LAYOUTS.md](./docs/LAYOUTS.md) - Page layouts and template organization
+- **Features**: [FEATURES.md](./docs/FEATURES.md) - Complete feature reference
+- **Quick Start**: [QUICKSTART.md](./QUICKSTART.md) - Get started in 5 minutes
 - **Examples**: See `examples/` directory
-- **Documentation**: [Full API docs](./docs/)
 - **Migration Guide**: [From RHTML](./MIGRATION.md)
 
 ## 🤝 Contributing

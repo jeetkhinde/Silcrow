@@ -36,23 +36,23 @@ impl HotReloadWatcher {
             match res {
                 Ok(event) => {
                     // Only process modify and create events
-                    if matches!(
-                        event.kind,
-                        EventKind::Modify(_) | EventKind::Create(_)
-                    ) {
+                    if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
                         for path in event.paths {
                             // Determine change type based on file path
                             let path_str = path.to_str().unwrap_or("");
 
-                            let change_type = if path_str.contains("pages/") || path_str.contains("pages\\") {
-                                ChangeType::Template
-                            } else if path_str.contains("components/") || path_str.contains("components\\") {
-                                ChangeType::Component
-                            } else if path.extension().and_then(|s| s.to_str()) == Some("rs") {
-                                ChangeType::SourceCode
-                            } else {
-                                continue; // Skip other files
-                            };
+                            let change_type =
+                                if path_str.contains("pages/") || path_str.contains("pages\\") {
+                                    ChangeType::Template
+                                } else if path_str.contains("components/")
+                                    || path_str.contains("components\\")
+                                {
+                                    ChangeType::Component
+                                } else if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+                                    ChangeType::SourceCode
+                                } else {
+                                    continue; // Skip other files
+                                };
 
                             info!("📝 File changed: {:?} ({:?})", path, change_type);
 
@@ -92,7 +92,7 @@ impl HotReloadWatcher {
     }
 }
 
-/// Create a hot reload watcher for the RHTML application
+/// Create a hot reload watcher for the rhtmx application
 pub fn create_watcher() -> Result<HotReloadWatcher> {
     let watch_paths = vec![
         PathBuf::from("pages"),

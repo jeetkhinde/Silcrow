@@ -1,14 +1,14 @@
 // File: src/template_loader.rs
-// Purpose: Loads RHTML templates from the pages/ directory
+// Purpose: Loads rhtmx templates from the pages/ directory
 
 use anyhow::{Context, Result};
-use rhtml_parser::{CssParser, ScopedCss};
-use rhtml_router::{Route, Router};
+use rhtmx_parser::{CssParser, ScopedCss};
+use rhtmx_router::{Route, Router};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Represents a loaded RHTML template
+/// Represents a loaded rhtmx template
 #[derive(Debug, Clone)]
 pub struct Template {
     pub path: PathBuf,
@@ -17,7 +17,7 @@ pub struct Template {
     pub partials: Vec<String>, // Names of partials defined in this template
 }
 
-/// Template loader that reads and caches RHTML files
+/// Template loader that reads and caches rhtmx files
 #[derive(Clone)]
 pub struct TemplateLoader {
     pages_dir: PathBuf,
@@ -92,7 +92,7 @@ impl TemplateLoader {
             let entry = entry?;
             let path = entry.path();
 
-            if path.extension().and_then(|s| s.to_str()) == Some("rhtml") {
+            if path.extension().and_then(|s| s.to_str()) == Some("rhtmx") {
                 // Load component file
                 self.load_component(&path)?;
             }
@@ -137,7 +137,8 @@ impl TemplateLoader {
                 partials: vec![partial_name.clone()],
             };
 
-            self.templates.insert(partial_route.clone(), partial_template);
+            self.templates
+                .insert(partial_route.clone(), partial_template);
 
             println!(
                 "📄 Registered partial route: {} -> {} (from component file)",
@@ -172,8 +173,8 @@ impl TemplateLoader {
             if path.is_dir() {
                 // Recursively load subdirectories
                 self.load_directory(&path)?;
-            } else if path.extension().and_then(|s| s.to_str()) == Some("rhtml") {
-                // Load .rhtml files
+            } else if path.extension().and_then(|s| s.to_str()) == Some("rhtmx") {
+                // Load .rhtmx files
                 self.load_template(&path)?;
             }
         }
@@ -248,7 +249,7 @@ impl TemplateLoader {
         Ok(())
     }
 
-    /// Convert file path to route (e.g., pages/index.rhtml -> "/")
+    /// Convert file path to route (e.g., pages/index.rhtmx -> "/")
     fn path_to_route(&self, path: &Path) -> String {
         let relative = path.strip_prefix(&self.pages_dir).unwrap_or(path);
 
@@ -450,13 +451,13 @@ mod tests {
         let loader = TemplateLoader::new("pages");
 
         // Test cases
-        assert_eq!(loader.path_to_route(Path::new("pages/index.rhtml")), "/");
+        assert_eq!(loader.path_to_route(Path::new("pages/index.rhtmx")), "/");
         assert_eq!(
-            loader.path_to_route(Path::new("pages/about.rhtml")),
+            loader.path_to_route(Path::new("pages/about.rhtmx")),
             "/about"
         );
         assert_eq!(
-            loader.path_to_route(Path::new("pages/users/profile.rhtml")),
+            loader.path_to_route(Path::new("pages/users/profile.rhtmx")),
             "/users/profile"
         );
     }

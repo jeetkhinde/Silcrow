@@ -133,13 +133,16 @@ impl OkResponse {
 
     /// Add an out-of-band update with a simple value (for backward compatibility)
     pub fn oob_value<T: ToString>(mut self, target: impl Into<String>, value: T) -> Self {
-        self.oob_updates.push((target.into(), Html(value.to_string())));
+        self.oob_updates
+            .push((target.into(), Html(value.to_string())));
         self
     }
 
     /// Add a custom header
     pub fn header(mut self, key: impl AsRef<str>, value: impl AsRef<str>) -> Self {
-        if let std::result::Result::Ok(header_name) = axum::http::HeaderName::from_bytes(key.as_ref().as_bytes()) {
+        if let std::result::Result::Ok(header_name) =
+            axum::http::HeaderName::from_bytes(key.as_ref().as_bytes())
+        {
             if let std::result::Result::Ok(header_value) = HeaderValue::from_str(value.as_ref()) {
                 self.headers.insert(header_name, header_value);
             }
@@ -276,7 +279,9 @@ impl ErrorResponse {
 
     /// Add a custom header
     pub fn header(mut self, key: impl AsRef<str>, value: impl AsRef<str>) -> Self {
-        if let std::result::Result::Ok(header_name) = axum::http::HeaderName::from_bytes(key.as_ref().as_bytes()) {
+        if let std::result::Result::Ok(header_name) =
+            axum::http::HeaderName::from_bytes(key.as_ref().as_bytes())
+        {
             if let std::result::Result::Ok(header_value) = HeaderValue::from_str(value.as_ref()) {
                 self.headers.insert(header_name, header_value);
             }
@@ -462,9 +467,7 @@ mod tests {
 
     #[test]
     fn test_redirect_response() {
-        let response = Redirect()
-            .to("/dashboard")
-            .toast("Logged in!");
+        let response = Redirect().to("/dashboard").toast("Logged in!");
 
         let (status, headers, _) = response.build();
 

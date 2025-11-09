@@ -1,10 +1,10 @@
 // File: src/renderer.rs
-// Purpose: Render RHTML templates with directive support
+// Purpose: Render rhtmx templates with directive support
 
 use crate::template_loader::TemplateLoader;
 use anyhow::Result;
 use regex::Regex;
-use rhtml_parser::{DirectiveParser, ExpressionEvaluator, Value};
+use rhtmx_parser::{DirectiveParser, ExpressionEvaluator, Value};
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -48,7 +48,7 @@ impl Renderer {
     }
 
     /// Collect CSS from a template's scoped CSS
-    pub fn collect_template_css(&mut self, scoped_css: &Option<rhtml_parser::ScopedCss>) {
+    pub fn collect_template_css(&mut self, scoped_css: &Option<rhtmx_parser::ScopedCss>) {
         if let Some(css) = scoped_css {
             self.collected_css.insert(css.scoped_css.clone());
         }
@@ -62,9 +62,10 @@ impl Renderer {
         Ok(interpolated)
     }
 
-    /// Find the position of slots block (either old "slots {" or new "__rhtml_slots__ {")
+    /// Find the position of slots block (either old "slots {" or new "__rhtmx_slots__ {")
     fn find_slots_block(&self, content: &str) -> Option<usize> {
-        content.find("__rhtml_slots__ {")
+        content
+            .find("__rhtmx_slots__ {")
             .or_else(|| content.find("slots {"))
     }
 
@@ -96,7 +97,7 @@ impl Renderer {
         content[search_start..].contains("WebPage {")
     }
 
-    /// Extract HTML content from RHTML template
+    /// Extract HTML content from rhtmx template
     /// This needs to extract ONLY the WebPage function content, not slots block
     /// If no WebPage component exists, returns the entire content (for partials)
     fn extract_html(&self, content: &str) -> String {
@@ -428,7 +429,7 @@ impl Renderer {
         self.add_scope_attribute(&interpolated, &scope_name)
     }
 
-    /// Add data-rhtml scope attribute to the root element
+    /// Add data-rhtmx scope attribute to the root element
     fn add_scope_attribute(&self, html: &str, scope_name: &str) -> String {
         let html = html.trim();
 
@@ -440,11 +441,11 @@ impl Renderer {
                     let tag = &html[..=first_gt];
 
                     // Check if it's a self-closing tag or already has the attribute
-                    if tag.contains("data-rhtml=") {
+                    if tag.contains("data-rhtmx=") {
                         return html.to_string();
                     }
 
-                    // Insert the data-rhtml attribute before the closing >
+                    // Insert the data-rhtmx attribute before the closing >
                     let insert_pos = if tag.ends_with("/>") {
                         first_gt - 1
                     } else {
@@ -452,7 +453,7 @@ impl Renderer {
                     };
 
                     let new_tag = format!(
-                        "{} data-rhtml=\"{}\"{}",
+                        "{} data-rhtmx=\"{}\"{}",
                         &html[..insert_pos],
                         scope_name,
                         &html[insert_pos..]
@@ -464,7 +465,7 @@ impl Renderer {
         }
 
         // If we can't find a tag, wrap it in a div with the scope attribute
-        format!("<div data-rhtml=\"{}\">{}</div>", scope_name, html)
+        format!("<div data-rhtmx=\"{}\">{}</div>", scope_name, html)
     }
 
     /// Process a match block (r-match, r-when, r-default)
@@ -815,7 +816,7 @@ impl Renderer {
     /// Supported formats:
     /// - @layout(false) -> No layout
     /// - @layout("custom") -> Use specific layout
-    /// - No directive -> Default behavior (use _layout.rhtml)
+    /// - No directive -> Default behavior (use _layout.rhtmx)
     pub fn parse_layout_directive(&self, content: &str) -> Option<LayoutDirective> {
         // Pattern: @layout(false) or @layout("name") at the START of the file
         // Use ^ to match only at the beginning, with optional whitespace
@@ -902,7 +903,7 @@ impl Renderer {
             .join("\n\n");
 
         // Create a <style> tag with the scoped CSS
-        let style_tag = format!("<style data-rhtml-scoped>\n{}\n</style>", combined_css);
+        let style_tag = format!("<style data-rhtmx-scoped>\n{}\n</style>", combined_css);
 
         // Try to inject into <head> before </head> tag
         if let Some(head_close) = html.find("</head>") {

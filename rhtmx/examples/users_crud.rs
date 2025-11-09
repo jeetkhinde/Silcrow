@@ -67,14 +67,14 @@ mod db {
 // ============================================================================
 
 // Handles GET /users
-#[get]
+get!()
 fn index() -> rhtmx::OkResponse {
     let users = db::get_users().unwrap_or_default();
     Ok().render(users_page, users)
 }
 
 // Handles POST /users
-#[post]
+post!()
 fn create(req: CreateUserRequest) -> rhtmx::OkResponse {
     let user = db::create_user(req.name, req.email).unwrap();
 
@@ -85,7 +85,7 @@ fn create(req: CreateUserRequest) -> rhtmx::OkResponse {
 }
 
 // Handles DELETE /users/:id
-#[delete(":id")]
+delete!(":id")
 fn delete(id: i32) -> rhtmx::OkResponse {
     db::delete_user(id).unwrap();
 

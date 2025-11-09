@@ -60,12 +60,17 @@ fn hello_page(name: &str) -> Html {
 
 ### 1. HTTP Verb Macros
 
+Use `get!`, `post!`, `put!`, `patch!`, `delete!` to define route handlers:
+
 ```rust
 #[get]          // GET requests
 #[post]         // POST requests
 #[put(":id")]   // PUT with path parameter
 #[delete(":id")] // DELETE with path parameter
+#[patch(":id")] // PATCH with path parameter
 ```
+
+**📖 Full documentation:** [HTTP Handlers Guide](./docs/http/HTTP_HANDLERS_GUIDE.md)
 
 ### 2. Response Builders
 
@@ -186,18 +191,20 @@ fn todo_item(todo: Todo) -> Html {
 
 ## Next Steps
 
-1. **Read the full README**: `README.md`
-2. **Check examples**: `examples/users_crud.rs`
-3. **Learn HTMX**: https://htmx.org/
-4. **Start building!**
+1. **HTTP Handlers**: Read [HTTP Handlers Guide](./docs/http/HTTP_HANDLERS_GUIDE.md) for routing, path parameters, and response builders
+2. **Layouts**: Read [docs/LAYOUTS.md](./docs/LAYOUTS.md) for page structure and templates
+3. **Full README**: See [README.md](./README.md) for complete feature overview
+4. **Check examples**: `examples/users_crud.rs`
+5. **Learn HTMX**: https://htmx.org/
+6. **Start building!**
 
 ## Common Patterns
 
 ### 1. Form Handling
 
 ```rust
-#[post]
-fn submit_form(req: FormData) -> rhtmx::OkResponse {
+post! {
+    fn submit_form(req: FormData) -> rhtmx::OkResponse {
     // Validate
     if req.name.is_empty() {
         return Error()
@@ -218,8 +225,8 @@ fn submit_form(req: FormData) -> rhtmx::OkResponse {
 ### 2. OOB Updates
 
 ```rust
-#[post]
-fn add_item(item: Item) -> rhtmx::OkResponse {
+post! {
+    fn add_item(item: Item) -> rhtmx::OkResponse {
     save(item.clone());
 
     Ok()
@@ -259,7 +266,7 @@ fn dashboard(user: &User) -> Html {
 ❌ **DON'T:**
 - Put business logic in UI functions
 - Use manual string concatenation
-- Forget to use `#[get]`, `#[post]`, etc. macros
+- Forget to use `get!`, `post!`, etc. macros
 - Mix concerns (keep handlers and UI separate)
 
 ---

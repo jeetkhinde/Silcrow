@@ -6,12 +6,12 @@ use axum::{
     routing::get,
     Router,
 };
-use rhtml::hot_reload::{create_watcher, ChangeType};
-use rhtml::{
-    ActionHandlerRegistry, Config, FormData, LayoutDirective, QueryParams, Renderer,
-    RequestContext, TemplateLoader, register_built_in_handlers, database,
+use rhtmx::hot_reload::{create_watcher, ChangeType};
+use rhtmx::{
+    database, register_built_in_handlers, ActionHandlerRegistry, Config, FormData, LayoutDirective,
+    QueryParams, Renderer, RequestContext, TemplateLoader,
 };
-use rhtml_parser::Value;
+use rhtmx_parser::Value;
 use serde_json::Value as JsonValue;
 use sqlx::SqlitePool;
 use std::sync::Arc;
@@ -32,7 +32,7 @@ async fn main() {
     // Initialize tracing
     tracing_subscriber::fmt::init();
 
-    println!("🚀 RHTML App Starting...");
+    println!("🚀 rhtmx App Starting...");
 
     // Load configuration
     let config = Config::load_default().unwrap_or_else(|e| {
@@ -58,7 +58,7 @@ async fn main() {
         .map(|v| v.parse::<bool>().unwrap_or(config.dev.hot_reload))
         .unwrap_or(config.dev.hot_reload);
 
-    // Load all templates with configuration from rhtml.toml
+    // Load all templates with configuration from rhtmx.toml
     let mut loader = TemplateLoader::with_config(
         &config.routing.pages_dir,
         &config.routing.components_dir,
@@ -124,7 +124,7 @@ async fn main() {
 
     // Initialize database
     println!("📁 Initializing SQLite database...");
-    let database_url = "sqlite:rhtml.db";
+    let database_url = "sqlite:rhtmx.db";
     let db_pool = match database::init_db(database_url).await {
         Ok(pool) => {
             println!("✅ Database initialized successfully");
@@ -193,8 +193,15 @@ async fn index_handler(
     query: AxumQuery<std::collections::HashMap<String, String>>,
     body: Bytes,
 ) -> Response {
-    let request_context =
-        create_request_context(method, "/".to_string(), query.0, headers, body, Arc::new(state.db.clone())).await;
+    let request_context = create_request_context(
+        method,
+        "/".to_string(),
+        query.0,
+        headers,
+        body,
+        Arc::new(state.db.clone()),
+    )
+    .await;
     render_route(&state, "/", request_context).await
 }
 
@@ -208,8 +215,15 @@ async fn template_handler(
     body: Bytes,
 ) -> Response {
     let route = format!("/{}", path);
-    let request_context =
-        create_request_context(method, route.clone(), query.0, headers, body, Arc::new(state.db.clone())).await;
+    let request_context = create_request_context(
+        method,
+        route.clone(),
+        query.0,
+        headers,
+        body,
+        Arc::new(state.db.clone()),
+    )
+    .await;
     render_route(&state, &route, request_context).await
 }
 
@@ -319,7 +333,7 @@ async fn render_route(state: &AppState, route: &str, request_context: RequestCon
             return error_response(
                 500,
                 "Layout Not Found",
-                "Missing _layout.rhtml in pages directory",
+                "Missing _layout.rhtmx in pages directory",
             );
         }
     };
@@ -464,7 +478,7 @@ async fn render_route_direct(
             return error_response(
                 500,
                 "Layout Not Found",
-                "Missing _layout.rhtml in pages directory",
+                "Missing _layout.rhtmx in pages directory",
             );
         }
     };
@@ -700,7 +714,7 @@ fn setup_demo_data(
     }
 }
 
-/// Create a custom error response using _error.rhtml if available
+/// Create a custom error response using _error.rhtmx if available
 async fn custom_error_response(
     state: &AppState,
     status: u16,

@@ -165,20 +165,22 @@ fn scope_css_rules(scope_name: &str, css: &str) -> String {
 ///
 /// ```ignore
 /// // File: pages/users.rs
-/// #[get]  // Handles GET /users
-/// fn index() -> OkResponse {
-///     let users = db::get_users()?;
-///     Ok().render(users_list, users)
+/// get! {
+///     fn index() -> OkResponse {
+///         let users = db::get_users()?;
+///         Ok().render(users_list, users)
+///     }
 /// }
 ///
-/// #[get("partial=stats")]  // Handles GET /users?partial=stats
-/// fn stats() -> OkResponse {
-///     Ok().render(stats_component, get_stats())
+/// get!("partial=stats") {
+///     fn stats() -> OkResponse {
+///         Ok().render(stats_component, get_stats())
+///     }
 /// }
 /// ```
-#[proc_macro_attribute]
-pub fn get(args: TokenStream, input: TokenStream) -> TokenStream {
-    http::http_handler("GET", args, input)
+#[proc_macro]
+pub fn get(input: TokenStream) -> TokenStream {
+    http::http_handler("GET", input)
 }
 
 /// HTTP POST handler macro
@@ -186,16 +188,17 @@ pub fn get(args: TokenStream, input: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```ignore
-/// #[post]
-/// fn create(req: CreateUserRequest) -> OkResponse {
-///     let user = db::create_user(req)?;
-///     Ok().render(user_card, user)
-///         .toast("User created!")
+/// post! {
+///     fn create(req: CreateUserRequest) -> OkResponse {
+///         let user = db::create_user(req)?;
+///         Ok().render(user_card, user)
+///             .toast("User created!")
+///     }
 /// }
 /// ```
-#[proc_macro_attribute]
-pub fn post(args: TokenStream, input: TokenStream) -> TokenStream {
-    http::http_handler("POST", args, input)
+#[proc_macro]
+pub fn post(input: TokenStream) -> TokenStream {
+    http::http_handler("POST", input)
 }
 
 /// HTTP PUT handler macro
@@ -203,16 +206,17 @@ pub fn post(args: TokenStream, input: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```ignore
-/// #[put(":id")]
-/// fn update(id: i32, req: UpdateUserRequest) -> OkResponse {
-///     let user = db::update_user(id, req)?;
-///     Ok().render(user_card, user)
-///         .toast("User updated!")
+/// put!(":id") {
+///     fn update(id: i32, req: UpdateUserRequest) -> OkResponse {
+///         let user = db::update_user(id, req)?;
+///         Ok().render(user_card, user)
+///             .toast("User updated!")
+///     }
 /// }
 /// ```
-#[proc_macro_attribute]
-pub fn put(args: TokenStream, input: TokenStream) -> TokenStream {
-    http::http_handler("PUT", args, input)
+#[proc_macro]
+pub fn put(input: TokenStream) -> TokenStream {
+    http::http_handler("PUT", input)
 }
 
 /// HTTP PATCH handler macro
@@ -220,15 +224,16 @@ pub fn put(args: TokenStream, input: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```ignore
-/// #[patch(":id")]
-/// fn partial_update(id: i32, req: PatchUserRequest) -> OkResponse {
-///     let user = db::patch_user(id, req)?;
-///     Ok().render(user_card, user)
+/// patch!(":id") {
+///     fn partial_update(id: i32, req: PatchUserRequest) -> OkResponse {
+///         let user = db::patch_user(id, req)?;
+///         Ok().render(user_card, user)
+///     }
 /// }
 /// ```
-#[proc_macro_attribute]
-pub fn patch(args: TokenStream, input: TokenStream) -> TokenStream {
-    http::http_handler("PATCH", args, input)
+#[proc_macro]
+pub fn patch(input: TokenStream) -> TokenStream {
+    http::http_handler("PATCH", input)
 }
 
 /// HTTP DELETE handler macro
@@ -236,15 +241,16 @@ pub fn patch(args: TokenStream, input: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```ignore
-/// #[delete(":id")]
-/// fn delete(id: i32) -> OkResponse {
-///     db::delete_user(id)?;
-///     Ok().toast("User deleted!")
+/// delete!(":id") {
+///     fn delete(id: i32) -> OkResponse {
+///         db::delete_user(id)?;
+///         Ok().toast("User deleted!")
+///     }
 /// }
 /// ```
-#[proc_macro_attribute]
-pub fn delete(args: TokenStream, input: TokenStream) -> TokenStream {
-    http::http_handler("DELETE", args, input)
+#[proc_macro]
+pub fn delete(input: TokenStream) -> TokenStream {
+    http::http_handler("DELETE", input)
 }
 
 /// Derive macro for automatic validation
