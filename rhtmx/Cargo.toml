@@ -20,5 +20,6 @@ tower = "0.4"
 tower-http = { version = "0.5", features = ["fs"] }
 regex = "1.10"
 once_cell = "1.19"
+maud = "0.26"
 
 [dev-dependencies]

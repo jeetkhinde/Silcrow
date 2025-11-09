@@ -225,6 +225,81 @@ pub fn html(input: TokenStream) -> TokenStream {
     output.into()
 }
 
+/// The maud! macro for Maud template syntax
+///
+/// This is a convenience wrapper around Maud's html! macro that automatically
+/// converts the result to RHTMX's Html type. Use this when you prefer Maud's
+/// Lisp-like syntax over the JSX-style html! macro.
+///
+/// # Example
+///
+/// ```ignore
+/// use rhtmx::{Ok, OkResponse, maud};
+///
+/// get!()
+/// fn user_card() -> OkResponse {
+///     let user_name = "Alice";
+///     let html = maud! {
+///         div.card {
+///             h3 { (user_name) }
+///             p { "User profile card" }
+///         }
+///     };
+///     Ok().html(html)
+/// }
+/// ```
+///
+/// # Syntax
+///
+/// Maud uses a Lisp-like syntax that is more compact than HTML:
+/// - `div { content }` - Element with content
+/// - `div.class { content }` - Element with class
+/// - `div#id { content }` - Element with id
+/// - `div[attr=value] { content }` - Element with attribute
+/// - `(expr)` - Interpolate Rust expression
+/// - `@if condition { ... }` - Conditional
+/// - `@for item in items { ... }` - Loop
+///
+/// # Comparison with html!
+///
+/// **html! (JSX-style):**
+/// ```ignore
+/// html! {
+///     <div class="card">
+///         <h3>{user_name}</h3>
+///         <p>"User profile card"</p>
+///     </div>
+/// }
+/// ```
+///
+/// **maud! (Lisp-style):**
+/// ```ignore
+/// maud! {
+///     div.card {
+///         h3 { (user_name) }
+///         p { "User profile card" }
+///     }
+/// }
+/// ```
+///
+/// Choose based on your preference:
+/// - **html!**: Familiar HTML-like syntax, good for markup-heavy code
+/// - **maud!**: Compact Lisp syntax, good for programmatic HTML generation
+#[proc_macro]
+pub fn maud(input: TokenStream) -> TokenStream {
+    // Pass input to Maud's html! macro and convert result to RHTMX Html
+    let input_tokens = proc_macro2::TokenStream::from(input);
+
+    let output = quote! {
+        {
+            use rhtmx::maud_wrapper::MaudMarkup;
+            maud::html! { #input_tokens }.to_html()
+        }
+    };
+
+    output.into()
+}
+
 // ============================================================================
 // HTTP Verb Macros - get!, post!, put!, patch!, delete!
 // ============================================================================

@@ -7,6 +7,7 @@ pub mod example_actions;
 pub mod form_context;
 pub mod hot_reload;
 pub mod html;
+pub mod maud_wrapper;
 pub mod renderer;
 pub mod request_context;
 pub mod template_loader;
@@ -17,7 +18,7 @@ pub mod validation_pipeline;
 pub use rhtmx_router::{Route, RouteMatch, Router};
 
 // Re-export macros from rhtmx-macro crate
-pub use rhtmx_macro::{html, get, post, put, patch, delete};
+pub use rhtmx_macro::{html, maud, get, post, put, patch, delete};
 
 pub use action_executor::{deserialize_form, form_to_json, ActionResult};
 pub use action_handlers::{register_built_in_handlers, ActionHandler, ActionHandlerRegistry};
