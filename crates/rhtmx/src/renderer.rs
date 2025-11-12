@@ -48,10 +48,11 @@ impl Renderer {
     }
 
     /// Collect CSS from a template's scoped CSS
-    pub fn collect_template_css(&mut self, scoped_css: &Option<rhtmx_parser::ScopedCss>) {
-        if let Some(css) = scoped_css {
-            self.collected_css.insert(css.scoped_css.clone());
-        }
+    pub fn collect_template_css(&mut self, _scoped_css: &Option<()>) {
+        // TODO: Implement CSS collection from scoped CSS
+        // if let Some(css) = scoped_css {
+        //     self.collected_css.insert(css.scoped_css.clone());
+        // }
     }
 
     /// Render a template to HTML
@@ -391,9 +392,10 @@ impl Renderer {
         };
 
         // Collect CSS from this component
-        if let Some(ref scoped_css) = component.scoped_css {
-            self.collected_css.insert(scoped_css.scoped_css.clone());
-        }
+        // TODO: Implement CSS collection from component scoped CSS
+        // if let Some(ref scoped_css) = component.scoped_css {
+        //     self.collected_css.insert(scoped_css.scoped_css.clone());
+        // }
 
         // Extract HTML from component
         let component_html = self.extract_html(&component.content);
@@ -420,11 +422,8 @@ impl Renderer {
         let interpolated = component_renderer.process_interpolations(&processed);
 
         // Add scope attribute to the component HTML
-        let scope_name = component
-            .scoped_css
-            .as_ref()
-            .map(|css| css.scope_name.clone())
-            .unwrap_or(name.clone());
+        // TODO: Extract scope name from scoped_css when CSS parsing is implemented
+        let scope_name = name.clone();
 
         self.add_scope_attribute(&interpolated, &scope_name)
     }

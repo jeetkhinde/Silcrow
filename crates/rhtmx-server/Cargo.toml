@@ -1,0 +1,49 @@
+# crates/rhtmx-server/Cargo.toml
+[package]
+name = "rhtmx-server"
+version = "0.1.0"
+edition = "2021"
+description = "Reference server implementation for RHTMX framework"
+license = "MIT"
+repository = "https://github.com/jeetkhinde/RHTMX"
+
+[[bin]]
+name = "rhtmx-server"
+path = "src/main.rs"
+
+[dependencies]
+# Local crates
+rhtmx = { path = "../rhtmx" }
+rhtmx-parser = { path = "../rhtmx-parser" }
+
+# Web framework & async runtime
+axum = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tower-livereload = { workspace = true }
+notify = { workspace = true }
+
+# Serialization & data
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+# Error handling & logging
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Configuration
+dotenvy = "0.15"
+
+# Utilities
+urlencoding = { workspace = true }
+regex = { workspace = true }
+maud = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = "1.4"
+rstest = "0.22"

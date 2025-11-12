@@ -2,9 +2,8 @@
 // Purpose: Example action implementations for /examples/actions-validation
 // This demonstrates how actions work with validation and form helpers
 
-use crate::action_executor::ActionResult;
-use crate::request_context::RequestContext;
-use crate::validation::Validate;
+use rhtmx::action_executor::ActionResult;
+use rhtmx::RequestContext;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -48,7 +47,8 @@ pub struct SearchUsersRequest {
 }
 
 // Implement Validate for CreateUserRequest
-impl Validate for CreateUserRequest {
+// TODO: Use the Validate derive macro from rhtmx instead of manual implementation
+impl rhtmx::ValidateTrait for CreateUserRequest {
     fn validate(&self) -> Result<(), HashMap<String, String>> {
         let mut errors = HashMap::new();
 
@@ -99,7 +99,7 @@ impl Validate for CreateUserRequest {
 }
 
 // Implement Validate for UpdateUserRequest
-impl Validate for UpdateUserRequest {
+impl rhtmx::ValidateTrait for UpdateUserRequest {
     fn validate(&self) -> Result<(), HashMap<String, String>> {
         let mut errors = HashMap::new();
 
@@ -132,7 +132,7 @@ impl Validate for UpdateUserRequest {
 }
 
 // Implement Validate for SearchUsersRequest (no validation needed)
-impl Validate for SearchUsersRequest {
+impl rhtmx::ValidateTrait for SearchUsersRequest {
     fn validate(&self) -> Result<(), HashMap<String, String>> {
         Ok(())
     }
@@ -150,86 +150,17 @@ pub async fn get_actions_validation(_ctx: RequestContext) -> ActionResult {
 }
 
 /// POST /examples/actions-validation - Create a user
-pub async fn post_actions_validation(ctx: RequestContext) -> ActionResult {
-    use crate::validation_pipeline::{validate_request as validate_req, ValidationPipelineResult};
-
-    // Validate the request
-    let result = validate_req::<CreateUserRequest>(&ctx.form);
-
-    match result {
-        ValidationPipelineResult::Invalid(form_context) => {
-            // Validation failed - return error response with form context
-            let error_html = format_validation_errors(&form_context);
-            ActionResult::Html {
-                content: error_html,
-                headers: Default::default(),
-            }
-        }
-        ValidationPipelineResult::Valid(req) => {
-            // Validation passed - create the user in the database
-            use crate::database;
-            let pool = ctx.db.as_ref();
-
-            match database::create_user(
-                pool,
-                req.name.clone(),
-                req.email.clone(),
-                req.age,
-                req.username.clone(),
-                req.bio.clone(),
-            ).await {
-                Ok(user) => {
-                    // Get updated user count
-                    let user_count = match database::count_users(pool).await {
-                        Ok(count) => count,
-                        Err(_) => 1, // Default to 1 if count fails
-                    };
-
-                    // Return HTML with toast and OOB update
-                    let response_html = format!(
-                        r#"<div class="user-card" id="user-{}">
-                        <h3>{} (@{})</h3>
-                        <p>Email: {}</p>
-                        <p>Age: {}</p>
-                    </div>"#,
-                        user.id, user.name, user.username, user.email, user.age
-                    );
-
-                    // Build response with HX-Trigger header for toast
-                    let mut headers = axum::http::HeaderMap::new();
-                    let trigger = serde_json::json!({
-                        "showToast": {
-                            "message": "User created!"
-                        }
-                    });
-                    if let Ok(value) = trigger.to_string().parse() {
-                        headers.insert("HX-Trigger", value);
-                    }
-
-                    // Add OOB update for user count
-                    let oob_html = format!(
-                        r#"<div id="user-count" hx-swap-oob="true">{}</div>"#,
-                        user_count
-                    );
-
-                    ActionResult::Html {
-                        content: format!("{}\n{}", response_html, oob_html),
-                        headers,
-                    }
-                }
-                Err(e) => {
-                    // Database error
-                    ActionResult::Error {
-                        status: 500,
-                        message: format!("Failed to create user: {}", e),
-                    }
-                }
-            }
-        }
+pub async fn post_actions_validation(_ctx: RequestContext) -> ActionResult {
+    // TODO: Implement validation_pipeline module for form validation
+    ActionResult::Html {
+        content: "<p>POST /examples/actions-validation - Validation pipeline not yet implemented</p>".to_string(),
+        headers: Default::default(),
     }
 }
 
 /// Helper function to format validation errors as HTML
+// TODO: Implement form context for validation errors
+/*
 fn format_validation_errors(context: &crate::form_context::FormContext) -> String {
     let mut html = String::from(r#"<div class="validation-errors"><h3>Please fix the following errors:</h3><ul>"#);
 
@@ -240,6 +171,7 @@ fn format_validation_errors(context: &crate::form_context::FormContext) -> Strin
     html.push_str("</ul></div>");
     html
 }
+*/
 
 /// PATCH /examples/actions-validation/:id - Update a user
 pub async fn patch_actions_validation(_ctx: RequestContext) -> ActionResult {
@@ -251,14 +183,16 @@ pub async fn patch_actions_validation(_ctx: RequestContext) -> ActionResult {
 
 /// DELETE /examples/actions-validation/:id - Delete a user
 pub async fn delete_actions_validation(ctx: RequestContext) -> ActionResult {
-    use crate::database;
-
-    let pool = ctx.db.as_ref();
+    use rhtmx::database;
 
     // Get the updated user count after deletion
-    let count = match database::count_users(pool).await {
-        Ok(c) => c.saturating_sub(1), // Assume one was deleted
-        Err(_) => 0, // Default to 0 if count fails
+    let count = if let Some(pool) = ctx.db.as_ref() {
+        match database::count_users(pool).await {
+            Ok(c) => c.saturating_sub(1), // Assume one was deleted
+            Err(_) => 0, // Default to 0 if count fails
+        }
+    } else {
+        0 // Default to 0 if database is not configured
     };
 
     // Return only OOB update

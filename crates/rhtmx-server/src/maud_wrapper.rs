@@ -7,7 +7,7 @@
 /// This wrapper allows you to use Maud's powerful templating alongside RHTMX's
 /// response builders and file-based routing.
 
-use crate::html::Html;
+use rhtmx::html::Html;
 
 /// Convert Maud's Markup to RHTMX's Html type
 pub fn maud_to_html(markup: maud::Markup) -> Html {

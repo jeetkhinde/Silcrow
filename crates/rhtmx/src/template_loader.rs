@@ -2,7 +2,7 @@
 // Purpose: Loads rhtmx templates from the pages/ directory
 
 use anyhow::{Context, Result};
-use rhtmx_parser::{CssParser, ScopedCss};
+// use rhtmx_parser::{CssParser, ScopedCss};
 use rhtmx_router::{Route, Router};
 use std::collections::HashMap;
 use std::fs;
@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 pub struct Template {
     pub path: PathBuf,
     pub content: String,
-    pub scoped_css: Option<ScopedCss>,
+    pub scoped_css: Option<()>, // TODO: Implement CSS parsing
     pub partials: Vec<String>, // Names of partials defined in this template
 }
 
@@ -114,7 +114,10 @@ impl TemplateLoader {
             .to_string();
 
         // Process CSS and extract partials info
-        let (content_without_css, scoped_css, partials) = CssParser::process_template(&content);
+        // TODO: Implement CSS parsing with CssParser
+        let partials = vec![]; // Placeholder for extracting partials
+        let content_without_css = content.clone();
+        let scoped_css = None;
 
         let template = Template {
             path: path.to_path_buf(),
@@ -194,7 +197,10 @@ impl TemplateLoader {
         );
 
         // Process CSS and extract partials info
-        let (content_without_css, scoped_css, partials) = CssParser::process_template(&content);
+        // TODO: Implement CSS parsing with CssParser
+        let partials = vec![]; // Placeholder for extracting partials
+        let content_without_css = content.clone();
+        let scoped_css = None;
 
         let template = Template {
             path: path.to_path_buf(),

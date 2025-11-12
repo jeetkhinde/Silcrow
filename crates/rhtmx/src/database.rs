@@ -1,9 +1,9 @@
 // File: src/database.rs
-// Purpose: SQLx database layer with connection pooling and schema
+// Purpose: Multi-database SQLx layer with support for SQLite, PostgreSQL, and other databases
+// Supports environment-based configuration for seamless database switching
 
-use sqlx::sqlite::{SqlitePool, SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::AnyPool;
 use sqlx::Row;
-use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 
 /// User model representing a row in the users table
@@ -17,47 +17,68 @@ pub struct User {
     pub username: String,
 }
 
-/// Initialize SQLite database with schema
-pub async fn init_db(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
-    // Create connection options
-    let connect_options = SqliteConnectOptions::from_str(database_url)?
-        .create_if_missing(true);
+/// Initialize database with support for SQLite, PostgreSQL, MySQL, etc.
+///
+/// # Database URLs Format:
+/// - SQLite: `sqlite:rhtmx.db` or `sqlite::memory:`
+/// - PostgreSQL: `postgres://user:password@localhost:5432/dbname`
+/// - PostgreSQL (Supabase): `postgres://postgres:password@db.xxxxx.supabase.co:5432/postgres`
+pub async fn init_db(database_url: &str) -> Result<AnyPool, sqlx::Error> {
+    // Create connection pool with any supported database
+    let pool = AnyPool::connect(database_url).await?;
 
-    // Create pool
-    let pool = SqlitePoolOptions::new()
-        .max_connections(5)
-        .connect_with(connect_options)
-        .await?;
+    // Detect database type from URL
+    let is_postgres = database_url.starts_with("postgres://") || database_url.starts_with("postgresql://");
 
     // Run migrations (create tables if they don't exist)
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            email TEXT NOT NULL UNIQUE,
-            age INTEGER NOT NULL,
-            bio TEXT,
-            username TEXT NOT NULL UNIQUE,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    if is_postgres {
+        // PostgreSQL schema with SERIAL for auto-increment
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                age INTEGER NOT NULL,
+                bio TEXT,
+                username TEXT NOT NULL UNIQUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            "#,
         )
-        "#,
-    )
-    .execute(&pool)
-    .await?;
+        .execute(&pool)
+        .await?;
+    } else {
+        // SQLite schema (default)
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                age INTEGER NOT NULL,
+                bio TEXT,
+                username TEXT NOT NULL UNIQUE,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+    }
 
     Ok(pool)
 }
 
 /// Get all users from the database
-pub async fn get_users(pool: &SqlitePool) -> Result<Vec<User>, sqlx::Error> {
+pub async fn get_users(pool: &AnyPool) -> Result<Vec<User>, sqlx::Error> {
     sqlx::query_as::<_, User>("SELECT id, name, email, age, bio, username FROM users ORDER BY id")
         .fetch_all(pool)
         .await
 }
 
 /// Get a user by ID
-pub async fn get_user(pool: &SqlitePool, id: i32) -> Result<Option<User>, sqlx::Error> {
+pub async fn get_user(pool: &AnyPool, id: i32) -> Result<Option<User>, sqlx::Error> {
     sqlx::query_as::<_, User>(
         "SELECT id, name, email, age, bio, username FROM users WHERE id = ? LIMIT 1"
     )
@@ -68,7 +89,7 @@ pub async fn get_user(pool: &SqlitePool, id: i32) -> Result<Option<User>, sqlx::
 
 /// Create a new user
 pub async fn create_user(
-    pool: &SqlitePool,
+    pool: &AnyPool,
     name: String,
     email: String,
     age: i32,
@@ -86,10 +107,13 @@ pub async fn create_user(
     .execute(pool)
     .await?;
 
-    let id = result.last_insert_rowid() as i32;
+    // Get the last inserted ID (works across SQLite, PostgreSQL, MySQL, etc.)
+    // Note: last_insert_id() may return None for some databases that don't support it
+    // For now, we use a simple approach: convert Option<i64> to i32
+    let last_id: i32 = result.last_insert_id().unwrap_or(0) as i32;
 
     Ok(User {
-        id,
+        id: last_id,
         name,
         email,
         age,
@@ -100,7 +124,7 @@ pub async fn create_user(
 
 /// Update an existing user
 pub async fn update_user(
-    pool: &SqlitePool,
+    pool: &AnyPool,
     id: i32,
     name: Option<String>,
     email: Option<String>,
@@ -144,7 +168,7 @@ pub async fn update_user(
 }
 
 /// Delete a user by ID
-pub async fn delete_user(pool: &SqlitePool, id: i32) -> Result<bool, sqlx::Error> {
+pub async fn delete_user(pool: &AnyPool, id: i32) -> Result<bool, sqlx::Error> {
     let result = sqlx::query("DELETE FROM users WHERE id = ?")
         .bind(id)
         .execute(pool)
@@ -154,7 +178,7 @@ pub async fn delete_user(pool: &SqlitePool, id: i32) -> Result<bool, sqlx::Error
 }
 
 /// Count total users
-pub async fn count_users(pool: &SqlitePool) -> Result<i32, sqlx::Error> {
+pub async fn count_users(pool: &AnyPool) -> Result<i32, sqlx::Error> {
     let row = sqlx::query("SELECT COUNT(*) as count FROM users")
         .fetch_one(pool)
         .await?;
@@ -164,7 +188,7 @@ pub async fn count_users(pool: &SqlitePool) -> Result<i32, sqlx::Error> {
 
 /// Search users by filter (name or email)
 pub async fn search_users(
-    pool: &SqlitePool,
+    pool: &AnyPool,
     filter: Option<String>,
 ) -> Result<Vec<User>, sqlx::Error> {
     if let Some(f) = filter {

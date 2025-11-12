@@ -3,7 +3,7 @@
 
 use axum::http::{HeaderMap, Method};
 use serde_json::Value as JsonValue;
-use sqlx::SqlitePool;
+use sqlx::AnyPool;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -28,8 +28,9 @@ pub struct RequestContext {
     /// Request path
     pub path: String,
 
-    /// Database connection pool
-    pub db: Arc<SqlitePool>,
+    /// Database connection pool (supports SQLite, PostgreSQL, MySQL, etc.)
+    /// None if database is not configured
+    pub db: Option<Arc<AnyPool>>,
 }
 
 impl std::fmt::Debug for RequestContext {
@@ -49,7 +50,7 @@ impl RequestContext {
         query: QueryParams,
         form: FormData,
         headers: HeaderMap,
-        db: Arc<SqlitePool>,
+        db: Option<Arc<AnyPool>>,
     ) -> Self {
         // Parse cookies from headers
         let cookies = Self::parse_cookies(&headers);

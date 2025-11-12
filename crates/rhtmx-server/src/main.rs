@@ -1,3 +1,10 @@
+// Module declarations
+mod hot_reload;
+mod action_handlers;
+mod example_actions;
+mod maud_wrapper;
+mod form_context;
+
 use axum::{
     body::Bytes,
     extract::{Query as AxumQuery, State},
@@ -6,14 +13,15 @@ use axum::{
     routing::get,
     Router,
 };
-use rhtmx::hot_reload::{create_watcher, ChangeType};
 use rhtmx::{
-    database, register_built_in_handlers, ActionHandlerRegistry, Config, FormData, LayoutDirective,
+    database, Config, FormData, LayoutDirective,
     QueryParams, Renderer, RequestContext, TemplateLoader,
 };
+use crate::hot_reload::{create_watcher, ChangeType};
+use crate::action_handlers::{ActionHandlerRegistry, register_built_in_handlers};
 use rhtmx_parser::Value;
 use serde_json::Value as JsonValue;
-use sqlx::SqlitePool;
+use sqlx::AnyPool;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_livereload::LiveReloadLayer;
@@ -24,7 +32,7 @@ use tracing::{error, info};
 struct AppState {
     template_loader: Arc<RwLock<TemplateLoader>>,
     action_registry: Arc<ActionHandlerRegistry>,
-    db: SqlitePool,
+    db: Option<Arc<AnyPool>>,
 }
 
 #[tokio::main]
@@ -122,18 +130,37 @@ async fn main() {
         println!("🔄 Hot Reload: DISABLED");
     }
 
-    // Initialize database
-    println!("📁 Initializing SQLite database...");
-    let database_url = "sqlite:rhtmx.db";
-    let db_pool = match database::init_db(database_url).await {
-        Ok(pool) => {
-            println!("✅ Database initialized successfully");
-            pool
+    // Initialize database (optional)
+    // Load DATABASE_URL from .env file or environment variable
+    dotenvy::dotenv().ok();
+    let db_pool = if let Ok(database_url) = std::env::var("DATABASE_URL") {
+        let db_type = if database_url.starts_with("postgres://") || database_url.starts_with("postgresql://") {
+            "PostgreSQL"
+        } else if database_url.starts_with("mysql://") {
+            "MySQL"
+        } else {
+            "SQLite"
+        };
+
+        println!("📁 Initializing {} database...", db_type);
+        println!("   Database: {}", if db_type == "SQLite" { &database_url } else { "***" });
+
+        match database::init_db(&database_url).await {
+            Ok(pool) => {
+                println!("✅ Database initialized successfully");
+                Some(Arc::new(pool))
+            }
+            Err(e) => {
+                eprintln!("❌ Failed to initialize database: {}", e);
+                eprintln!("   Make sure DATABASE_URL is set correctly in .env or environment");
+                std::process::exit(1);
+            }
         }
-        Err(e) => {
-            eprintln!("❌ Failed to initialize database: {}", e);
-            std::process::exit(1);
-        }
+    } else {
+        println!("📁 Database configuration not found");
+        println!("   Set DATABASE_URL in .env or environment to enable database");
+        println!("   Application running without database support");
+        None
     };
 
     // Setup action handler registry
@@ -199,7 +226,7 @@ async fn index_handler(
         query.0,
         headers,
         body,
-        Arc::new(state.db.clone()),
+        state.db.clone(),
     )
     .await;
     render_route(&state, "/", request_context).await
@@ -221,7 +248,7 @@ async fn template_handler(
         query.0,
         headers,
         body,
-        Arc::new(state.db.clone()),
+        state.db.clone(),
     )
     .await;
     render_route(&state, &route, request_context).await
@@ -234,7 +261,7 @@ async fn create_request_context(
     query_params: std::collections::HashMap<String, String>,
     headers: HeaderMap,
     body: Bytes,
-    db: Arc<SqlitePool>,
+    db: Option<Arc<AnyPool>>,
 ) -> RequestContext {
     // Create query params
     let query = QueryParams::new(query_params);

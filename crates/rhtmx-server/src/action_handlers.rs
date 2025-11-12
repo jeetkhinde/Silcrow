@@ -2,8 +2,8 @@
 // Purpose: Manual registration of action handlers for different routes
 // This will be replaced by a proc macro system in the future
 
-use crate::action_executor::ActionResult;
-use crate::request_context::RequestContext;
+use rhtmx::action_executor::ActionResult;
+use rhtmx::RequestContext;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;

@@ -8,6 +8,16 @@
 .idea/
 .vscode/
 
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
 # Backup / OS files
 *.swp
 *.bak

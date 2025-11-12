@@ -5,6 +5,15 @@ pub mod html;
 pub mod validation;
 pub mod layouts;
 
+// Framework modules
+pub mod renderer;
+pub mod template_loader;
+pub mod request_context;
+pub mod config;
+pub mod database;
+pub mod action_executor;
+pub mod actions;
+
 // Re-export the html! macro from rhtmx-macro
 pub use rhtmx_macro::{html, css, get, post, put, patch, delete, Validate};
 
@@ -15,6 +24,14 @@ pub use html::{
     Ok, Error, Redirect,
     ok, error, redirect,
 };
+
+// Re-export framework types
+pub use renderer::Renderer;
+pub use renderer::LayoutDirective;
+pub use template_loader::TemplateLoader;
+pub use request_context::{RequestContext, QueryParams, FormData};
+pub use config::Config;
+pub use actions::ActionRegistry;
 
 // Re-export validation trait
 pub use validation::Validate as ValidateTrait;

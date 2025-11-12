@@ -5,6 +5,7 @@ members = [
   "crates/rhtmx-parser",
   "crates/rhtmx-router",
   "crates/rhtmx-sync",
+  "crates/rhtmx-server",
 ]
 
 resolver = "2"
@@ -32,6 +33,8 @@ notify = "6.1"
 urlencoding = "2.1"
 sqlx = { version = "0.7", features = [
   "sqlite",
+  "postgres",
+  "any",
   "runtime-tokio-rustls",
   "chrono",
   "uuid",
