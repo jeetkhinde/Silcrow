@@ -87,7 +87,7 @@ fn create_user(req: CreateUserRequest) -> Result<OkResponse, ErrorResponse> {
     // ... create user
 }
 
-fn validation_errors(errors: Vec<String>) -> Html {
+fn validation_errors(errors: Vec<String>) {
     html! {
         <div class="errors">
             <h3>Please fix the following:</h3>
@@ -131,7 +131,7 @@ Loop through collections with the `r-for` directive:
 #### Simple Iteration
 
 ```rust
-fn users_list(users: Vec<User>) -> Html {
+fn users_list(users: Vec<User>) {
     html! {
         <div class="users-list">
             <h2>Users</h2>
@@ -164,7 +164,7 @@ rhtml::Html(__html)
 #### With Index
 
 ```rust
-fn numbered_list(items: Vec<String>) -> Html {
+fn numbered_list(items: Vec<String>) {
     html! {
         <ol>
             <li r-for="(i, item) in items">
@@ -189,7 +189,7 @@ fn numbered_list(items: Vec<String>) -> Html {
 Conditionally render elements based on boolean expressions:
 
 ```rust
-fn dashboard(user: &User) -> Html {
+fn dashboard(user: &User) {
     html! {
         <div>
             <h1>Dashboard</h1>
@@ -243,7 +243,7 @@ Insert Rust expressions directly into HTML using `{expr}` syntax:
 ### Basic Interpolation
 
 ```rust
-fn user_greeting(user: &User) -> Html {
+fn user_greeting(user: &User) {
     html! {
         <div>
             <h1>Hello, {user.name}!</h1>
@@ -257,7 +257,7 @@ fn user_greeting(user: &User) -> Html {
 ### In Attributes
 
 ```rust
-fn user_card(user: &User) -> Html {
+fn user_card(user: &User) {
     html! {
         <div
             class="user-card"
@@ -274,7 +274,7 @@ fn user_card(user: &User) -> Html {
 ### Complex Expressions
 
 ```rust
-fn stats_dashboard(stats: &Stats) -> Html {
+fn stats_dashboard(stats: &Stats) {
     let growth_rate = (stats.new_users as f64 / stats.total_users as f64) * 100.0;
 
     html! {
@@ -299,20 +299,20 @@ fn stats_dashboard(stats: &Stats) -> Html {
 ### Example 1: CRUD User Interface
 
 ```rust
-use rhtml::{Ok, Error, html, Html};
+use rhtml::{Ok, Error, html};
 
 // File: pages/Users.rhtml
 
 // GET /users - List all users
 get!()
-fn index() -> OkResponse {
+fn index() {
     let users = db::get_users()?;
     Ok().render(users_page, users)
 }
 
 // POST /users - Create new user
 post!()
-fn create(req: CreateUserRequest) -> Result<OkResponse, ErrorResponse> {
+fn create(req: CreateUserRequest) {
     // Validate
     if let Err(errors) = validate(&req) {
         return Err(

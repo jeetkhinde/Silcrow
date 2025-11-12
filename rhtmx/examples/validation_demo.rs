@@ -1,7 +1,7 @@
 // Example: Complete validation demo with all validators
 // Shows how to use #[derive(Validate)] with RHTMX
 
-use rhtmx::{html, Html, Validate, ValidateTrait};
+use rhtmx::{html, Validate, ValidateTrait};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -98,7 +98,7 @@ struct UpdateSettingsRequest {
 
 // ===== Helper Functions =====
 
-fn render_validation_errors(errors: &HashMap<String, String>) -> Html {
+fn render_validation_errors(errors: &HashMap<String, String>) {
     let mut items = String::new();
     for (field, error) in errors {
         items.push_str(&format!("<li><strong>{}:</strong> {}</li>", field, error));
@@ -140,10 +140,10 @@ fn main() {
     // Test 2: Invalid user registration (multiple errors)
     println!("Test 2: Invalid User Registration");
     let invalid_user = RegisterUserRequest {
-        name: "Al".to_string(), // Too short
+        name: "Al".to_string(),             // Too short
         email: "bob@gmail.com".to_string(), // Public domain
-        password: "weak".to_string(), // Weak password
-        age: 15, // Too young
+        password: "weak".to_string(),       // Weak password
+        age: 15,                            // Too young
         bio: None,
         website: "not-a-url".to_string(), // Invalid URL
     };
@@ -271,8 +271,8 @@ fn main() {
     }
 
     let passwords = PasswordTest {
-        basic: "simple".to_string(), // Valid for basic (6+ chars)
-        medium: "Password123".to_string(), // Valid for medium (8+ with upper, lower, digit)
+        basic: "simple".to_string(),          // Valid for basic (6+ chars)
+        medium: "Password123".to_string(),    // Valid for medium (8+ with upper, lower, digit)
         strong: "SecurePass123!".to_string(), // Valid for strong (8+ with all)
     };
 

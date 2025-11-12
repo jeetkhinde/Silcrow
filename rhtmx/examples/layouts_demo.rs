@@ -1,7 +1,7 @@
 // Example: Layout System Demo
 // Shows how to use layouts with RHTMX
 
-use rhtmx::{html, Html, layouts};
+use rhtmx::{html, layouts};
 
 fn main() {
     println!("=== RHTMX Layout System Demo ===\n");
@@ -32,12 +32,15 @@ fn main() {
 
 // ===== Example 1: Basic Root Layout =====
 
-fn basic_page() -> Html {
+fn basic_page() {
     // In a real app, this would be returned from a #[get] handler
-    let content = Html(r#"<div class="container">
+    let content = Html(
+        r#"<div class="container">
     <h1>Welcome to RHTMX</h1>
     <p>This page uses the default root layout.</p>
-</div>"#.into());
+</div>"#
+            .into(),
+    );
 
     layouts::root::layout(content, layouts::root::Slots::new("Home Page"))
 }
@@ -46,27 +49,36 @@ fn basic_page() -> Html {
 
 #[allow(dead_code)]
 fn custom_slots_page() -> Html {
-    let content = Html(r#"<div class="container">
+    let content = Html(
+        r#"<div class="container">
     <h1>About Us</h1>
     <p>Learn more about our company.</p>
-</div>"#.into());
+</div>"#
+            .into(),
+    );
 
     // Custom header
-    let custom_header = Html(r#"<nav class="custom-nav">
+    let custom_header = Html(
+        r#"<nav class="custom-nav">
     <div class="container">
         <a href="/">Home</a>
         <a href="/about" class="active">About</a>
         <a href="/products">Products</a>
         <a href="/contact">Contact</a>
     </div>
-</nav>"#.into());
+</nav>"#
+            .into(),
+    );
 
     // Custom footer
-    let custom_footer = Html(r#"<footer class="custom-footer">
+    let custom_footer = Html(
+        r#"<footer class="custom-footer">
     <div class="container">
         <p>© 2024 RHTMX Inc.</p>
     </div>
-</footer>"#.into());
+</footer>"#
+            .into(),
+    );
 
     layouts::root::layout(
         content,
@@ -80,7 +92,8 @@ fn custom_slots_page() -> Html {
 // ===== Example 3: Admin Layout =====
 
 fn admin_page() -> Html {
-    let content = Html(r#"<div class="dashboard">
+    let content = Html(
+        r#"<div class="dashboard">
     <h1>Admin Dashboard</h1>
     <div class="stats">
         <div class="stat-card">
@@ -92,12 +105,11 @@ fn admin_page() -> Html {
             <p class="stat-number">$45,678</p>
         </div>
     </div>
-</div>"#.into());
+</div>"#
+            .into(),
+    );
 
-    layouts::admin::layout(
-        content,
-        layouts::admin::Slots::new("Dashboard"),
-    )
+    layouts::admin::layout(content, layouts::admin::Slots::new("Dashboard"))
 }
 
 // ===== Example 4: HTMX Partial (No Layout) =====
@@ -105,7 +117,8 @@ fn admin_page() -> Html {
 fn htmx_partial() -> Html {
     // For HTMX partials, return just the HTML fragment
     // No layout needed - HTMX will swap this into the page
-    Html(r#"<div id="user-list">
+    Html(
+        r#"<div id="user-list">
     <div class="user-item">
         <span>Alice</span>
         <button hx-delete="/api/users/1">Delete</button>
@@ -114,7 +127,9 @@ fn htmx_partial() -> Html {
         <span>Bob</span>
         <button hx-delete="/api/users/2">Delete</button>
     </div>
-</div>"#.into())
+</div>"#
+            .into(),
+    )
 }
 
 // ===== Example Showing Real Handler Pattern =====
@@ -122,14 +137,17 @@ fn htmx_partial() -> Html {
 /// Example of how layouts would be used in actual route handlers
 #[allow(dead_code)]
 mod handlers {
-    use rhtmx::{Html, layouts};
+    use rhtmx::{layouts, Html};
 
     pub fn index_handler() -> Html {
-        let content = Html(r#"<div class="hero">
+        let content = Html(
+            r#"<div class="hero">
     <h1>Welcome to RHTMX</h1>
     <p>Build fast, reactive web apps with Rust + HTMX</p>
     <a href="/docs" class="btn">Get Started</a>
-</div>"#.into());
+</div>"#
+                .into(),
+        );
 
         layouts::root::layout(
             content,
@@ -138,32 +156,39 @@ mod handlers {
     }
 
     pub fn about_handler() -> Html {
-        let content = Html(r#"<article>
+        let content = Html(
+            r#"<article>
     <h1>About RHTMX</h1>
     <p>RHTMX combines the power of Rust with the simplicity of HTMX.</p>
-</article>"#.into());
+</article>"#
+                .into(),
+        );
 
         layouts::root::layout(
             content,
-            layouts::root::Slots::new("About - RHTMX")
-                .description("Learn about RHTMX framework"),
+            layouts::root::Slots::new("About - RHTMX").description("Learn about RHTMX framework"),
         )
     }
 
     pub fn admin_dashboard() -> Html {
-        let content = Html(r#"<div>
+        let content = Html(
+            r#"<div>
     <h1>Dashboard</h1>
     <p>Admin analytics and stats</p>
-</div>"#.into());
+</div>"#
+                .into(),
+        );
 
-        let breadcrumbs = Html(r#"<nav>
+        let breadcrumbs = Html(
+            r#"<nav>
     <a href="/admin">Admin</a> / <span>Dashboard</span>
-</nav>"#.into());
+</nav>"#
+                .into(),
+        );
 
         layouts::admin::layout(
             content,
-            layouts::admin::Slots::new("Dashboard")
-                .breadcrumbs(breadcrumbs),
+            layouts::admin::Slots::new("Dashboard").breadcrumbs(breadcrumbs),
         )
     }
 }

@@ -1,0 +1,56 @@
+# ------------------------------
+# 🔧 General settings
+# ------------------------------
+
+# Normalize all text files to use LF in the repository
+# Git will handle conversion automatically for Windows users
+* text=auto eol=lf
+
+# Treat all files as UTF-8
+* encoding=utf-8
+
+# ------------------------------
+# 🦀 Rust source files
+# ------------------------------
+*.rs text eol=lf diff=rust
+Cargo.toml text eol=lf
+Cargo.lock text eol=lf merge=ours
+
+# ------------------------------
+# 💻 Configuration / Scripts
+# ------------------------------
+*.sh text eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.env text eol=lf
+
+# ------------------------------
+# 🧱 Binary / Assets
+# ------------------------------
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.wasm binary
+*.pdf binary
+*.zip binary
+*.exe binary
+
+# ------------------------------
+# ⚙️ Editor / IDE
+# ------------------------------
+# VS Code configuration should use LF endings
+.vscode/* text eol=lf
+
+# ------------------------------
+# 🚀 GitHub-specific
+# ------------------------------
+# Don’t include these files when exporting archives (e.g. `git archive`)
+.gitattributes export-ignore
+.gitignore export-ignore

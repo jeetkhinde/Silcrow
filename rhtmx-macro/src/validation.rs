@@ -3,7 +3,7 @@
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Data, DeriveInput, Fields, Lit, Expr, ExprLit};
+use syn::{Data, DeriveInput, Expr, ExprLit, Fields, Lit};
 
 /// Parse validation attributes from a field
 pub fn extract_validation_attrs(attrs: &[syn::Attribute]) -> Vec<ValidationAttr> {
@@ -26,7 +26,10 @@ pub fn extract_validation_attrs(attrs: &[syn::Attribute]) -> Vec<ValidationAttr>
                 let _ = attr.parse_nested_meta(|meta| {
                     if let Ok(value) = meta.value() {
                         if let Ok(expr) = value.parse::<Expr>() {
-                            if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = expr {
+                            if let Expr::Lit(ExprLit {
+                                lit: Lit::Str(s), ..
+                            }) = expr
+                            {
                                 domains.push(s.value());
                             }
                         }
@@ -42,7 +45,10 @@ pub fn extract_validation_attrs(attrs: &[syn::Attribute]) -> Vec<ValidationAttr>
                 let _ = attr.parse_nested_meta(|meta| {
                     if let Ok(value) = meta.value() {
                         if let Ok(expr) = value.parse::<Expr>() {
-                            if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = expr {
+                            if let Expr::Lit(ExprLit {
+                                lit: Lit::Str(s), ..
+                            }) = expr
+                            {
                                 validations.push(ValidationAttr::Password(s.value()));
                             }
                         }
@@ -54,7 +60,10 @@ pub fn extract_validation_attrs(attrs: &[syn::Attribute]) -> Vec<ValidationAttr>
                 let _ = attr.parse_nested_meta(|meta| {
                     if let Ok(value) = meta.value() {
                         if let Ok(expr) = value.parse::<Expr>() {
-                            if let Expr::Lit(ExprLit { lit: Lit::Int(i), .. }) = expr {
+                            if let Expr::Lit(ExprLit {
+                                lit: Lit::Int(i), ..
+                            }) = expr
+                            {
                                 if let Ok(val) = i.base10_parse::<i64>() {
                                     validations.push(ValidationAttr::Min(val));
                                 }
@@ -68,7 +77,10 @@ pub fn extract_validation_attrs(attrs: &[syn::Attribute]) -> Vec<ValidationAttr>
                 let _ = attr.parse_nested_meta(|meta| {
                     if let Ok(value) = meta.value() {
                         if let Ok(expr) = value.parse::<Expr>() {
-                            if let Expr::Lit(ExprLit { lit: Lit::Int(i), .. }) = expr {
+                            if let Expr::Lit(ExprLit {
+                                lit: Lit::Int(i), ..
+                            }) = expr
+                            {
                                 if let Ok(val) = i.base10_parse::<i64>() {
                                     validations.push(ValidationAttr::Max(val));
                                 }
@@ -84,7 +96,10 @@ pub fn extract_validation_attrs(attrs: &[syn::Attribute]) -> Vec<ValidationAttr>
                 let _ = attr.parse_nested_meta(|meta| {
                     if let Ok(value) = meta.value() {
                         if let Ok(expr) = value.parse::<Expr>() {
-                            if let Expr::Lit(ExprLit { lit: Lit::Int(i), .. }) = expr {
+                            if let Expr::Lit(ExprLit {
+                                lit: Lit::Int(i), ..
+                            }) = expr
+                            {
                                 if let Ok(val) = i.base10_parse::<i64>() {
                                     nums.push(val);
                                 }
@@ -101,7 +116,10 @@ pub fn extract_validation_attrs(attrs: &[syn::Attribute]) -> Vec<ValidationAttr>
                 let _ = attr.parse_nested_meta(|meta| {
                     if let Ok(value) = meta.value() {
                         if let Ok(expr) = value.parse::<Expr>() {
-                            if let Expr::Lit(ExprLit { lit: Lit::Int(i), .. }) = expr {
+                            if let Expr::Lit(ExprLit {
+                                lit: Lit::Int(i), ..
+                            }) = expr
+                            {
                                 if let Ok(val) = i.base10_parse::<usize>() {
                                     validations.push(ValidationAttr::MinLength(val));
                                 }
@@ -115,7 +133,10 @@ pub fn extract_validation_attrs(attrs: &[syn::Attribute]) -> Vec<ValidationAttr>
                 let _ = attr.parse_nested_meta(|meta| {
                     if let Ok(value) = meta.value() {
                         if let Ok(expr) = value.parse::<Expr>() {
-                            if let Expr::Lit(ExprLit { lit: Lit::Int(i), .. }) = expr {
+                            if let Expr::Lit(ExprLit {
+                                lit: Lit::Int(i), ..
+                            }) = expr
+                            {
                                 if let Ok(val) = i.base10_parse::<usize>() {
                                     validations.push(ValidationAttr::MaxLength(val));
                                 }
@@ -130,7 +151,10 @@ pub fn extract_validation_attrs(attrs: &[syn::Attribute]) -> Vec<ValidationAttr>
                 let _ = attr.parse_nested_meta(|meta| {
                     if let Ok(value) = meta.value() {
                         if let Ok(expr) = value.parse::<Expr>() {
-                            if let Expr::Lit(ExprLit { lit: Lit::Int(i), .. }) = expr {
+                            if let Expr::Lit(ExprLit {
+                                lit: Lit::Int(i), ..
+                            }) = expr
+                            {
                                 if let Ok(val) = i.base10_parse::<usize>() {
                                     nums.push(val);
                                 }
@@ -147,7 +171,10 @@ pub fn extract_validation_attrs(attrs: &[syn::Attribute]) -> Vec<ValidationAttr>
                 let _ = attr.parse_nested_meta(|meta| {
                     if let Ok(value) = meta.value() {
                         if let Ok(expr) = value.parse::<Expr>() {
-                            if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = expr {
+                            if let Expr::Lit(ExprLit {
+                                lit: Lit::Str(s), ..
+                            }) = expr
+                            {
                                 validations.push(ValidationAttr::Regex(s.value()));
                             }
                         }
@@ -231,35 +258,40 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
 
         // Check if field is Option<T>
         let is_option = is_option_type(&field.ty);
-        let has_allow_whitespace = validations.iter().any(|v| matches!(v, ValidationAttr::AllowWhitespace));
+        let has_allow_whitespace = validations
+            .iter()
+            .any(|v| matches!(v, ValidationAttr::AllowWhitespace));
 
         for validation in &validations {
             let validation_check = match validation {
                 ValidationAttr::Email => {
                     quote! {
-                        if !rhtml_app::validation::validators::is_valid_email(&self.#field_name) {
+                        if !rhtmx_app::validation::validators::is_valid_email(&self.#field_name) {
                             errors.insert(#field_name_str.to_string(), "Invalid email address".to_string());
                         }
                     }
                 }
                 ValidationAttr::NoPublicDomains => {
                     quote! {
-                        if rhtml_app::validation::validators::is_public_domain(&self.#field_name) {
+                        if rhtmx_app::validation::validators::is_public_domain(&self.#field_name) {
                             errors.insert(#field_name_str.to_string(), "Public email domains not allowed".to_string());
                         }
                     }
                 }
                 ValidationAttr::BlockedDomains(domains) => {
-                    let domains_vec = domains.iter().map(|d| quote! { #d.to_string() }).collect::<Vec<_>>();
+                    let domains_vec = domains
+                        .iter()
+                        .map(|d| quote! { #d.to_string() })
+                        .collect::<Vec<_>>();
                     quote! {
-                        if rhtml_app::validation::validators::is_blocked_domain(&self.#field_name, &vec![#(#domains_vec),*]) {
+                        if rhtmx_app::validation::validators::is_blocked_domain(&self.#field_name, &vec![#(#domains_vec),*]) {
                             errors.insert(#field_name_str.to_string(), "Email domain is blocked".to_string());
                         }
                     }
                 }
                 ValidationAttr::Password(pattern) => {
                     quote! {
-                        if let Err(msg) = rhtml_app::validation::validators::validate_password(&self.#field_name, #pattern) {
+                        if let Err(msg) = rhtmx_app::validation::validators::validate_password(&self.#field_name, #pattern) {
                             errors.insert(#field_name_str.to_string(), msg);
                         }
                     }
@@ -309,14 +341,14 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                 }
                 ValidationAttr::Regex(pattern) => {
                     quote! {
-                        if !rhtml_app::validation::validators::matches_regex(&self.#field_name, #pattern) {
+                        if !rhtmx_app::validation::validators::matches_regex(&self.#field_name, #pattern) {
                             errors.insert(#field_name_str.to_string(), "Invalid format".to_string());
                         }
                     }
                 }
                 ValidationAttr::Url => {
                     quote! {
-                        if !rhtml_app::validation::validators::is_valid_url(&self.#field_name) {
+                        if !rhtmx_app::validation::validators::is_valid_url(&self.#field_name) {
                             errors.insert(#field_name_str.to_string(), "Invalid URL".to_string());
                         }
                     }
@@ -332,7 +364,9 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                         continue;
                     }
                 }
-                ValidationAttr::AllowWhitespace | ValidationAttr::Query | ValidationAttr::Form => continue,
+                ValidationAttr::AllowWhitespace | ValidationAttr::Query | ValidationAttr::Form => {
+                    continue
+                }
             };
 
             validation_code.push(validation_check);

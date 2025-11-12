@@ -1,4 +1,4 @@
-# rhtml-router
+# rhtmx-router
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
@@ -24,13 +24,13 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rhtml-router = "0.1.0"
+rhtmx-router = "0.1.0"
 ```
 
 Or use cargo add:
 
 ```bash
-cargo add rhtml-router
+cargo add rhtmx-router
 ```
 
 ## Quick Start
@@ -38,16 +38,16 @@ cargo add rhtml-router
 ### Basic Usage (Hardcoded Paths)
 
 ```rust
-use rhtml_router::{Router, Route};
+use rhtmx_router::{Router, Route};
 
 fn main() {
     let mut router = Router::new();
 
     // Add routes from file paths
-    router.add_route(Route::from_path("pages/index.rhtml", "pages"));
-    router.add_route(Route::from_path("pages/about.rhtml", "pages"));
-    router.add_route(Route::from_path("pages/users/[id].rhtml", "pages"));
-    router.add_route(Route::from_path("pages/docs/[...slug].rhtml", "pages"));
+    router.add_route(Route::from_path("pages/index.rhtmx", "pages"));
+    router.add_route(Route::from_path("pages/about.rhtmx", "pages"));
+    router.add_route(Route::from_path("pages/users/[id].rhtmx", "pages"));
+    router.add_route(Route::from_path("pages/docs/[...slug].rhtmx", "pages"));
 
     // Sort routes by priority (call this after adding all routes)
     router.sort_routes();
@@ -65,7 +65,7 @@ fn main() {
 The router is framework-agnostic - you can use any configuration system (TOML, YAML, JSON, env vars, etc.):
 
 ```rust
-use rhtml_router::{Router, Route};
+use rhtmx_router::{Router, Route};
 
 fn main() {
     let mut router = Router::new();
@@ -75,8 +75,8 @@ fn main() {
     let pages_dir = read_config().pages_dir; // ← You provide this
 
     // Router respects your configuration
-    router.add_route(Route::from_path("app/index.rhtml", &pages_dir));
-    router.add_route(Route::from_path("app/users/[id].rhtml", &pages_dir));
+    router.add_route(Route::from_path("app/index.rhtmx", &pages_dir));
+    router.add_route(Route::from_path("app/users/[id].rhtmx", &pages_dir));
 
     router.sort_routes();
 
@@ -89,7 +89,7 @@ fn main() {
 ### Example: Using with TOML Configuration
 
 ```rust
-use rhtml_router::{Router, Route};
+use rhtmx_router::{Router, Route};
 use std::fs;
 
 // Your config structure (can be anything)
@@ -115,7 +115,7 @@ fn main() {
     // Use configured directory
     let pages_dir = &config.routing.pages_dir;
     router.add_route(Route::from_path(
-        &format!("{}/index.rhtml", pages_dir),
+        &format!("{}/index.rhtmx", pages_dir),
         pages_dir
     ));
 
@@ -134,25 +134,25 @@ case_insensitive = true    # Case-insensitive URL matching
 
 | File Path | Route Pattern | Description |
 |-----------|---------------|-------------|
-| `pages/index.rhtml` | `/` | Root page |
-| `pages/about.rhtml` | `/about` | Static route |
-| `pages/users/index.rhtml` | `/users` | Section index |
-| `pages/users/[id].rhtml` | `/users/:id` | Dynamic segment |
-| `pages/docs/[...slug].rhtml` | `/docs/*slug` | Catch-all |
-| `pages/posts/[id?].rhtml` | `/posts/:id?` | Optional param |
-| `pages/_layout.rhtml` | `/` | Root layout |
-| `pages/users/_layout.rhtml` | `/users` | Section layout |
-| `pages/_error.rhtml` | `/` | Root error page |
+| `pages/index.rhtmx` | `/` | Root page |
+| `pages/about.rhtmx` | `/about` | Static route |
+| `pages/users/index.rhtmx` | `/users` | Section index |
+| `pages/users/[id].rhtmx` | `/users/:id` | Dynamic segment |
+| `pages/docs/[...slug].rhtmx` | `/docs/*slug` | Catch-all |
+| `pages/posts/[id?].rhtmx` | `/posts/:id?` | Optional param |
+| `pages/_layout.rhtmx` | `/` | Root layout |
+| `pages/users/_layout.rhtmx` | `/users` | Section layout |
+| `pages/_error.rhtmx` | `/` | Root error page |
 
 ## Examples
 
 ### Basic Routing
 
 ```rust
-use rhtml_router::{Router, Route};
+use rhtmx_router::{Router, Route};
 
 let mut router = Router::new();
-router.add_route(Route::from_path("pages/about.rhtml", "pages"));
+router.add_route(Route::from_path("pages/about.rhtmx", "pages"));
 router.sort_routes();
 
 let result = router.match_route("/about").unwrap();
@@ -162,10 +162,10 @@ assert_eq!(result.route.pattern, "/about");
 ### Dynamic Routes
 
 ```rust
-use rhtml_router::{Router, Route};
+use rhtmx_router::{Router, Route};
 
 let mut router = Router::new();
-router.add_route(Route::from_path("pages/users/[id].rhtml", "pages"));
+router.add_route(Route::from_path("pages/users/[id].rhtmx", "pages"));
 router.sort_routes();
 
 let result = router.match_route("/users/42").unwrap();
@@ -175,10 +175,10 @@ assert_eq!(result.params["id"], "42");
 ### Catch-all Routes
 
 ```rust
-use rhtml_router::{Router, Route};
+use rhtmx_router::{Router, Route};
 
 let mut router = Router::new();
-router.add_route(Route::from_path("pages/docs/[...slug].rhtml", "pages"));
+router.add_route(Route::from_path("pages/docs/[...slug].rhtmx", "pages"));
 router.sort_routes();
 
 let result = router.match_route("/docs/guide/intro").unwrap();
@@ -188,10 +188,10 @@ assert_eq!(result.params["slug"], "guide/intro");
 ### Optional Parameters
 
 ```rust
-use rhtml_router::{Router, Route};
+use rhtmx_router::{Router, Route};
 
 let mut router = Router::new();
-router.add_route(Route::from_path("pages/posts/[id?].rhtml", "pages"));
+router.add_route(Route::from_path("pages/posts/[id?].rhtmx", "pages"));
 router.sort_routes();
 
 // Matches with parameter
@@ -206,10 +206,10 @@ assert!(result.params.get("id").is_none());
 ### Case-Insensitive Routing
 
 ```rust
-use rhtml_router::{Router, Route};
+use rhtmx_router::{Router, Route};
 
 let mut router = Router::with_case_insensitive(true);
-router.add_route(Route::from_path("pages/about.rhtml", "pages"));
+router.add_route(Route::from_path("pages/about.rhtmx", "pages"));
 router.sort_routes();
 
 // All match the same route
@@ -224,7 +224,7 @@ This crate is **framework-agnostic** and designed to be used by web frameworks o
 
 ```
 ┌──────────────────────────────────────────────────┐
-│  Your Application (Axum, Actix, RHTML, etc.)    │
+│  Your Application (Axum, Actix, rhtmx, etc.)    │
 │                                                   │
 │  ┌─────────────┐                                 │
 │  │ config.toml │  ← You choose the format        │
@@ -249,7 +249,7 @@ This crate is **framework-agnostic** and designed to be used by web frameworks o
                   │
                   ↓
         ┌──────────────────────────┐
-        │   rhtml-router crate     │
+        │   rhtmx-router crate     │
         │                          │
         │  - Receives parameters   │
         │  - NO config reading     │
@@ -269,7 +269,7 @@ This crate is **framework-agnostic** and designed to be used by web frameworks o
 
 ```rust
 use axum::{Router as AxumRouter, routing::get, extract::Path};
-use rhtml_router::{Router, Route};
+use rhtmx_router::{Router, Route};
 use std::collections::HashMap;
 
 async fn handle_route(
@@ -280,7 +280,7 @@ async fn handle_route(
     // You decide where pages_dir comes from
     let pages_dir = "pages"; // Could be from config, env var, etc.
 
-    router.add_route(Route::from_path("pages/users/[id].rhtml", pages_dir));
+    router.add_route(Route::from_path("pages/users/[id].rhtmx", pages_dir));
     router.sort_routes();
 
     if let Some(route_match) = router.match_route(&format!("/{}", path)) {
@@ -302,26 +302,26 @@ async fn main() {
 }
 ```
 
-### Integration with RHTML Framework
+### Integration with rhtmx Framework
 
-If you're using the RHTML framework (which uses this router):
+If you're using the rhtmx framework (which uses this router):
 
 ```rust
-use rhtml_app::Config;  // RHTML's config system
-use rhtml_router::{Router, Route};
+use rhtmx_app::Config;  // rhtmx's config system
+use rhtmx_router::{Router, Route};
 
-// RHTML reads rhtml.toml for you
-let config = Config::load("rhtml.toml")?;
+// rhtmx reads rhtmx.toml for you
+let config = Config::load("rhtmx.toml")?;
 
 // Pass configured values to router
 let mut router = Router::with_case_insensitive(config.routing.case_insensitive);
 router.add_route(Route::from_path(
-    &format!("{}/index.rhtml", config.routing.pages_dir),
+    &format!("{}/index.rhtmx", config.routing.pages_dir),
     &config.routing.pages_dir
 ));
 ```
 
-See [RHTML's configuration guide](https://github.com/jeetkhinde/RHTML/blob/main/CONFIGURATION.md) for details.
+See [rhtmx's configuration guide](https://github.com/jeetkhinde/rhtmx/blob/main/CONFIGURATION.md) for details.
 
 ## Route Priority
 
@@ -335,16 +335,16 @@ Routes are matched in order of priority:
 ### Example Priority Order
 
 ```rust
-let static_route = Route::from_path("pages/users/new.rhtml", "pages");
+let static_route = Route::from_path("pages/users/new.rhtmx", "pages");
 // Priority: 0 (static always wins)
 
-let optional_route = Route::from_path("pages/users/[id?].rhtml", "pages");
+let optional_route = Route::from_path("pages/users/[id?].rhtmx", "pages");
 // Priority: ~3
 
-let dynamic_route = Route::from_path("pages/users/[id].rhtml", "pages");
+let dynamic_route = Route::from_path("pages/users/[id].rhtmx", "pages");
 // Priority: ~4
 
-let catchall_route = Route::from_path("pages/users/[...rest].rhtml", "pages");
+let catchall_route = Route::from_path("pages/users/[...rest].rhtmx", "pages");
 // Priority: 1000+
 ```
 
@@ -358,28 +358,28 @@ When matching `/users/123`:
 
 ## Special Files
 
-### Layout Files (`_layout.rhtml`)
+### Layout Files (`_layout.rhtmx`)
 
 Layout files define nested layouts. The router tracks them separately:
 
 ```rust
 let mut router = Router::new();
-router.add_route(Route::from_path("pages/_layout.rhtml", "pages"));
-router.add_route(Route::from_path("pages/users/_layout.rhtml", "pages"));
+router.add_route(Route::from_path("pages/_layout.rhtmx", "pages"));
+router.add_route(Route::from_path("pages/users/_layout.rhtmx", "pages"));
 
 // Get layout for a route
 let layout = router.get_layout("/users/123").unwrap();
 assert_eq!(layout.pattern, "/users");
 ```
 
-### Error Pages (`_error.rhtml`)
+### Error Pages (`_error.rhtmx`)
 
 Error pages handle 404s and other errors:
 
 ```rust
 let mut router = Router::new();
-router.add_route(Route::from_path("pages/_error.rhtml", "pages"));
-router.add_route(Route::from_path("pages/api/_error.rhtml", "pages"));
+router.add_route(Route::from_path("pages/_error.rhtmx", "pages"));
+router.add_route(Route::from_path("pages/api/_error.rhtmx", "pages"));
 
 // Get error page for a route
 let error = router.get_error_page("/api/users").unwrap();
@@ -417,7 +417,7 @@ cargo test --all-features
 
 ## Comparison with Other Routers
 
-| Feature | rhtml-router | matchit | path-tree |
+| Feature | rhtmx-router | matchit | path-tree |
 |---------|--------------|---------|-----------|
 | File-based | ✅ | ❌ | ❌ |
 | Zero deps | ✅ | ❌ | ❌ |
@@ -429,7 +429,7 @@ cargo test --all-features
 
 ## Contributing
 
-Contributions welcome! Please check out the [RHTML repository](https://github.com/jeetkhinde/RHTML).
+Contributions welcome! Please check out the [rhtmx repository](https://github.com/jeetkhinde/rhtmx).
 
 ## License
 
@@ -451,4 +451,4 @@ MIT License - see [LICENSE](../LICENSE) file for details.
 
 ## Acknowledgments
 
-Part of the [RHTML project](https://github.com/jeetkhinde/RHTML) - a Rust-first SSR framework.
+Part of the [rhtmx project](https://github.com/jeetkhinde/rhtmx) - a Rust-first SSR framework.

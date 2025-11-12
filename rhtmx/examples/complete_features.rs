@@ -1,7 +1,7 @@
 // RHTMX Example: Complete Feature Demo
 // Demonstrates all RHTMX directives and features
 
-use rhtmx::{html, css, Html, Ok, get};
+use rhtmx::{css, get, html, Ok};
 
 // ============================================================================
 // Data Models
@@ -34,7 +34,7 @@ enum UserStatus {
 // Example 1: r-if, r-else-if, r-else
 // ============================================================================
 
-fn conditional_rendering_demo(score: i32) -> Html {
+fn conditional_rendering_demo(score: i32) {
     html! {
         <div class="score-display">
             <h3>Score: {score}</h3>
@@ -62,7 +62,7 @@ fn conditional_rendering_demo(score: i32) -> Html {
 // Example 2: r-match with r-when and r-default
 // ============================================================================
 
-fn status_badge(status: UserStatus) -> Html {
+fn status_badge(status: UserStatus) {
     html! {
         <div r-match="status" class="status-container">
             <span r-when="UserStatus::Active" class="badge badge-active">
@@ -81,7 +81,7 @@ fn status_badge(status: UserStatus) -> Html {
     }
 }
 
-fn role_badge(role: UserRole) -> Html {
+fn role_badge(role: UserRole) {
     html! {
         <div r-match="role" class="role-badge">
             <div r-when="UserRole::Admin" class="badge admin">
@@ -104,9 +104,9 @@ fn role_badge(role: UserRole) -> Html {
 // Example 3: css! macro with scoping
 // ============================================================================
 
-fn styled_user_card(user: User) -> Html {
+fn styled_user_card(user: User) {
     // Define scoped CSS for this component
-    let _style = css! {
+    css! {
         scope: "user-card",
         .card {
             border: 2px solid #e0e0e0;
@@ -158,7 +158,7 @@ fn styled_user_card(user: User) -> Html {
 // Example 4: Combining all features
 // ============================================================================
 
-fn dashboard(users: Vec<User>) -> Html {
+fn dashboard(users: Vec<User>) {
     html! {
         <div class="dashboard">
             <header>

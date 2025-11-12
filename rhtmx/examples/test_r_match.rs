@@ -37,7 +37,7 @@ fn main() {
     println!("Pending status: {}", badge.0);
 
     // Test 3: Nested in function
-    fn render_status(status: UserStatus) -> Html {
+    fn render_status(status: UserStatus) {
         html! {
             <div class="status-badge" r-match="status">
                 <span r-when="UserStatus::Active" class="active">"✓ Active"</span>
@@ -47,7 +47,10 @@ fn main() {
         }
     }
 
-    println!("Function result: {}", render_status(UserStatus::Suspended).0);
+    println!(
+        "Function result: {}",
+        render_status(UserStatus::Suspended).0
+    );
 
     println!("\n✅ All r-match tests passed!");
 }
