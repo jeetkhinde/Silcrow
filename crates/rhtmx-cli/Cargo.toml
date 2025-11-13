@@ -37,6 +37,7 @@ anyhow = { workspace = true }
 
 # File operations
 walkdir = "2.5"
+glob = "0.3"
 
 # Terminal output
 colored = "2.1"
