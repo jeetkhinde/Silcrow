@@ -21,11 +21,7 @@ pub fn execute(mode: BuildMode, release: bool) -> Result<()> {
 
     match mode {
         BuildMode::Ssr => build_ssr(release),
-        BuildMode::Ssg => {
-            println!("{}", "⚠ SSG mode not yet implemented".yellow());
-            println!("Coming soon: Will compile + run in generator mode + write HTML files");
-            Ok(())
-        }
+        BuildMode::Ssg => build_ssg(release),
         BuildMode::Isr => {
             println!("{}", "⚠ ISR mode not yet implemented".yellow());
             println!("Coming soon: Will compile with caching layer");
@@ -129,4 +125,344 @@ fn build_ssr(release: bool) -> Result<()> {
     println!("  {}", format!("./{}", binary_dst.display()).yellow());
 
     Ok(())
+}
+
+fn build_ssg(release: bool) -> Result<()> {
+    let current_dir = env::current_dir()?;
+
+    // Step 1: Read configuration
+    let config_path = current_dir.join("rhtmx.toml");
+    let config = crate::theme::manifest::ProjectConfig::from_file(&config_path)
+        .context("Failed to read rhtmx.toml")?;
+
+    let ssg_config = config.ssg.as_ref();
+    let output_dir = ssg_config
+        .map(|s| s.output_dir.clone())
+        .unwrap_or_else(|| "dist".to_string());
+
+    // Step 2: Ensure theme is merged
+    println!("{}", "  ⚙  Preparing build environment...".cyan());
+    let manager = ThemeManager::new(&current_dir);
+    manager.load_and_merge(false)?;
+    let merged_path = manager.merged_path();
+
+    // Step 3: Discover routes from pages directory
+    println!("{}", "  🔍 Discovering routes...".cyan());
+    let pages_dir = merged_path.join("pages");
+    let routes = discover_routes(&pages_dir)?;
+    println!("     Found {} static routes", routes.len());
+
+    // Step 4: Expand dynamic routes from configuration
+    let mut all_routes = routes.clone();
+    if let Some(ssg_cfg) = ssg_config {
+        if !ssg_cfg.dynamic_routes.is_empty() {
+            println!("{}", "  📋 Expanding dynamic routes...".cyan());
+            for dynamic_source in &ssg_cfg.dynamic_routes {
+                let expanded = expand_dynamic_route(&current_dir, dynamic_source)?;
+                println!("     {} -> {} routes", dynamic_source.pattern, expanded.len());
+                all_routes.extend(expanded);
+            }
+        }
+    }
+
+    println!();
+    println!("  Total routes to render: {}", all_routes.len());
+    println!();
+
+    // Step 5: Create output directory
+    let dist_path = current_dir.join(&output_dir);
+    if dist_path.exists() {
+        fs::remove_dir_all(&dist_path)
+            .context("Failed to remove existing dist directory")?;
+    }
+    fs::create_dir_all(&dist_path)
+        .context("Failed to create dist directory")?;
+
+    // Step 6: Generate HTML for each route
+    println!("{}", "  📝 Generating static HTML...".cyan());
+    generate_html_files(merged_path, &all_routes, &dist_path)?;
+
+    // Step 7: Copy static assets
+    println!("{}", "  📦 Copying static assets...".cyan());
+    copy_static_assets(merged_path, &dist_path)?;
+
+    println!();
+    println!("{}", "✓ SSG build complete!".green().bold());
+    println!();
+    println!("Output directory: {}", dist_path.display().to_string().cyan());
+    println!("Total files: {}", all_routes.len() + 1); // +1 for static dir
+    println!();
+    println!("Deploy your site:");
+    println!("  Serve the {} directory with any static file server", output_dir);
+
+    Ok(())
+}
+
+/// Discover all routes by scanning the pages directory
+fn discover_routes(pages_dir: &std::path::Path) -> Result<Vec<RouteInfo>> {
+    let mut routes = Vec::new();
+    discover_routes_recursive(pages_dir, pages_dir, &mut routes)?;
+    Ok(routes)
+}
+
+fn discover_routes_recursive(
+    base_dir: &std::path::Path,
+    current_dir: &std::path::Path,
+    routes: &mut Vec<RouteInfo>,
+) -> Result<()> {
+    use std::fs;
+
+    if !current_dir.exists() {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(current_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            discover_routes_recursive(base_dir, &path, routes)?;
+        } else if path.extension().and_then(|s| s.to_str()) == Some("rhtmx") {
+            // Skip layouts and error pages
+            if let Some(filename) = path.file_stem().and_then(|s| s.to_str()) {
+                if filename.starts_with('_') {
+                    continue;
+                }
+            }
+
+            // Convert file path to route pattern
+            let relative = path.strip_prefix(base_dir)?;
+            let route_path = file_path_to_route(relative);
+
+            // Skip dynamic routes (they'll be handled by config)
+            if route_path.contains('[') {
+                continue;
+            }
+
+            routes.push(RouteInfo {
+                pattern: route_path.clone(),
+                file_path: path.clone(),
+                params: std::collections::HashMap::new(),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+/// Convert file path to route pattern
+fn file_path_to_route(path: &std::path::Path) -> String {
+    let mut route = String::from("/");
+
+    for component in path.components() {
+        if let std::path::Component::Normal(os_str) = component {
+            if let Some(segment) = os_str.to_str() {
+                // Remove .rhtmx extension
+                let segment = segment.strip_suffix(".rhtmx").unwrap_or(segment);
+
+                // Skip index files
+                if segment == "index" {
+                    continue;
+                }
+
+                if !route.ends_with('/') {
+                    route.push('/');
+                }
+                route.push_str(segment);
+            }
+        }
+    }
+
+    // Ensure we have at least "/"
+    if route.is_empty() {
+        route = "/".to_string();
+    }
+
+    route
+}
+
+/// Expand dynamic routes based on configuration
+fn expand_dynamic_route(
+    project_root: &std::path::Path,
+    source: &crate::theme::manifest::DynamicRouteSource,
+) -> Result<Vec<RouteInfo>> {
+    use glob::glob;
+    use std::collections::HashMap;
+
+    let mut routes = Vec::new();
+
+    // Resolve glob pattern relative to project root
+    let glob_pattern = project_root.join(&source.source);
+    let glob_pattern_str = glob_pattern.to_str()
+        .ok_or_else(|| anyhow::anyhow!("Invalid glob pattern"))?;
+
+    for entry in glob(glob_pattern_str)
+        .context("Failed to read glob pattern")?
+    {
+        let path = entry.context("Failed to read glob entry")?;
+
+        // Extract slug from filename
+        let slug = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        // Replace [slug] or [id] in pattern with actual value
+        let route_pattern = source.pattern
+            .replace("[slug]", &slug)
+            .replace("[id]", &slug);
+
+        let mut params = HashMap::new();
+        if source.pattern.contains("[slug]") {
+            params.insert("slug".to_string(), slug.clone());
+        } else if source.pattern.contains("[id]") {
+            params.insert("id".to_string(), slug.clone());
+        }
+
+        routes.push(RouteInfo {
+            pattern: route_pattern,
+            file_path: path,
+            params,
+        });
+    }
+
+    Ok(routes)
+}
+
+/// Generate HTML files for all routes
+fn generate_html_files(
+    merged_path: &std::path::Path,
+    routes: &[RouteInfo],
+    output_dir: &std::path::Path,
+) -> Result<()> {
+    use std::fs;
+
+    for (idx, route) in routes.iter().enumerate() {
+        print!("     [{}/{}] {} ", idx + 1, routes.len(), route.pattern);
+
+        // Read template file
+        let template_content = fs::read_to_string(&route.file_path)
+            .with_context(|| format!("Failed to read template: {:?}", route.file_path))?;
+
+        // Generate HTML (simplified - just wrap in basic HTML for now)
+        let html = generate_html_for_route(&route.pattern, &template_content, &route.params)?;
+
+        // Determine output file path
+        let output_file = route_to_file_path(output_dir, &route.pattern);
+
+        // Create parent directories if needed
+        if let Some(parent) = output_file.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory: {:?}", parent))?;
+        }
+
+        // Write HTML file
+        fs::write(&output_file, html)
+            .with_context(|| format!("Failed to write HTML file: {:?}", output_file))?;
+
+        println!("{}", "✓".green());
+    }
+
+    Ok(())
+}
+
+/// Generate HTML for a route (simplified version)
+fn generate_html_for_route(
+    route: &str,
+    _template_content: &str,
+    params: &std::collections::HashMap<String, String>,
+) -> Result<String> {
+    // For now, generate a simple HTML page
+    // In a real implementation, this would:
+    // 1. Compile the template with Rust macros
+    // 2. Execute the rendering code
+    // 3. Return the generated HTML
+
+    let params_display = if params.is_empty() {
+        String::new()
+    } else {
+        format!("<p>Route params: {:?}</p>", params)
+    };
+
+    Ok(format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RHTMX - {route}</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <nav>
+        <a href="/">Home</a>
+    </nav>
+    <main>
+        <h1>Route: {route}</h1>
+        {params_display}
+        <p>This is a static generated page.</p>
+        <p class="note">Note: Full template rendering will be implemented in the next iteration.</p>
+    </main>
+    <footer>
+        <p>Built with RHTMX SSG</p>
+    </footer>
+</body>
+</html>"#
+    ))
+}
+
+/// Convert route pattern to file path
+fn route_to_file_path(base: &std::path::Path, route: &str) -> std::path::PathBuf {
+    if route == "/" {
+        base.join("index.html")
+    } else {
+        let clean_route = route.trim_start_matches('/');
+        base.join(format!("{}.html", clean_route))
+    }
+}
+
+/// Copy static assets to output directory
+fn copy_static_assets(merged_path: &std::path::Path, output_dir: &std::path::Path) -> Result<()> {
+    let static_src = merged_path.join("static");
+    if !static_src.exists() {
+        println!("     No static directory found, skipping");
+        return Ok(());
+    }
+
+    let static_dst = output_dir.join("static");
+    copy_directory_recursive(&static_src, &static_dst)?;
+
+    println!("     ✓ Copied static assets");
+    Ok(())
+}
+
+fn copy_directory_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<()> {
+    use std::fs;
+
+    fs::create_dir_all(dst)
+        .with_context(|| format!("Failed to create directory: {:?}", dst))?;
+
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        let file_name = entry.file_name();
+        let dst_path = dst.join(&file_name);
+
+        if path.is_dir() {
+            copy_directory_recursive(&path, &dst_path)?;
+        } else {
+            fs::copy(&path, &dst_path)
+                .with_context(|| format!("Failed to copy file: {:?}", path))?;
+        }
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+struct RouteInfo {
+    pattern: String,
+    file_path: std::path::PathBuf,
+    params: std::collections::HashMap<String, String>,
 }

@@ -2,6 +2,33 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+/// SSG (Static Site Generation) configuration
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SsgConfig {
+    /// Output directory for generated static files
+    #[serde(default = "default_output_dir")]
+    pub output_dir: String,
+    /// Dynamic route sources for pre-rendering
+    #[serde(default)]
+    pub dynamic_routes: Vec<DynamicRouteSource>,
+}
+
+fn default_output_dir() -> String {
+    "dist".to_string()
+}
+
+/// Configuration for dynamic route data sources
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DynamicRouteSource {
+    /// Route pattern (e.g., "/posts/[slug]")
+    pub pattern: String,
+    /// Source glob pattern for content files (e.g., "content/posts/*.md")
+    pub source: String,
+    /// Optional field to extract from filename for slug (default: filename without extension)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slug_field: Option<String>,
+}
+
 /// Project configuration with theme reference (from rhtmx.toml)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectConfig {
@@ -9,6 +36,8 @@ pub struct ProjectConfig {
     pub project: ProjectInfo,
     #[serde(default)]
     pub theme: Option<ThemeConfig>,
+    #[serde(default)]
+    pub ssg: Option<SsgConfig>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
