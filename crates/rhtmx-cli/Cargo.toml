@@ -26,6 +26,11 @@ clap = { version = "4.5", features = ["derive", "cargo"] }
 serde = { workspace = true }
 toml = { workspace = true }
 
+# Dev server (optional, only used for `rhtmx dev`)
+tokio = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+tower-livereload = { workspace = true, optional = true }
+
 # Utilities
 anyhow = { workspace = true }
 
@@ -34,3 +39,7 @@ walkdir = "2.5"
 
 # Terminal output
 colored = "2.1"
+
+[features]
+default = ["dev-server"]
+dev-server = ["tokio", "axum", "tower-livereload"]

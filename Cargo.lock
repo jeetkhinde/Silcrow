@@ -1753,13 +1753,16 @@ name = "rhtmx-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "clap",
  "colored",
  "rhtmx",
  "rhtmx-parser",
  "rhtmx-router",
  "serde",
+ "tokio",
  "toml 0.8.23",
+ "tower-livereload",
  "walkdir",
 ]
 

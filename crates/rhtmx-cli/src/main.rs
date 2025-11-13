@@ -2,6 +2,9 @@ mod commands;
 mod project;
 mod theme;
 
+#[cfg(feature = "dev-server")]
+mod dev;
+
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use colored::Colorize;

@@ -68,8 +68,8 @@ fn create_initial_pages(project_path: &Path) -> Result<()> {
     fs::create_dir_all(project_path.join("pages"))?;
     fs::create_dir_all(project_path.join("static/css"))?;
 
-    // Create _layout.rhtml
-    let layout_content = r#"// pages/_layout.rhtml
+    // Create _layout.rhtmx
+    let layout_content = r#"// pages/_layout.rhtmx
 
 pub struct LayoutSlots {
     pub content: impl Render,       // Required - auto-filled
@@ -103,11 +103,11 @@ pub fn layout(slots: LayoutSlots) {
 }
 "#;
 
-    fs::write(project_path.join("pages/_layout.rhtml"), layout_content)
-        .context("Failed to create _layout.rhtml")?;
+    fs::write(project_path.join("pages/_layout.rhtmx"), layout_content)
+        .context("Failed to create _layout.rhtmx")?;
 
-    // Create index.rhtml
-    let index_content = r#"// pages/index.rhtml
+    // Create index.rhtmx
+    let index_content = r#"// pages/index.rhtmx
 
 slot! {
     title: "Welcome to RHTMX",
@@ -133,7 +133,7 @@ pub fn index() {
         <div class="next-steps">
             <h2>Next Steps</h2>
             <ol>
-                <li>Edit <code>pages/index.rhtml</code> to customize this page</li>
+                <li>Edit <code>pages/index.rhtmx</code> to customize this page</li>
                 <li>Create new pages in the <code>pages/</code> directory</li>
                 <li>Add components in <code>components/</code></li>
                 <li>Run <code>rhtmx dev</code> to start the dev server</li>
@@ -143,8 +143,8 @@ pub fn index() {
 }
 "#;
 
-    fs::write(project_path.join("pages/index.rhtml"), index_content)
-        .context("Failed to create index.rhtml")?;
+    fs::write(project_path.join("pages/index.rhtmx"), index_content)
+        .context("Failed to create index.rhtmx")?;
 
     // Create a basic CSS file
     let css_content = r#"/* static/css/styles.css */
@@ -303,8 +303,8 @@ rhtmx build --mode=isr
 ```
 {}
 ├── pages/              # File-based routes
-│   ├── _layout.rhtml  # Root layout
-│   └── index.rhtml    # Home page
+│   ├── _layout.rhtmx  # Root layout
+│   └── index.rhtmx    # Home page
 ├── components/         # Reusable components
 ├── static/            # Static assets (CSS, JS, images)
 ├── src/               # Rust source code
