@@ -1,0 +1,30 @@
+[package]
+name = "rhtmx-isr"
+version = "0.1.0"
+edition = "2021"
+authors = ["RHTMX Team"]
+description = "Incremental Static Regeneration engine for RHTMX framework"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+# Core dependencies
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+async-trait = "0.1"
+
+# Storage backends
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager"], optional = true }
+walkdir = "2.5"
+
+# Note: Proc macro support will be added in a separate rhtmx-isr-macro crate
+# to avoid the limitation that proc-macro crates can only export macros
+
+[features]
+default = ["memory", "filesystem"]
+memory = []
+filesystem = []
+dragonfly = ["redis"]
+all = ["memory", "filesystem", "dragonfly"]

@@ -17,6 +17,71 @@ fn default_output_dir() -> String {
     "dist".to_string()
 }
 
+/// ISR (Incremental Static Regeneration) configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IsrConfig {
+    /// Default revalidation period in seconds
+    #[serde(default = "default_revalidate")]
+    pub default_revalidate: u64,
+    /// Storage configuration
+    pub storage: StorageConfig,
+}
+
+fn default_revalidate() -> u64 {
+    60
+}
+
+/// Storage backend configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StorageConfig {
+    /// Primary storage backend: "memory", "filesystem", or "dragonfly"
+    pub primary: String,
+    /// Optional fallback storage backend
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fallback: Option<String>,
+    /// Dragonfly-specific configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dragonfly: Option<DragonflyConfig>,
+    /// Filesystem-specific configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filesystem: Option<FilesystemConfig>,
+}
+
+/// Dragonfly (Redis) storage configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DragonflyConfig {
+    /// Redis/Dragonfly connection URL
+    pub url: String,
+    /// Connection pool size
+    #[serde(default = "default_pool_size")]
+    pub pool_size: u32,
+    /// Key prefix for cache entries
+    #[serde(default = "default_key_prefix")]
+    pub key_prefix: String,
+}
+
+fn default_pool_size() -> u32 {
+    10
+}
+
+fn default_key_prefix() -> String {
+    "rhtmx:isr:".to_string()
+}
+
+/// Filesystem storage configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FilesystemConfig {
+    /// Cache directory path
+    pub path: String,
+    /// Maximum cache size in megabytes
+    #[serde(default = "default_max_size")]
+    pub max_size_mb: u64,
+}
+
+fn default_max_size() -> u64 {
+    500
+}
+
 /// Configuration for dynamic route data sources
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DynamicRouteSource {
@@ -38,6 +103,19 @@ pub struct ProjectConfig {
     pub theme: Option<ThemeConfig>,
     #[serde(default)]
     pub ssg: Option<SsgConfig>,
+    #[serde(default)]
+    pub isr: Option<IsrConfig>,
+}
+
+impl Default for ProjectConfig {
+    fn default() -> Self {
+        Self {
+            project: ProjectInfo::default(),
+            theme: None,
+            ssg: None,
+            isr: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

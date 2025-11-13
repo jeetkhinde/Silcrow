@@ -22,11 +22,7 @@ pub fn execute(mode: BuildMode, release: bool) -> Result<()> {
     match mode {
         BuildMode::Ssr => build_ssr(release),
         BuildMode::Ssg => build_ssg(release),
-        BuildMode::Isr => {
-            println!("{}", "⚠ ISR mode not yet implemented".yellow());
-            println!("Coming soon: Will compile with caching layer");
-            Ok(())
-        }
+        BuildMode::Isr => build_isr(release),
     }
 }
 
@@ -465,4 +461,158 @@ struct RouteInfo {
     pattern: String,
     file_path: std::path::PathBuf,
     params: std::collections::HashMap<String, String>,
+}
+
+fn build_isr(release: bool) -> Result<()> {
+    let current_dir = env::current_dir()?;
+
+    // Step 1: Ensure theme is merged
+    println!("{}", "  ⚙  Preparing build environment...".cyan());
+    let manager = ThemeManager::new(&current_dir);
+    manager.load_and_merge(false)?;
+
+    let merged_path = manager.merged_path();
+
+    // Step 2: Copy and modify Cargo.toml to add ISR dependencies
+    println!("{}", "  ⚙  Setting up ISR configuration...".cyan());
+    let cargo_toml_src = current_dir.join("Cargo.toml");
+    let cargo_toml_dst = merged_path.join("Cargo.toml");
+
+    if !cargo_toml_src.exists() {
+        anyhow::bail!("Cargo.toml not found in project root. Is this a valid RHTMX project?");
+    }
+
+    // Read and modify Cargo.toml to add ISR dependency
+    let mut cargo_toml_content = fs::read_to_string(&cargo_toml_src)
+        .context("Failed to read Cargo.toml")?;
+
+    // Parse TOML
+    let mut cargo_toml: toml::Value = toml::from_str(&cargo_toml_content)
+        .context("Failed to parse Cargo.toml")?;
+
+    // Add rhtmx-isr dependency if not already present
+    if let Some(deps) = cargo_toml.get_mut("dependencies").and_then(|v| v.as_table_mut()) {
+        if !deps.contains_key("rhtmx-isr") {
+            // Determine the path to rhtmx-isr crate
+            // Assume it's in the workspace or use a version
+            let isr_dep = toml::Value::Table({
+                let mut table = toml::map::Map::new();
+                table.insert("path".to_string(), toml::Value::String("../rhtmx-isr".to_string()));
+                table.insert("features".to_string(), toml::Value::Array(vec![
+                    toml::Value::String("all".to_string())
+                ]));
+                table
+            });
+            deps.insert("rhtmx-isr".to_string(), isr_dep);
+        }
+    }
+
+    // Write modified Cargo.toml
+    let modified_toml = toml::to_string_pretty(&cargo_toml)
+        .context("Failed to serialize Cargo.toml")?;
+    fs::write(&cargo_toml_dst, modified_toml)
+        .context("Failed to write modified Cargo.toml")?;
+
+    // Step 3: Read ISR configuration from rhtmx.toml
+    println!("{}", "  ⚙  Reading ISR configuration...".cyan());
+    let config_path = current_dir.join("rhtmx.toml");
+    let config = if config_path.exists() {
+        crate::theme::manifest::ProjectConfig::from_file(&config_path)
+            .context("Failed to read rhtmx.toml")?
+    } else {
+        crate::theme::manifest::ProjectConfig::default()
+    };
+
+    // Display ISR configuration
+    if let Some(ref isr_config) = config.isr {
+        println!("     Revalidation: {}s", isr_config.default_revalidate);
+        println!("     Primary storage: {}", isr_config.storage.primary);
+        if let Some(ref fallback) = isr_config.storage.fallback {
+            println!("     Fallback storage: {}", fallback);
+        }
+    } else {
+        println!("     Using default ISR configuration");
+        println!("     (Add [isr] section to rhtmx.toml to customize)");
+    }
+
+    // Step 4: Get project name from Cargo.toml
+    let project_name = cargo_toml
+        .get("package")
+        .and_then(|p| p.get("name"))
+        .and_then(|n| n.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Failed to get package name from Cargo.toml"))?
+        .to_string();
+
+    // Step 5: Run cargo build in merged directory with ISR features
+    println!("{}", "  🔨 Compiling project with ISR support...".cyan());
+    println!();
+
+    let mut cmd = Command::new("cargo");
+    cmd.arg("build")
+        .arg("--features")
+        .arg("isr")
+        .current_dir(merged_path);
+
+    if release {
+        cmd.arg("--release");
+    }
+
+    let status = cmd.status()
+        .context("Failed to execute cargo build. Is cargo installed?")?;
+
+    if !status.success() {
+        anyhow::bail!("Build failed");
+    }
+
+    println!();
+
+    // Step 6: Copy binary to project target directory
+    let build_mode = if release { "release" } else { "debug" };
+    let binary_src = merged_path.join(format!("target/{}/{}", build_mode, project_name));
+    let binary_dst = current_dir.join(format!("target/{}/{}", build_mode, project_name));
+
+    if !binary_src.exists() {
+        anyhow::bail!(
+            "Binary not found at expected location: {}\nDid the build succeed?",
+            binary_src.display()
+        );
+    }
+
+    // Create target directory if it doesn't exist
+    if let Some(parent) = binary_dst.parent() {
+        fs::create_dir_all(parent)
+            .context("Failed to create target directory")?;
+    }
+
+    println!("{}", "  📦 Copying binary...".cyan());
+    fs::copy(&binary_src, &binary_dst)
+        .context("Failed to copy binary to target directory")?;
+
+    // Make binary executable on Unix systems
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&binary_dst)?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&binary_dst, perms)?;
+    }
+
+    println!();
+    println!("{}", "✓ ISR build complete!".green().bold());
+    println!();
+    println!("Binary location: {}", binary_dst.display().to_string().cyan());
+    println!();
+    println!("Run your application:");
+    println!("  {}", format!("./{}", binary_dst.display()).yellow());
+    println!();
+    println!("ISR features:");
+    println!("  • Cached page serving");
+    println!("  • Background revalidation");
+    println!("  • Multiple storage backends (memory, filesystem, dragonfly)");
+    if config.isr.is_some() {
+        println!();
+        println!("Configuration from rhtmx.toml will be used at runtime.");
+    }
+
+    Ok(())
 }

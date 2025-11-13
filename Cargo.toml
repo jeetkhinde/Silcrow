@@ -7,6 +7,7 @@ members = [
   "crates/rhtmx-sync",
   "crates/rhtmx-server",
   "crates/rhtmx-cli",
+  "crates/rhtmx-isr",
   "crates/RHTMX-Form",
   "crates/rhtmx-validation/core",
   "crates/rhtmx-validation/wasm",
