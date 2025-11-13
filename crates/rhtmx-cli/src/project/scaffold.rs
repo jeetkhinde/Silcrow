@@ -60,6 +60,11 @@ fn create_config_files(project_path: &Path, theme: Option<&str>) -> Result<()> {
     fs::write(project_path.join("Cargo.toml"), cargo_config)
         .context("Failed to create Cargo.toml")?;
 
+    // Create src/main.rs
+    let main_rs = generate_main_rs();
+    fs::write(project_path.join("src/main.rs"), main_rs)
+        .context("Failed to create src/main.rs")?;
+
     Ok(())
 }
 
@@ -414,4 +419,32 @@ anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 "#, project_name))
+}
+
+fn generate_main_rs() -> String {
+    r#"use axum::{
+    routing::get,
+    Router,
+};
+use std::net::SocketAddr;
+
+#[tokio::main]
+async fn main() {
+    // Initialize tracing
+    tracing_subscriber::fmt::init();
+
+    println!("🚀 Starting RHTMX server...");
+
+    // Build router
+    let app = Router::new()
+        .route("/", get(|| async { "Hello from RHTMX!" }));
+
+    // Start server
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    println!("✅ Server running at http://{}", addr);
+
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
+}
+"#.to_string()
 }
