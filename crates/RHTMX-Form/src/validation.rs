@@ -591,9 +591,19 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                     }
                 }
                 ValidationAttr::Url => {
-                    quote! {
-                        if !rhtmx::validation::validators::is_valid_url(&self.#field_name) {
-                            errors.insert(#field_name_str.to_string(), "Invalid URL".to_string());
+                    if is_option {
+                        quote! {
+                            if let Some(ref value) = self.#field_name {
+                                if !rhtmx::validation::validators::is_valid_url(value) {
+                                    errors.insert(#field_name_str.to_string(), "Invalid URL".to_string());
+                                }
+                            }
+                        }
+                    } else {
+                        quote! {
+                            if !rhtmx::validation::validators::is_valid_url(&self.#field_name) {
+                                errors.insert(#field_name_str.to_string(), "Invalid URL".to_string());
+                            }
                         }
                     }
                 }
@@ -786,4 +796,229 @@ fn is_string_type(ty: &syn::Type) -> bool {
         }
     }
     false
+}
+
+/// Convert validation attributes to HTML5 attributes
+fn validation_to_html5_attrs(validations: &[ValidationAttr]) -> Vec<(&'static str, String)> {
+    let mut attrs = Vec::new();
+
+    for validation in validations {
+        match validation {
+            ValidationAttr::Email => {
+                attrs.push(("type", "email".to_string()));
+            }
+            ValidationAttr::Required => {
+                attrs.push(("required", "".to_string()));
+            }
+            ValidationAttr::MinLength(n) => {
+                attrs.push(("minlength", n.to_string()));
+            }
+            ValidationAttr::MaxLength(n) => {
+                attrs.push(("maxlength", n.to_string()));
+            }
+            ValidationAttr::Min(n) => {
+                attrs.push(("min", n.to_string()));
+            }
+            ValidationAttr::Max(n) => {
+                attrs.push(("max", n.to_string()));
+            }
+            ValidationAttr::Regex(pattern) => {
+                attrs.push(("pattern", pattern.clone()));
+            }
+            ValidationAttr::Url => {
+                attrs.push(("type", "url".to_string()));
+            }
+            _ => {}
+        }
+    }
+
+    attrs
+}
+
+/// Convert validation attributes to data-validate JSON
+fn validation_to_json(validations: &[ValidationAttr]) -> String {
+    let mut json_parts = Vec::new();
+
+    for validation in validations {
+        match validation {
+            ValidationAttr::Email => {
+                json_parts.push(r#""email": true"#.to_string());
+            }
+            ValidationAttr::NoPublicDomains => {
+                json_parts.push(r#""noPublicDomains": true"#.to_string());
+            }
+            ValidationAttr::BlockedDomains(domains) => {
+                let domains_json = domains
+                    .iter()
+                    .map(|d| format!(r#""{}""#, d))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                json_parts.push(format!(r#""blockedDomains": [{}]"#, domains_json));
+            }
+            ValidationAttr::Password(pattern) => {
+                json_parts.push(format!(r#""password": "{}""#, pattern));
+            }
+            ValidationAttr::Min(n) => {
+                json_parts.push(format!(r#""min": {}"#, n));
+            }
+            ValidationAttr::Max(n) => {
+                json_parts.push(format!(r#""max": {}"#, n));
+            }
+            ValidationAttr::Range(min, max) => {
+                json_parts.push(format!(r#""min": {}, "max": {}"#, min, max));
+            }
+            ValidationAttr::MinLength(n) => {
+                json_parts.push(format!(r#""minLength": {}"#, n));
+            }
+            ValidationAttr::MaxLength(n) => {
+                json_parts.push(format!(r#""maxLength": {}"#, n));
+            }
+            ValidationAttr::Length(min, max) => {
+                json_parts.push(format!(r#""minLength": {}, "maxLength": {}"#, min, max));
+            }
+            ValidationAttr::Regex(pattern) => {
+                // Escape quotes in pattern
+                let escaped = pattern.replace('"', r#"\""#);
+                json_parts.push(format!(r#""pattern": "{}""#, escaped));
+            }
+            ValidationAttr::Url => {
+                json_parts.push(r#""url": true"#.to_string());
+            }
+            ValidationAttr::Required => {
+                json_parts.push(r#""required": true"#.to_string());
+            }
+            ValidationAttr::Contains(s) => {
+                json_parts.push(format!(r#""contains": "{}""#, s));
+            }
+            ValidationAttr::NotContains(s) => {
+                json_parts.push(format!(r#""notContains": "{}""#, s));
+            }
+            ValidationAttr::StartsWith(s) => {
+                json_parts.push(format!(r#""startsWith": "{}""#, s));
+            }
+            ValidationAttr::EndsWith(s) => {
+                json_parts.push(format!(r#""endsWith": "{}""#, s));
+            }
+            ValidationAttr::Equals(s) => {
+                json_parts.push(format!(r#""equals": "{}""#, s));
+            }
+            ValidationAttr::NotEquals(s) => {
+                json_parts.push(format!(r#""notEquals": "{}""#, s));
+            }
+            ValidationAttr::EqualsField(field) => {
+                json_parts.push(format!(r#""equalsField": "{}""#, field));
+            }
+            ValidationAttr::MinItems(n) => {
+                json_parts.push(format!(r#""minItems": {}"#, n));
+            }
+            ValidationAttr::MaxItems(n) => {
+                json_parts.push(format!(r#""maxItems": {}"#, n));
+            }
+            ValidationAttr::Unique => {
+                json_parts.push(r#""unique": true"#.to_string());
+            }
+            ValidationAttr::EnumVariant(variants) => {
+                let variants_json = variants
+                    .iter()
+                    .map(|v| format!(r#""{}""#, v))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                json_parts.push(format!(r#""enum": [{}]"#, variants_json));
+            }
+            _ => {}
+        }
+    }
+
+    if json_parts.is_empty() {
+        "{}".to_string()
+    } else {
+        format!("{{{}}}", json_parts.join(", "))
+    }
+}
+
+/// Generate FormField implementation for a struct
+pub fn impl_form_field(input: &DeriveInput) -> TokenStream {
+    let name = &input.ident;
+
+    let fields = match &input.data {
+        Data::Struct(data) => match &data.fields {
+            Fields::Named(fields) => &fields.named,
+            _ => panic!("FormField only supports structs with named fields"),
+        },
+        _ => panic!("FormField only supports structs"),
+    };
+
+    let mut field_match_arms = Vec::new();
+    let mut field_names_list = Vec::new();
+
+    for field in fields {
+        let field_name = field.ident.as_ref().unwrap();
+        let field_name_str = field_name.to_string();
+        let validations = extract_validation_attrs(&field.attrs);
+
+        field_names_list.push(field_name_str.clone());
+
+        // Get label if specified
+        let field_label = validations
+            .iter()
+            .find_map(|v| match v {
+                ValidationAttr::Label(label) => Some(label.clone()),
+                _ => None,
+            })
+            .unwrap_or_else(|| {
+                // Convert snake_case to Title Case
+                field_name_str
+                    .split('_')
+                    .map(|word| {
+                        let mut chars = word.chars();
+                        match chars.next() {
+                            None => String::new(),
+                            Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            });
+
+        // Convert validations to HTML5 attributes
+        let html5_attrs = validation_to_html5_attrs(&validations);
+        let html5_inserts = html5_attrs.iter().map(|(k, v)| {
+            quote! {
+                attrs.insert(#k.to_string(), #v.to_string());
+            }
+        });
+
+        // Convert validations to JSON
+        let data_validate_json = validation_to_json(&validations);
+
+        field_match_arms.push(quote! {
+            #field_name_str => {
+                let mut attrs = std::collections::HashMap::new();
+                #(#html5_inserts)*
+
+                rhtmx::FieldAttrs {
+                    html5_attrs: attrs,
+                    data_validate: #data_validate_json.to_string(),
+                    label: #field_label.to_string(),
+                }
+            }
+        });
+    }
+
+    let field_names_array: Vec<_> = field_names_list.iter().map(|name| quote! { #name }).collect();
+
+    quote! {
+        impl rhtmx::FormField for #name {
+            fn field_attrs(&self, field_name: &str) -> rhtmx::FieldAttrs {
+                match field_name {
+                    #(#field_match_arms)*
+                    _ => rhtmx::FieldAttrs::default(),
+                }
+            }
+
+            fn field_names(&self) -> Vec<&'static str> {
+                vec![#(#field_names_array),*]
+            }
+        }
+    }
 }

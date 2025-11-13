@@ -416,9 +416,14 @@ impl CodeGenerator {
 
     /// Generate code for an element
     fn generate_element(element: &Element) -> TokenStream {
-        // Check for r-directives
+        // Check for r-directives (control flow)
         if let Some(directive_code) = Self::check_directives(element) {
             return directive_code;
+        }
+
+        // Check for r-field directive (attribute enhancement)
+        if let Some(r_field_attr) = element.attributes.iter().find(|a| a.name == "r-field") {
+            return Self::generate_r_field(element, r_field_attr);
         }
 
         let tag = &element.tag;
@@ -693,6 +698,117 @@ impl CodeGenerator {
             match #match_expr {
                 #(#match_arms)*
             }
+        }
+    }
+
+    /// Generate code for r-field directive
+    /// Extracts field metadata and generates validation attributes
+    fn generate_r_field(element: &Element, r_field_attr: &Attribute) -> TokenStream {
+        // Extract the field expression (e.g., req.email, form.user.name)
+        let field_expr = match &r_field_attr.value {
+            AttributeValue::Dynamic(expr) => expr.clone(),
+            AttributeValue::Static(s) => s.parse::<TokenStream>().unwrap_or_default(),
+        };
+
+        // Extract the field name (last identifier in the expression)
+        let field_name = Self::extract_field_name(&field_expr.to_string());
+
+        // Get the base expression (everything before the last dot)
+        let base_expr = Self::extract_base_expr(&field_expr.to_string());
+        let base_tokens: TokenStream = base_expr.parse().unwrap_or_else(|_| field_expr.clone());
+
+        let tag = &element.tag;
+
+        // Create clean element without r-field attribute
+        let mut clean_attrs = element.attributes.clone();
+        clean_attrs.retain(|a| a.name != "r-field");
+
+        // Generate opening tag
+        let mut output = quote! {
+            __html.push_str("<");
+            __html.push_str(#tag);
+        };
+
+        // Add name attribute automatically
+        output.extend(quote! {
+            __html.push_str(" name=\"");
+            __html.push_str(#field_name);
+            __html.push_str("\"");
+        });
+
+        // Add existing attributes (except r-field)
+        for attr in &clean_attrs {
+            output.extend(Self::generate_attribute(attr));
+        }
+
+        // Add validation attributes from field_attrs()
+        output.extend(quote! {
+            {
+                let __field_attrs = #base_tokens.field_attrs(#field_name);
+
+                // Add HTML5 attributes
+                for (__attr_name, __attr_value) in &__field_attrs.html5_attrs {
+                    __html.push_str(" ");
+                    __html.push_str(__attr_name);
+                    if !__attr_value.is_empty() {
+                        __html.push_str("=\"");
+                        __html.push_str(__attr_value);
+                        __html.push_str("\"");
+                    }
+                }
+
+                // Add data-validate attribute
+                if !__field_attrs.data_validate.is_empty() && __field_attrs.data_validate != "{}" {
+                    __html.push_str(" data-validate='");
+                    __html.push_str(&__field_attrs.data_validate);
+                    __html.push_str("'");
+                }
+            }
+        });
+
+        // Close tag
+        if element.self_closing {
+            output.extend(quote! {
+                __html.push_str(" />");
+            });
+        } else {
+            output.extend(quote! {
+                __html.push_str(">");
+            });
+
+            // Add children
+            for child in &element.children {
+                output.extend(Self::generate_node(child));
+            }
+
+            // Closing tag
+            output.extend(quote! {
+                __html.push_str("</");
+                __html.push_str(#tag);
+                __html.push_str(">");
+            });
+        }
+
+        output
+    }
+
+    /// Extract the field name from an expression like "req.email" -> "email"
+    fn extract_field_name(expr: &str) -> String {
+        expr.trim()
+            .split('.')
+            .last()
+            .unwrap_or(expr.trim())
+            .trim()
+            .to_string()
+    }
+
+    /// Extract the base expression from "req.email" -> "req"
+    fn extract_base_expr(expr: &str) -> String {
+        let parts: Vec<&str> = expr.trim().split('.').collect();
+        if parts.len() > 1 {
+            parts[..parts.len() - 1].join(".")
+        } else {
+            expr.trim().to_string()
         }
     }
 }
