@@ -1,454 +1,219 @@
-# rhtmx-router
+# RHTMX Router
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
-
-A zero-dependency file-based router for Rust web frameworks.
+`rhtmx-router` is a file-system-based router for Rust web applications, designed for the RHTMX framework. It automatically generates URL routes from your file structure in the `pages` directory, supporting static, dynamic, and catch-all routes with a priority system for correct matching.
 
 ## Features
 
-- 🚀 **Zero dependencies** - Only uses Rust standard library
-- 📁 **File-based routing** - Routes automatically generated from file structure
-- 🎯 **Smart prioritization** - Static routes match before dynamic routes
-- 🔀 **Dynamic segments** - `/users/:id`, `/posts/:slug`
-- 🌟 **Catch-all routes** - `/docs/*path` matches any path depth
-- ❓ **Optional parameters** - `/posts/:id?` matches with or without ID
-- 🎨 **Layout support** - Special `_layout` files for nested layouts
-- ⚠️ **Error pages** - Custom error pages with `_error` files
-- 🔤 **Case-insensitive** - Optional case-insensitive matching
-- ⚡ **Framework-agnostic** - Works with Axum, Actix, Rocket, Warp, etc.
+- **File-System-Based Routing**: Convention over configuration. Create files and folders in your `pages` directory to define your application's routes.
+- **Multiple Route Types**: Supports static paths, dynamic segments, optional parameters, and catch-all routes.
+  - Static routes: `/about`, `/contact`
+  - Dynamic routes: `/users/[id]` → `/users/:id`
+  - Optional parameters: `/posts/[id?]` → `/posts/:id?` (matches with or without parameter)
+  - Catch-all routes: `/docs/[...slug]` → `/docs/*slug`
+- **Hierarchical Layouts**: Define shared layouts for different sections of your site using `_layout.rhtmx` files. The router automatically finds the most specific layout for any given route.
+- **Hierarchical Error Pages**: Specify custom error pages with `_error.rhtmx` that act as error boundaries for their directory and subdirectories.
+- **Intelligent Route Prioritization**: Automatically sorts routes by priority to ensure correct matching: static > optional params > required dynamic > catch-all.
+- **Case-Sensitive/Insensitive Routing**: Choose between exact case matching or case-insensitive URLs.
+- **Parameter Extraction**: Automatically extracts dynamic parameters as a HashMap.
+- **Zero External Dependencies**: Built entirely with Rust's standard library.
 
-## Installation
+## How it Works
 
-Add to your `Cargo.toml`:
+The router scans a `pages` directory and converts the file paths into route patterns.
 
-```toml
-[dependencies]
-rhtmx-router = "0.1.0"
+### File-to-Route Mapping
+
+- `pages/index.rhtmx` → `/`
+- `pages/about.rhtmx` → `/about`
+- `pages/users/index.rhtmx` → `/users`
+- `pages/users/[id].rhtmx` → `/users/:id` (dynamic route)
+- `pages/posts/[id?].rhtmx` → `/posts/:id?` (optional parameter)
+- `pages/docs/[...slug].rhtmx` → `/docs/*slug` (catch-all route)
+- `pages/users/_layout.rhtmx` → Layout for `/users` and subdirectories
+- `pages/_error.rhtmx` → Error page for entire app
+
+### Special Files
+
+- **`_layout.rhtmx`**: Provides a layout for its directory and all subdirectories.
+- **`_error.rhtmx`**: Acts as an error boundary for its directory and subdirectories.
+
+### Layout and Error Page Inheritance
+
+When looking for a layout or error page for a specific route, the router follows a fallback chain to find the most specific one:
+
+1.  **Exact Match**: Looks for `_layout.rhtmx` or `_error.rhtmx` in the same directory as the matched route file.
+2.  **Parent Section**: If not found, it searches in the parent directory, and so on, up to the root `pages` directory.
+3.  **Root**: Finally, it falls back to the `_layout.rhtmx` or `_error.rhtmx` in the root of the `pages` directory.
+
+For example, for a route `/dashboard/settings/profile`, it would look for a layout in this order:
+1. `pages/dashboard/settings/_layout.rhtmx`
+2. `pages/dashboard/_layout.rhtmx`
+3. `pages/_layout.rhtmx`
+
+### Route Matching Priority
+
+The router automatically assigns a priority to each route to resolve ambiguity. Routes are sorted and matched in this order:
+
+1. **Static routes** (e.g., `/about`) — priority: 0 (highest, most specific)
+2. **Optional dynamic routes** (e.g., `/posts/:id?`) — priority: depth
+3. **Required dynamic routes** (e.g., `/users/:id`) — priority: depth + 1
+4. **Catch-all routes** (e.g., `/docs/*slug`) — priority: 1000+ (lowest, least specific)
+
+**Priority Formula:**
+
+```text
+static route:        priority = 0
+optional params:     priority = dynamic_count + depth
+required dynamic:    priority = dynamic_count + depth + 1
+catch-all:           priority = 1000 + depth
 ```
 
-Or use cargo add:
+Lower values = higher priority (matched first).
 
-```bash
-cargo add rhtmx-router
-```
+### Optional vs. Required Parameters
 
-## Quick Start
+Optional parameters (e.g., `/posts/[id?]`) match both with and without the parameter:
 
-### Basic Usage (Hardcoded Paths)
+- `/posts` ✓ (matches, `id` is absent)
+- `/posts/123` ✓ (matches, `id = "123"`)
+- `/posts/123/comments` ✓ (matches, `id = "123"`)
+
+The router intelligently distinguishes between optional parameters and the next static segment to avoid ambiguity.
+
+### Catch-All Routes
+
+Catch-all routes capture one or more remaining path segments:
+
+- `/docs` ✓ (matches, `slug = ""`)
+- `/docs/guide` ✓ (matches, `slug = "guide"`)
+- `/docs/guide/intro` ✓ (matches, `slug = "guide/intro"`)
+
+### Trailing Slash and Case Sensitivity
+
+- **Trailing Slashes**: Automatically normalized. `/about/` matches the pattern `/about`.
+- **Case Sensitivity**: When case-insensitive mode is enabled, only static segments are affected. Dynamic segment values preserve their original case.
+
+## Usage
+
+Here's a basic example of how to use the `Router`. In a real RHTMX application, this is handled by the `TemplateLoader`.
 
 ```rust
-use rhtmx_router::{Router, Route};
+use rhtmx_router::{Route, Router};
 
 fn main() {
-    let mut router = Router::new();
+    // 1. Create a new router
+    let mut router = Router::with_case_insensitive(false); // Case-sensitive
 
-    // Add routes from file paths
-    router.add_route(Route::from_path("pages/index.rhtmx", "pages"));
-    router.add_route(Route::from_path("pages/about.rhtmx", "pages"));
-    router.add_route(Route::from_path("pages/users/[id].rhtmx", "pages"));
-    router.add_route(Route::from_path("pages/docs/[...slug].rhtmx", "pages"));
+    // 2. Create routes from file paths
+    // In a real app, you would scan a directory.
+    let pages_dir = "pages";
+    let route_paths = vec![
+        "pages/index.rhtmx",
+        "pages/about.rhtmx",
+        "pages/users/_layout.rhtmx",
+        "pages/users/[id].rhtmx",
+        "pages/docs/[...slug].rhtmx",
+    ];
 
-    // Sort routes by priority (call this after adding all routes)
-    router.sort_routes();
-
-    // Match incoming requests
-    if let Some(route_match) = router.match_route("/users/123") {
-        println!("Matched: {}", route_match.route.pattern);
-        println!("User ID: {}", route_match.params["id"]);
+    for path in route_paths {
+        let route = Route::from_path(path, pages_dir);
+        println!(
+            "Discovered Route: pattern='{}', priority={}, is_layout={}, file='{}'",
+            route.pattern, route.priority, route.is_layout, route.template_path
+        );
+        router.add_route(route);
     }
-}
-```
 
-### With Configuration (Framework-Agnostic)
-
-The router is framework-agnostic - you can use any configuration system (TOML, YAML, JSON, env vars, etc.):
-
-```rust
-use rhtmx_router::{Router, Route};
-
-fn main() {
-    let mut router = Router::new();
-
-    // Read configuration from YOUR system
-    // (TOML, YAML, JSON, environment variables, hardcoded, etc.)
-    let pages_dir = read_config().pages_dir; // ← You provide this
-
-    // Router respects your configuration
-    router.add_route(Route::from_path("app/index.rhtmx", &pages_dir));
-    router.add_route(Route::from_path("app/users/[id].rhtmx", &pages_dir));
-
+    // 3. Sort routes by priority
+    // This is crucial for correct matching.
     router.sort_routes();
 
-    // Routes are generated relative to configured directory
-    let route = router.match_route("/users/123").unwrap();
-    assert_eq!(route.route.pattern, "/users/:id");
-}
-```
+    // 4. Match an incoming request path
+    let request_path = "/users/123";
+    if let Some(matched) = router.match_route(request_path) {
+        println!("\nMatched '{}' to pattern '{}'", request_path, matched.pattern);
+        println!("Params: {:?}", matched.params);
 
-### Example: Using with TOML Configuration
-
-```rust
-use rhtmx_router::{Router, Route};
-use std::fs;
-
-// Your config structure (can be anything)
-#[derive(Deserialize)]
-struct Config {
-    routing: RoutingConfig,
-}
-
-#[derive(Deserialize)]
-struct RoutingConfig {
-    pages_dir: String,      // e.g., "pages", "app", "routes"
-    case_insensitive: bool,
-}
-
-fn main() {
-    // Load config from your TOML file
-    let config_str = fs::read_to_string("config.toml").unwrap();
-    let config: Config = toml::from_str(&config_str).unwrap();
-
-    // Create router with configured options
-    let mut router = Router::with_case_insensitive(config.routing.case_insensitive);
-
-    // Use configured directory
-    let pages_dir = &config.routing.pages_dir;
-    router.add_route(Route::from_path(
-        &format!("{}/index.rhtmx", pages_dir),
-        pages_dir
-    ));
-
-    router.sort_routes();
-}
-```
-
-**Your `config.toml`:**
-```toml
-[routing]
-pages_dir = "app"          # Use Next.js-style directory
-case_insensitive = true    # Case-insensitive URL matching
-```
-
-## File Naming Convention
-
-| File Path | Route Pattern | Description |
-|-----------|---------------|-------------|
-| `pages/index.rhtmx` | `/` | Root page |
-| `pages/about.rhtmx` | `/about` | Static route |
-| `pages/users/index.rhtmx` | `/users` | Section index |
-| `pages/users/[id].rhtmx` | `/users/:id` | Dynamic segment |
-| `pages/docs/[...slug].rhtmx` | `/docs/*slug` | Catch-all |
-| `pages/posts/[id?].rhtmx` | `/posts/:id?` | Optional param |
-| `pages/_layout.rhtmx` | `/` | Root layout |
-| `pages/users/_layout.rhtmx` | `/users` | Section layout |
-| `pages/_error.rhtmx` | `/` | Root error page |
-
-## Examples
-
-### Basic Routing
-
-```rust
-use rhtmx_router::{Router, Route};
-
-let mut router = Router::new();
-router.add_route(Route::from_path("pages/about.rhtmx", "pages"));
-router.sort_routes();
-
-let result = router.match_route("/about").unwrap();
-assert_eq!(result.route.pattern, "/about");
-```
-
-### Dynamic Routes
-
-```rust
-use rhtmx_router::{Router, Route};
-
-let mut router = Router::new();
-router.add_route(Route::from_path("pages/users/[id].rhtmx", "pages"));
-router.sort_routes();
-
-let result = router.match_route("/users/42").unwrap();
-assert_eq!(result.params["id"], "42");
-```
-
-### Catch-all Routes
-
-```rust
-use rhtmx_router::{Router, Route};
-
-let mut router = Router::new();
-router.add_route(Route::from_path("pages/docs/[...slug].rhtmx", "pages"));
-router.sort_routes();
-
-let result = router.match_route("/docs/guide/intro").unwrap();
-assert_eq!(result.params["slug"], "guide/intro");
-```
-
-### Optional Parameters
-
-```rust
-use rhtmx_router::{Router, Route};
-
-let mut router = Router::new();
-router.add_route(Route::from_path("pages/posts/[id?].rhtmx", "pages"));
-router.sort_routes();
-
-// Matches with parameter
-let result = router.match_route("/posts/123").unwrap();
-assert_eq!(result.params["id"], "123");
-
-// Matches without parameter
-let result = router.match_route("/posts").unwrap();
-assert!(result.params.get("id").is_none());
-```
-
-### Case-Insensitive Routing
-
-```rust
-use rhtmx_router::{Router, Route};
-
-let mut router = Router::with_case_insensitive(true);
-router.add_route(Route::from_path("pages/about.rhtmx", "pages"));
-router.sort_routes();
-
-// All match the same route
-assert!(router.match_route("/about").is_some());
-assert!(router.match_route("/About").is_some());
-assert!(router.match_route("/ABOUT").is_some());
-```
-
-## Architecture: Configuration Flow
-
-This crate is **framework-agnostic** and designed to be used by web frameworks or applications.
-
-```
-┌──────────────────────────────────────────────────┐
-│  Your Application (Axum, Actix, rhtmx, etc.)    │
-│                                                   │
-│  ┌─────────────┐                                 │
-│  │ config.toml │  ← You choose the format        │
-│  │ config.yaml │                                  │
-│  │ env vars    │                                  │
-│  └──────┬──────┘                                  │
-│         │                                         │
-│         ↓                                         │
-│  Your Config Loader                              │
-│  (toml, serde_yaml, env, hardcoded, etc.)       │
-│         │                                         │
-│         ↓                                         │
-│  pages_dir = "app"  ← You extract the values     │
-│  case_insensitive = true                         │
-│         │                                         │
-│         ↓                                         │
-│  router.add_route(                               │
-│    Route::from_path(path, &pages_dir)  ← Pass it│
-│  )                                                │
-│                                                   │
-└─────────────────┬─────────────────────────────────┘
-                  │
-                  ↓
-        ┌──────────────────────────┐
-        │   rhtmx-router crate     │
-        │                          │
-        │  - Receives parameters   │
-        │  - NO config reading     │
-        │  - NO TOML/YAML deps     │
-        │  - Pure routing logic    │
-        └──────────────────────────┘
-```
-
-**Key Points:**
-- ✅ Router does NOT read config files (stays framework-agnostic)
-- ✅ YOU read config using your preferred system
-- ✅ YOU pass configured values to the router
-- ✅ Router respects your configuration
-- ✅ Works with: TOML, YAML, JSON, env vars, hardcoded values, databases, etc.
-
-### Integration with Axum
-
-```rust
-use axum::{Router as AxumRouter, routing::get, extract::Path};
-use rhtmx_router::{Router, Route};
-use std::collections::HashMap;
-
-async fn handle_route(
-    Path(path): Path<String>,
-) -> String {
-    let mut router = Router::new();
-
-    // You decide where pages_dir comes from
-    let pages_dir = "pages"; // Could be from config, env var, etc.
-
-    router.add_route(Route::from_path("pages/users/[id].rhtmx", pages_dir));
-    router.sort_routes();
-
-    if let Some(route_match) = router.match_route(&format!("/{}", path)) {
-        format!("User ID: {}", route_match.params["id"])
+        // Find the appropriate layout for the matched route
+        // The `get_layout` method takes the request path and finds the best layout.
+        if let Some(layout_route) = router.get_layout(matched.pattern) {
+            println!("Using layout with pattern: '{}'", layout_route.pattern);
+        } else {
+            println!("No specific layout found for this route.");
+        }
     } else {
-        "Not found".to_string()
+        println!("\nNo match found for '{}'", request_path);
+    }
+
+    let request_path_about = "/about";
+    if let Some(matched) = router.match_route(request_path_about) {
+        println!("\nMatched '{}' to pattern '{}'", request_path_about, matched.pattern);
     }
 }
+```
 
-#[tokio::main]
-async fn main() {
-    let app = AxumRouter::new()
-        .route("/*path", get(handle_route));
+### `Route` Struct
 
-    axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+The `Route` struct contains information about a single route.
+
+```rust
+pub struct Route {
+    pub pattern: String,           // The URL pattern, e.g., "/users/:id"
+    pub template_path: String,     // Original file path to the template
+    pub params: Vec<String>,       // Extracted parameter names
+    pub priority: usize,           // Calculated priority for sorting (lower = higher)
+    pub is_layout: bool,           // True if it's a _layout.rhtmx file
+    pub is_error_page: bool,       // True if it's an _error.rhtmx file
+    pub has_catch_all: bool,       // True if pattern contains catch-all parameter
+    pub optional_params: Vec<String>, // Names of optional parameters
 }
 ```
 
-### Integration with rhtmx Framework
+#### `Route` Methods
 
-If you're using the rhtmx framework (which uses this router):
+- `Route::from_path(file_path: &str, pages_dir: &str) -> Self`: Creates a route from a file path.
+- `matches(&self, path: &str) -> Option<HashMap<String, String>>`: Matches a path (case-sensitive) and returns extracted parameters.
+- `matches_with_options(&self, path: &str, case_insensitive: bool) -> Option<HashMap<String, String>>`: Matches with optional case sensitivity.
+- `layout_pattern(&self) -> Option<String>`: Gets the parent directory pattern for layout inheritance.
 
-```rust
-use rhtmx_app::Config;  // rhtmx's config system
-use rhtmx_router::{Router, Route};
+### `Router` Struct
 
-// rhtmx reads rhtmx.toml for you
-let config = Config::load("rhtmx.toml")?;
+The `Router` manages the collection of routes, layouts, and error pages.
 
-// Pass configured values to router
-let mut router = Router::with_case_insensitive(config.routing.case_insensitive);
-router.add_route(Route::from_path(
-    &format!("{}/index.rhtmx", config.routing.pages_dir),
-    &config.routing.pages_dir
-));
-```
+#### Constructor Methods
 
-See [rhtmx's configuration guide](https://github.com/jeetkhinde/rhtmx/blob/main/CONFIGURATION.md) for details.
+- `Router::new() -> Self`: Creates a case-sensitive router.
+- `Router::with_case_insensitive(case_insensitive: bool) -> Self`: Creates a router with specified case sensitivity.
 
-## Route Priority
+#### Route Management
 
-Routes are matched in order of priority:
+- `add_route(&mut self, route: Route)`: Adds a route. Automatically categorizes it as a layout, error page, or regular route.
+- `remove_route(&mut self, pattern: &str) -> bool`: Removes a route by its pattern. Returns true if found and removed.
+- `sort_routes(&mut self)`: Sorts routes by priority. **Must be called after adding all routes and before matching.**
+- `set_case_insensitive(&mut self, case_insensitive: bool)`: Sets case sensitivity mode.
 
-1. **Static routes** (priority = 0) - Exact matches like `/about`, `/users/new`
-2. **Optional parameters** (priority = depth + params) - `/posts/:id?`
-3. **Required dynamic routes** (priority = depth + params + 1) - `/users/:id`
-4. **Catch-all routes** (priority = 1000+) - `/docs/*path`
+#### Route Matching
 
-### Example Priority Order
+- `match_route(&self, path: &str) -> Option<RouteMatch>`: Finds the best-matching route for a given request path and extracts parameters into a HashMap.
 
-```rust
-let static_route = Route::from_path("pages/users/new.rhtmx", "pages");
-// Priority: 0 (static always wins)
+#### Layout and Error Page Resolution
 
-let optional_route = Route::from_path("pages/users/[id?].rhtmx", "pages");
-// Priority: ~3
+- `get_layout(&self, pattern: &str) -> Option<&Route>`: Finds the most specific layout for a route pattern using inheritance chain: exact → parent section → root.
+- `get_error_page(&self, pattern: &str) -> Option<&Route>`: Finds the most specific error page for a route pattern using the same inheritance chain.
 
-let dynamic_route = Route::from_path("pages/users/[id].rhtmx", "pages");
-// Priority: ~4
+#### Query Methods
 
-let catchall_route = Route::from_path("pages/users/[...rest].rhtmx", "pages");
-// Priority: 1000+
-```
+- `routes(&self) -> &[Route]`: Returns a slice of all regular routes.
+- `layouts(&self) -> &HashMap<String, Route>`: Returns a reference to the layouts map.
+- `error_pages(&self) -> &HashMap<String, Route>`: Returns a reference to the error pages map.
 
-When matching `/users/new`:
-- `static_route` matches first ✅
-- Other routes never checked
+### `RouteMatch` Struct
 
-When matching `/users/123`:
-- `static_route` doesn't match
-- `optional_route` matches ✅
-
-## Special Files
-
-### Layout Files (`_layout.rhtmx`)
-
-Layout files define nested layouts. The router tracks them separately:
+The result of a successful route match.
 
 ```rust
-let mut router = Router::new();
-router.add_route(Route::from_path("pages/_layout.rhtmx", "pages"));
-router.add_route(Route::from_path("pages/users/_layout.rhtmx", "pages"));
-
-// Get layout for a route
-let layout = router.get_layout("/users/123").unwrap();
-assert_eq!(layout.pattern, "/users");
+pub struct RouteMatch {
+    pub route: Route,                      // The matched route
+    pub params: HashMap<String, String>,   // Extracted parameter values
+}
 ```
-
-### Error Pages (`_error.rhtmx`)
-
-Error pages handle 404s and other errors:
-
-```rust
-let mut router = Router::new();
-router.add_route(Route::from_path("pages/_error.rhtmx", "pages"));
-router.add_route(Route::from_path("pages/api/_error.rhtmx", "pages"));
-
-// Get error page for a route
-let error = router.get_error_page("/api/users").unwrap();
-assert_eq!(error.pattern, "/api"); // Section-specific error page
-```
-
-## Performance
-
-- **Route sorting**: O(n log n) at startup
-- **Route matching**: O(n) worst case, typically O(1) for static routes
-- **Memory**: Minimal overhead, only stores route metadata
-- **Zero allocations** during matching (except for parameter extraction)
-
-## Testing
-
-Run tests:
-
-```bash
-cargo test
-```
-
-Run with coverage:
-
-```bash
-cargo test --all-features
-```
-
-## Use Cases
-
-- **Web frameworks** - Add file-based routing to any Rust web framework
-- **Static site generators** - Map file structure to URLs
-- **API gateways** - Route requests based on file structure
-- **Documentation sites** - Perfect for nested documentation
-- **Content management** - File-based content routing
-
-## Comparison with Other Routers
-
-| Feature | rhtmx-router | matchit | path-tree |
-|---------|--------------|---------|-----------|
-| File-based | ✅ | ❌ | ❌ |
-| Zero deps | ✅ | ❌ | ❌ |
-| Catch-all | ✅ | ✅ | ✅ |
-| Optional params | ✅ | ❌ | ❌ |
-| Layouts | ✅ | ❌ | ❌ |
-| Error pages | ✅ | ❌ | ❌ |
-| Case insensitive | ✅ | ❌ | ❌ |
-
-## Contributing
-
-Contributions welcome! Please check out the [rhtmx repository](https://github.com/jeetkhinde/rhtmx).
-
-## License
-
-MIT License - see [LICENSE](../LICENSE) file for details.
-
-## Changelog
-
-### 0.1.0 (2025-01-04)
-
-- Initial release
-- Static routes
-- Dynamic segments
-- Catch-all routes
-- Optional parameters
-- Layout support
-- Error page support
-- Case-insensitive routing
-- Zero dependencies
-
-## Acknowledgments
-
-Part of the [rhtmx project](https://github.com/jeetkhinde/rhtmx) - a Rust-first SSR framework.
