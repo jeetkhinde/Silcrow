@@ -6,15 +6,16 @@
 /// Maud is a compile-time HTML templating library for Rust with a Lisp-like syntax.
 /// This wrapper allows you to use Maud's powerful templating alongside RHTMX's
 /// response builders and file-based routing.
-
 use rhtmx::html::Html;
 
 /// Convert Maud's Markup to RHTMX's Html type
+#[allow(dead_code)]
 pub fn maud_to_html(markup: maud::Markup) -> Html {
     Html(markup.into_string())
 }
 
 /// Trait to enable seamless conversion from Maud markup to Html
+#[allow(dead_code)]
 pub trait MaudMarkup {
     fn to_html(self) -> Html;
 }

@@ -57,10 +57,12 @@ pub fn is_valid_url(url: &str) -> bool {
     }
 
     // Must have content after protocol
-    let after_protocol = if url.starts_with("https://") {
-        &url[8..]
+    let after_protocol = if let Some(after) = url.strip_prefix("https://") {
+        after
+    } else if let Some(after) = url.strip_prefix("http://") {
+        after
     } else {
-        &url[7..]
+        return false;
     };
 
     if after_protocol.is_empty() {

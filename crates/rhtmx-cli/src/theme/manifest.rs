@@ -95,7 +95,7 @@ pub struct DynamicRouteSource {
 }
 
 /// Project configuration with theme reference (from rhtmx.toml)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProjectConfig {
     #[serde(default)]
     pub project: ProjectInfo,
@@ -105,17 +105,6 @@ pub struct ProjectConfig {
     pub ssg: Option<SsgConfig>,
     #[serde(default)]
     pub isr: Option<IsrConfig>,
-}
-
-impl Default for ProjectConfig {
-    fn default() -> Self {
-        Self {
-            project: ProjectInfo::default(),
-            theme: None,
-            ssg: None,
-            isr: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -197,7 +186,7 @@ impl ProjectConfig {
                 match &t.source {
                     ThemeSource::Git { url, .. } => url
                         .split('/')
-                        .last()
+                        .next_back()
                         .map(|s| s.trim_end_matches(".git").to_string()),
                     ThemeSource::Local { path } => {
                         path.file_name().and_then(|n| n.to_str()).map(String::from)
@@ -211,11 +200,13 @@ impl ProjectConfig {
 
 impl ThemeManifest {
     /// Parse theme manifest from TOML string
+    #[allow(dead_code)]
     pub fn from_str(content: &str) -> Result<Self, toml::de::Error> {
         toml::from_str(content)
     }
 
     /// Load theme manifest from file
+    #[allow(dead_code)]
     pub fn from_file(path: &std::path::Path) -> anyhow::Result<Self> {
         let content = std::fs::read_to_string(path)?;
         Ok(Self::from_str(&content)?)

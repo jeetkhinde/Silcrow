@@ -15,6 +15,7 @@ use redis::{AsyncCommands, Client};
 /// Dragonfly is 25x faster than Redis with lower memory usage.
 #[derive(Clone)]
 pub struct DragonflyStorage {
+    #[allow(dead_code)]
     client: Client,
     manager: ConnectionManager,
     config: DragonflyConfig,
@@ -146,7 +147,7 @@ impl Storage for DragonflyStorage {
             .context("Failed to scan keys")?;
 
         if !keys.is_empty() {
-            conn.del(&keys)
+            conn.del::<_, ()>(&keys)
                 .await
                 .context("Failed to delete keys")?;
         }

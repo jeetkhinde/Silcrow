@@ -83,7 +83,7 @@ impl FileWatcher {
                 if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
                     for path in &event.paths {
                         // Ignore hidden files and directories
-                        if path.to_str().map_or(false, |s| {
+                        if path.to_str().is_some_and(|s| {
                             s.contains("/.")
                                 || s.contains("\\.")
                                 || s.contains(".rhtmx/")
@@ -135,7 +135,7 @@ impl FileWatcher {
                 let path_str = path.to_str().unwrap_or("");
                 let is_theme_file = theme_path_clone
                     .as_ref()
-                    .map_or(false, |tp| path_str.starts_with(tp.to_str().unwrap_or("")));
+                    .is_some_and(|tp| path_str.starts_with(tp.to_str().unwrap_or("")));
 
                 let change_type = if is_theme_file {
                     ChangeType::ThemeFile
@@ -170,6 +170,7 @@ impl FileWatcher {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn theme_manager(&self) -> Arc<RwLock<ThemeManager>> {
         self.theme_manager.clone()
     }

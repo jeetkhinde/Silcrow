@@ -4,6 +4,7 @@
 
 use rhtmx::action_executor::ActionResult;
 use rhtmx::RequestContext;
+#[allow(unused_imports)]
 use rhtmx::ValidateTrait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -73,7 +74,10 @@ impl rhtmx::ValidateTrait for CreateUserRequest {
 
         // Validate age
         if self.age < 18 {
-            errors.insert("age".to_string(), "Must be at least 18 years old".to_string());
+            errors.insert(
+                "age".to_string(),
+                "Must be at least 18 years old".to_string(),
+            );
         } else if self.age > 120 {
             errors.insert("age".to_string(), "Please enter a valid age".to_string());
         }
@@ -118,7 +122,10 @@ impl rhtmx::ValidateTrait for UpdateUserRequest {
 
         if let Some(age) = &self.age {
             if *age < 18 {
-                errors.insert("age".to_string(), "Must be at least 18 years old".to_string());
+                errors.insert(
+                    "age".to_string(),
+                    "Must be at least 18 years old".to_string(),
+                );
             } else if *age > 120 {
                 errors.insert("age".to_string(), "Please enter a valid age".to_string());
             }
@@ -139,7 +146,6 @@ impl rhtmx::ValidateTrait for SearchUsersRequest {
     }
 }
 
-
 /// GET /examples/actions-validation
 pub async fn get_actions_validation(_ctx: RequestContext) -> ActionResult {
     // For now, just return HTML indicating we're rendering the page
@@ -154,7 +160,9 @@ pub async fn get_actions_validation(_ctx: RequestContext) -> ActionResult {
 pub async fn post_actions_validation(_ctx: RequestContext) -> ActionResult {
     // TODO: Implement validation_pipeline module for form validation
     ActionResult::Html {
-        content: "<p>POST /examples/actions-validation - Validation pipeline not yet implemented</p>".to_string(),
+        content:
+            "<p>POST /examples/actions-validation - Validation pipeline not yet implemented</p>"
+                .to_string(),
         headers: Default::default(),
     }
 }
@@ -189,17 +197,14 @@ pub async fn delete_actions_validation(ctx: RequestContext) -> ActionResult {
     let count = if let Some(pool) = ctx.db.as_ref() {
         match database::count_users(pool).await {
             Ok(c) => c.saturating_sub(1), // Assume one was deleted
-            Err(_) => 0, // Default to 0 if count fails
+            Err(_) => 0,                  // Default to 0 if count fails
         }
     } else {
         0 // Default to 0 if database is not configured
     };
 
     // Return only OOB update
-    let oob_html = format!(
-        r#"<div id="user-count" hx-swap-oob="true">{}</div>"#,
-        count
-    );
+    let oob_html = format!(r#"<div id="user-count" hx-swap-oob="true">{}</div>"#, count);
 
     let mut headers = axum::http::HeaderMap::new();
     let trigger = serde_json::json!({
@@ -220,6 +225,7 @@ pub async fn delete_actions_validation(ctx: RequestContext) -> ActionResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rhtmx::ValidateTrait;
 
     #[test]
     fn test_create_user_validation_valid() {

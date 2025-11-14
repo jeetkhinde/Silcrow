@@ -122,7 +122,7 @@ impl TemplateLoader {
         let template = Template {
             path: path.to_path_buf(),
             content: content_without_css.clone(),
-            scoped_css: scoped_css.clone(),
+            scoped_css,
             partials: partials.clone(),
         };
 
@@ -136,7 +136,7 @@ impl TemplateLoader {
             let partial_template = Template {
                 path: path.to_path_buf(),
                 content: content_without_css.clone(),
-                scoped_css: scoped_css.clone(),
+                scoped_css,
                 partials: vec![partial_name.clone()],
             };
 
@@ -233,9 +233,7 @@ impl TemplateLoader {
         }
 
         // Determine what key this will be stored with for clarity
-        let storage_key = if route_obj.is_layout {
-            self.path_to_route(path)
-        } else if route_obj.is_error_page {
+        let storage_key = if route_obj.is_layout || route_obj.is_error_page {
             self.path_to_route(path)
         } else {
             route_obj.pattern.clone()

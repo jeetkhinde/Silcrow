@@ -15,7 +15,16 @@ pub enum PasswordPattern {
 }
 
 impl PasswordPattern {
-    pub fn from_str(pattern: &str) -> Self {
+    /// Parse a password pattern from a string
+    ///
+    /// # Examples
+    /// ```
+    /// use rhtmx_validation_core::password::PasswordPattern;
+    /// assert!(matches!(PasswordPattern::parse("basic"), PasswordPattern::Basic));
+    /// assert!(matches!(PasswordPattern::parse("medium"), PasswordPattern::Medium));
+    /// assert!(matches!(PasswordPattern::parse("strong"), PasswordPattern::Strong));
+    /// ```
+    pub fn parse(pattern: &str) -> Self {
         match pattern {
             "basic" => PasswordPattern::Basic,
             "medium" => PasswordPattern::Medium,
@@ -33,7 +42,7 @@ impl PasswordPattern {
 /// - "strong": 8+ chars with uppercase, lowercase, digit, special char
 /// - Any other string: treated as custom pattern name (not implemented in core)
 pub fn validate_password(password: &str, pattern: &str) -> Result<(), String> {
-    let pattern_enum = PasswordPattern::from_str(pattern);
+    let pattern_enum = PasswordPattern::parse(pattern);
 
     match pattern_enum {
         PasswordPattern::Basic => validate_basic(password),

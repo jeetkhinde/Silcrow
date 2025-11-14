@@ -17,6 +17,7 @@ pub use rhtmx_validation_core::password::validate_password;
 pub use rhtmx_validation_core::string::is_valid_url;
 
 // Regex matching (requires std, so kept here)
+#[allow(dead_code)]
 static URL_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^https?://[^\s/$.?#].[^\s]*$").unwrap()
 });

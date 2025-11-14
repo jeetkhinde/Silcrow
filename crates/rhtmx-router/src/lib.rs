@@ -196,8 +196,7 @@ impl Route {
                 let inner = &segment[1..segment.len() - 1];
 
                 // Check for catch-all [...slug]
-                if inner.starts_with("...") {
-                    let param_name = &inner[3..];
+                if let Some(param_name) = inner.strip_prefix("...") {
                     pattern.push_str("/*");
                     pattern.push_str(param_name);
                     params.push(param_name.to_string());
@@ -205,8 +204,7 @@ impl Route {
                     dynamic_count += 100; // Very low priority
                 }
                 // Check for optional [id?]
-                else if inner.ends_with('?') {
-                    let param_name = &inner[..inner.len() - 1];
+                else if let Some(param_name) = inner.strip_suffix('?') {
                     pattern.push_str("/:");
                     pattern.push_str(param_name);
                     pattern.push('?');
@@ -296,8 +294,7 @@ impl Route {
             let pattern_seg = pattern_segments[pattern_idx];
 
             // Handle catch-all segment (e.g., *slug)
-            if pattern_seg.starts_with('*') {
-                let param_name = &pattern_seg[1..];
+            if let Some(param_name) = pattern_seg.strip_prefix('*') {
                 // Collect all remaining path segments
                 let remaining: Vec<&str> = path_segments[path_idx..].to_vec();
                 params.insert(param_name.to_string(), remaining.join("/"));
@@ -305,8 +302,8 @@ impl Route {
             }
 
             // Handle optional parameter (e.g., :id?)
-            if pattern_seg.ends_with('?') {
-                let param_name = &pattern_seg[1..pattern_seg.len() - 1];
+            if let Some(temp) = pattern_seg.strip_suffix('?') {
+                let param_name = &temp[1..];
 
                 // If there are more path segments, consume one
                 if path_idx < path_segments.len() {
@@ -319,12 +316,11 @@ impl Route {
                             true
                         } else {
                             // Next is static, check if current path matches it
-                            let matches = if case_insensitive {
+                            if case_insensitive {
                                 !next_pattern.eq_ignore_ascii_case(path_segments[path_idx])
                             } else {
                                 next_pattern != path_segments[path_idx]
-                            };
-                            matches
+                            }
                         }
                     } else {
                         // No more pattern segments, consume if there are path segments left
@@ -341,11 +337,10 @@ impl Route {
             }
 
             // Handle regular dynamic segment (e.g., :id)
-            if pattern_seg.starts_with(':') {
+            if let Some(param_name) = pattern_seg.strip_prefix(':') {
                 if path_idx >= path_segments.len() {
                     return None;
                 }
-                let param_name = &pattern_seg[1..];
                 params.insert(param_name.to_string(), path_segments[path_idx].to_string());
                 path_idx += 1;
                 pattern_idx += 1;

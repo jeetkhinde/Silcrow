@@ -354,13 +354,11 @@ pub fn derive_syncable(input: TokenStream) -> TokenStream {
 fn extract_table_name(input: &DeriveInput) -> Option<String> {
     for attr in &input.attrs {
         if attr.path().is_ident("sync") {
-            if let Ok(meta) = attr.parse_args::<syn::Meta>() {
-                if let syn::Meta::NameValue(nv) = meta {
-                    if nv.path.is_ident("table") {
-                        if let syn::Expr::Lit(lit) = nv.value {
-                            if let syn::Lit::Str(s) = lit.lit {
-                                return Some(s.value());
-                            }
+            if let Ok(syn::Meta::NameValue(nv)) = attr.parse_args::<syn::Meta>() {
+                if nv.path.is_ident("table") {
+                    if let syn::Expr::Lit(lit) = nv.value {
+                        if let syn::Lit::Str(s) = lit.lit {
+                            return Some(s.value());
                         }
                     }
                 }

@@ -28,7 +28,7 @@ impl ActionHandlerRegistry {
     pub fn register(&mut self, route: &str, method: &str, handler: ActionHandler) {
         self.handlers
             .entry(route.to_string())
-            .or_insert_with(HashMap::new)
+            .or_default()
             .insert(method.to_uppercase(), handler);
     }
 
@@ -40,6 +40,7 @@ impl ActionHandlerRegistry {
     }
 
     /// Check if a route has an action
+    #[allow(dead_code)]
     pub fn has_action(&self, route: &str, method: &str) -> bool {
         self.handlers
             .get(route)

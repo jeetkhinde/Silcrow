@@ -449,6 +449,7 @@ pub enum ValidationAttr {
     // Custom messages & labels
     Message(String),
     Label(String),
+    #[allow(dead_code)]
     MessageKey(String),
 
     // Custom validation
@@ -650,7 +651,7 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                     }
                 }
                 ValidationAttr::EqualsField(other_field) => {
-                    let other_field_ident = syn::Ident::new(&other_field, proc_macro2::Span::call_site());
+                    let other_field_ident = syn::Ident::new(other_field, proc_macro2::Span::call_site());
                     quote! {
                         if self.#field_name != self.#other_field_ident {
                             errors.insert(#field_name_str.to_string(), format!("Must match {}", #other_field));
@@ -658,7 +659,7 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                     }
                 }
                 ValidationAttr::DependsOn(dep_field, dep_value) => {
-                    let dep_field_ident = syn::Ident::new(&dep_field, proc_macro2::Span::call_site());
+                    let dep_field_ident = syn::Ident::new(dep_field, proc_macro2::Span::call_site());
                     quote! {
                         if self.#dep_field_ident == #dep_value {
                             if let Some(ref val) = self.#field_name {
@@ -713,7 +714,7 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                     }
                 }
                 ValidationAttr::Custom(func_name) => {
-                    let func_ident = syn::Ident::new(&func_name, proc_macro2::Span::call_site());
+                    let func_ident = syn::Ident::new(func_name, proc_macro2::Span::call_site());
                     quote! {
                         if let Err(msg) = #func_ident(&self.#field_name) {
                             errors.insert(#field_name_str.to_string(), msg);

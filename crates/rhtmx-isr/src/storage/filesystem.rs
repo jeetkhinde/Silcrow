@@ -32,10 +32,7 @@ impl FilesystemStorage {
     /// Get the file path for a cache key
     fn key_to_path(&self, key: &str) -> PathBuf {
         // Sanitize key to make it filesystem-safe
-        let safe_key = key
-            .replace('/', "_")
-            .replace('\\', "_")
-            .replace(':', "_");
+        let safe_key = key.replace(['/', '\\', ':'], "_");
 
         self.config.path.join(format!("{}.json", safe_key))
     }

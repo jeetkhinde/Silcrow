@@ -796,7 +796,7 @@ impl CodeGenerator {
     fn extract_field_name(expr: &str) -> String {
         expr.trim()
             .split('.')
-            .last()
+            .next_back()
             .unwrap_or(expr.trim())
             .trim()
             .to_string()

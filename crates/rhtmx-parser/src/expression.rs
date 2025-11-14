@@ -176,6 +176,7 @@ impl ExpressionEvaluator {
     }
 
     /// Convert value to string
+    #[allow(clippy::only_used_in_recursion)]
     fn value_to_string(&self, value: &Value) -> String {
         match value {
             Value::Bool(b) => b.to_string(),
