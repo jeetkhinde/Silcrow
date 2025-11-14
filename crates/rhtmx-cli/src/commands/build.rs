@@ -1,10 +1,10 @@
+use crate::theme::ThemeManager;
+use crate::BuildMode;
 use anyhow::{Context, Result};
 use colored::Colorize;
 use std::env;
 use std::fs;
 use std::process::Command;
-use crate::BuildMode;
-use crate::theme::ThemeManager;
 
 pub fn execute(mode: BuildMode, release: bool) -> Result<()> {
     let mode_str = match mode {
@@ -49,10 +49,10 @@ fn build_ssr(release: bool) -> Result<()> {
         .context("Failed to copy Cargo.toml to merged directory")?;
 
     // Step 3: Get project name from Cargo.toml
-    let cargo_toml_content = fs::read_to_string(&cargo_toml_dst)
-        .context("Failed to read Cargo.toml")?;
-    let cargo_toml: toml::Value = toml::from_str(&cargo_toml_content)
-        .context("Failed to parse Cargo.toml")?;
+    let cargo_toml_content =
+        fs::read_to_string(&cargo_toml_dst).context("Failed to read Cargo.toml")?;
+    let cargo_toml: toml::Value =
+        toml::from_str(&cargo_toml_content).context("Failed to parse Cargo.toml")?;
     let project_name = cargo_toml
         .get("package")
         .and_then(|p| p.get("name"))
@@ -65,14 +65,14 @@ fn build_ssr(release: bool) -> Result<()> {
     println!();
 
     let mut cmd = Command::new("cargo");
-    cmd.arg("build")
-        .current_dir(merged_path);
+    cmd.arg("build").current_dir(merged_path);
 
     if release {
         cmd.arg("--release");
     }
 
-    let status = cmd.status()
+    let status = cmd
+        .status()
         .context("Failed to execute cargo build. Is cargo installed?")?;
 
     if !status.success() {
@@ -95,13 +95,11 @@ fn build_ssr(release: bool) -> Result<()> {
 
     // Create target directory if it doesn't exist
     if let Some(parent) = binary_dst.parent() {
-        fs::create_dir_all(parent)
-            .context("Failed to create target directory")?;
+        fs::create_dir_all(parent).context("Failed to create target directory")?;
     }
 
     println!("{}", "  📦 Copying binary...".cyan());
-    fs::copy(&binary_src, &binary_dst)
-        .context("Failed to copy binary to target directory")?;
+    fs::copy(&binary_src, &binary_dst).context("Failed to copy binary to target directory")?;
 
     // Make binary executable on Unix systems
     #[cfg(unix)]
@@ -115,7 +113,10 @@ fn build_ssr(release: bool) -> Result<()> {
     println!();
     println!("{}", "✓ Build complete!".green().bold());
     println!();
-    println!("Binary location: {}", binary_dst.display().to_string().cyan());
+    println!(
+        "Binary location: {}",
+        binary_dst.display().to_string().cyan()
+    );
     println!();
     println!("Run your application:");
     println!("  {}", format!("./{}", binary_dst.display()).yellow());
@@ -155,7 +156,11 @@ fn build_ssg(_release: bool) -> Result<()> {
             println!("{}", "  📋 Expanding dynamic routes...".cyan());
             for dynamic_source in &ssg_cfg.dynamic_routes {
                 let expanded = expand_dynamic_route(&current_dir, dynamic_source)?;
-                println!("     {} -> {} routes", dynamic_source.pattern, expanded.len());
+                println!(
+                    "     {} -> {} routes",
+                    dynamic_source.pattern,
+                    expanded.len()
+                );
                 all_routes.extend(expanded);
             }
         }
@@ -168,11 +173,9 @@ fn build_ssg(_release: bool) -> Result<()> {
     // Step 5: Create output directory
     let dist_path = current_dir.join(&output_dir);
     if dist_path.exists() {
-        fs::remove_dir_all(&dist_path)
-            .context("Failed to remove existing dist directory")?;
+        fs::remove_dir_all(&dist_path).context("Failed to remove existing dist directory")?;
     }
-    fs::create_dir_all(&dist_path)
-        .context("Failed to create dist directory")?;
+    fs::create_dir_all(&dist_path).context("Failed to create dist directory")?;
 
     // Step 6: Generate HTML for each route
     println!("{}", "  📝 Generating static HTML...".cyan());
@@ -185,11 +188,17 @@ fn build_ssg(_release: bool) -> Result<()> {
     println!();
     println!("{}", "✓ SSG build complete!".green().bold());
     println!();
-    println!("Output directory: {}", dist_path.display().to_string().cyan());
+    println!(
+        "Output directory: {}",
+        dist_path.display().to_string().cyan()
+    );
     println!("Total files: {}", all_routes.len() + 1); // +1 for static dir
     println!();
     println!("Deploy your site:");
-    println!("  Serve the {} directory with any static file server", output_dir);
+    println!(
+        "  Serve the {} directory with any static file server",
+        output_dir
+    );
 
     Ok(())
 }
@@ -289,12 +298,11 @@ fn expand_dynamic_route(
 
     // Resolve glob pattern relative to project root
     let glob_pattern = project_root.join(&source.source);
-    let glob_pattern_str = glob_pattern.to_str()
+    let glob_pattern_str = glob_pattern
+        .to_str()
         .ok_or_else(|| anyhow::anyhow!("Invalid glob pattern"))?;
 
-    for entry in glob(glob_pattern_str)
-        .context("Failed to read glob pattern")?
-    {
+    for entry in glob(glob_pattern_str).context("Failed to read glob pattern")? {
         let path = entry.context("Failed to read glob entry")?;
 
         // Extract slug from filename
@@ -305,7 +313,8 @@ fn expand_dynamic_route(
             .to_string();
 
         // Replace [slug] or [id] in pattern with actual value
-        let route_pattern = source.pattern
+        let route_pattern = source
+            .pattern
             .replace("[slug]", &slug)
             .replace("[id]", &slug);
 
@@ -436,8 +445,7 @@ fn copy_static_assets(merged_path: &std::path::Path, output_dir: &std::path::Pat
 fn copy_directory_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<()> {
     use std::fs;
 
-    fs::create_dir_all(dst)
-        .with_context(|| format!("Failed to create directory: {:?}", dst))?;
+    fs::create_dir_all(dst).with_context(|| format!("Failed to create directory: {:?}", dst))?;
 
     for entry in fs::read_dir(src)? {
         let entry = entry?;
@@ -483,24 +491,31 @@ fn build_isr(release: bool) -> Result<()> {
     }
 
     // Read and modify Cargo.toml to add ISR dependency
-    let cargo_toml_content = fs::read_to_string(&cargo_toml_src)
-        .context("Failed to read Cargo.toml")?;
+    let cargo_toml_content =
+        fs::read_to_string(&cargo_toml_src).context("Failed to read Cargo.toml")?;
 
     // Parse TOML
-    let mut cargo_toml: toml::Value = toml::from_str(&cargo_toml_content)
-        .context("Failed to parse Cargo.toml")?;
+    let mut cargo_toml: toml::Value =
+        toml::from_str(&cargo_toml_content).context("Failed to parse Cargo.toml")?;
 
     // Add rhtmx-isr dependency if not already present
-    if let Some(deps) = cargo_toml.get_mut("dependencies").and_then(|v| v.as_table_mut()) {
+    if let Some(deps) = cargo_toml
+        .get_mut("dependencies")
+        .and_then(|v| v.as_table_mut())
+    {
         if !deps.contains_key("rhtmx-isr") {
             // Determine the path to rhtmx-isr crate
             // Assume it's in the workspace or use a version
             let isr_dep = toml::Value::Table({
                 let mut table = toml::map::Map::new();
-                table.insert("path".to_string(), toml::Value::String("../rhtmx-isr".to_string()));
-                table.insert("features".to_string(), toml::Value::Array(vec![
-                    toml::Value::String("all".to_string())
-                ]));
+                table.insert(
+                    "path".to_string(),
+                    toml::Value::String("../rhtmx-isr".to_string()),
+                );
+                table.insert(
+                    "features".to_string(),
+                    toml::Value::Array(vec![toml::Value::String("all".to_string())]),
+                );
                 table
             });
             deps.insert("rhtmx-isr".to_string(), isr_dep);
@@ -508,10 +523,9 @@ fn build_isr(release: bool) -> Result<()> {
     }
 
     // Write modified Cargo.toml
-    let modified_toml = toml::to_string_pretty(&cargo_toml)
-        .context("Failed to serialize Cargo.toml")?;
-    fs::write(&cargo_toml_dst, modified_toml)
-        .context("Failed to write modified Cargo.toml")?;
+    let modified_toml =
+        toml::to_string_pretty(&cargo_toml).context("Failed to serialize Cargo.toml")?;
+    fs::write(&cargo_toml_dst, modified_toml).context("Failed to write modified Cargo.toml")?;
 
     // Step 3: Read ISR configuration from rhtmx.toml
     println!("{}", "  ⚙  Reading ISR configuration...".cyan());
@@ -557,7 +571,8 @@ fn build_isr(release: bool) -> Result<()> {
         cmd.arg("--release");
     }
 
-    let status = cmd.status()
+    let status = cmd
+        .status()
         .context("Failed to execute cargo build. Is cargo installed?")?;
 
     if !status.success() {
@@ -580,13 +595,11 @@ fn build_isr(release: bool) -> Result<()> {
 
     // Create target directory if it doesn't exist
     if let Some(parent) = binary_dst.parent() {
-        fs::create_dir_all(parent)
-            .context("Failed to create target directory")?;
+        fs::create_dir_all(parent).context("Failed to create target directory")?;
     }
 
     println!("{}", "  📦 Copying binary...".cyan());
-    fs::copy(&binary_src, &binary_dst)
-        .context("Failed to copy binary to target directory")?;
+    fs::copy(&binary_src, &binary_dst).context("Failed to copy binary to target directory")?;
 
     // Make binary executable on Unix systems
     #[cfg(unix)]
@@ -600,7 +613,10 @@ fn build_isr(release: bool) -> Result<()> {
     println!();
     println!("{}", "✓ ISR build complete!".green().bold());
     println!();
-    println!("Binary location: {}", binary_dst.display().to_string().cyan());
+    println!(
+        "Binary location: {}",
+        binary_dst.display().to_string().cyan()
+    );
     println!();
     println!("Run your application:");
     println!("  {}", format!("./{}", binary_dst.display()).yellow());

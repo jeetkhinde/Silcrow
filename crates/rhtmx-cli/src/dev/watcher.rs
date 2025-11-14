@@ -59,9 +59,7 @@ impl FileWatcher {
             if let Ok(config) = crate::theme::manifest::ProjectConfig::from_file(&config_path) {
                 if let Some(theme_config) = &config.theme {
                     match &theme_config.source {
-                        crate::theme::manifest::ThemeSource::Local { path } => {
-                            Some(path.clone())
-                        }
+                        crate::theme::manifest::ThemeSource::Local { path } => Some(path.clone()),
                         _ => None,
                     }
                 } else {
@@ -86,8 +84,10 @@ impl FileWatcher {
                     for path in &event.paths {
                         // Ignore hidden files and directories
                         if path.to_str().map_or(false, |s| {
-                            s.contains("/.") || s.contains("\\.") ||
-                            s.contains(".rhtmx/") || s.contains(".themes/")
+                            s.contains("/.")
+                                || s.contains("\\.")
+                                || s.contains(".rhtmx/")
+                                || s.contains(".themes/")
                         }) {
                             continue;
                         }
@@ -133,7 +133,8 @@ impl FileWatcher {
 
                 // Determine what changed
                 let path_str = path.to_str().unwrap_or("");
-                let is_theme_file = theme_path_clone.as_ref()
+                let is_theme_file = theme_path_clone
+                    .as_ref()
                     .map_or(false, |tp| path_str.starts_with(tp.to_str().unwrap_or("")));
 
                 let change_type = if is_theme_file {

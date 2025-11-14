@@ -27,8 +27,7 @@ impl ThemeManager {
     pub fn load_and_merge(&self, force_reload: bool) -> Result<()> {
         // Read project config
         let config_path = self.project_root.join("rhtmx.toml");
-        let config = ProjectConfig::from_file(&config_path)
-            .context("Failed to read rhtmx.toml")?;
+        let config = ProjectConfig::from_file(&config_path).context("Failed to read rhtmx.toml")?;
 
         if !config.has_theme() {
             // No theme, just copy user files to merged directory
@@ -37,7 +36,8 @@ impl ThemeManager {
         }
 
         let theme_config = config.theme.as_ref().unwrap();
-        let theme_name = config.theme_name()
+        let theme_name = config
+            .theme_name()
             .ok_or_else(|| anyhow::anyhow!("Could not determine theme name"))?;
 
         println!("  {} Loading theme: {}", "→".cyan(), theme_name.bold());
@@ -65,8 +65,7 @@ impl ThemeManager {
     fn download_theme(&self, source: &ThemeSource, cache_path: &Path) -> Result<()> {
         // Remove existing cache if present
         if cache_path.exists() {
-            std::fs::remove_dir_all(cache_path)
-                .context("Failed to remove existing theme cache")?;
+            std::fs::remove_dir_all(cache_path).context("Failed to remove existing theme cache")?;
         }
 
         match source {
@@ -96,8 +95,7 @@ impl ThemeManager {
         dest: &Path,
     ) -> Result<()> {
         let mut cmd = Command::new("git");
-        cmd.arg("clone")
-            .arg("--depth").arg("1");
+        cmd.arg("clone").arg("--depth").arg("1");
 
         // Use tag or branch if specified
         if let Some(tag_name) = tag {
@@ -108,7 +106,8 @@ impl ThemeManager {
 
         cmd.arg(url).arg(dest);
 
-        let output = cmd.output()
+        let output = cmd
+            .output()
             .context("Failed to execute git clone. Is git installed?")?;
 
         if !output.status.success() {

@@ -1832,6 +1832,7 @@ dependencies = [
  "redis",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "walkdir",
 ]
@@ -1917,6 +1918,7 @@ dependencies = [
  "tower 0.4.13",
  "tower-http",
  "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 

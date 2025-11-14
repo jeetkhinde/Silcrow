@@ -148,14 +148,9 @@ pub enum ThemeSource {
         branch: Option<String>,
     },
     /// Local path
-    Local {
-        path: PathBuf,
-    },
+    Local { path: PathBuf },
     /// Registry (future)
-    Registry {
-        name: String,
-        version: String,
-    },
+    Registry { name: String, version: String },
 }
 
 /// Theme manifest (theme.toml inside theme directory)
@@ -200,9 +195,10 @@ impl ProjectConfig {
             t.name.clone().or_else(|| {
                 // Derive name from source
                 match &t.source {
-                    ThemeSource::Git { url, .. } => {
-                        url.split('/').last().map(|s| s.trim_end_matches(".git").to_string())
-                    }
+                    ThemeSource::Git { url, .. } => url
+                        .split('/')
+                        .last()
+                        .map(|s| s.trim_end_matches(".git").to_string()),
                     ThemeSource::Local { path } => {
                         path.file_name().and_then(|n| n.to_str()).map(String::from)
                     }
