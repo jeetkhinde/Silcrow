@@ -172,6 +172,12 @@ pub struct Route {
     pub is_error_page: bool,
     /// Whether this is a no-layout marker
     pub is_nolayout_marker: bool,
+    /// Whether this is a loading UI file (Phase 4.3)
+    pub is_loading: bool,
+    /// Whether this is a template file (Phase 4.4)
+    pub is_template: bool,
+    /// Whether this is a not-found page (Phase 4.5)
+    pub is_not_found: bool,
     /// Layout resolution strategy
     pub layout_option: LayoutOption,
     /// Name of this layout (if it's a named layout)
@@ -372,6 +378,9 @@ impl Route {
         let is_layout = filename == "_layout" || filename.starts_with("_layout.");
         let is_error_page = filename == "_error";
         let is_nolayout_marker = filename == "_nolayout";
+        let is_loading = filename == "loading"; // Phase 4.3
+        let is_template = filename == "_template"; // Phase 4.4
+        let is_not_found = filename == "not-found"; // Phase 4.5
 
         // Detect named layouts: _layout.name.rhtml
         let layout_name = if is_layout {
@@ -397,6 +406,9 @@ impl Route {
             optional_params,
             is_error_page,
             is_nolayout_marker,
+            is_loading,
+            is_template,
+            is_not_found,
             layout_option: LayoutOption::default(),
             layout_name,
             metadata: HashMap::new(),
@@ -449,6 +461,9 @@ impl Route {
                 || segment.starts_with("_layout.") // Skip named layouts like _layout.admin
                 || segment == "_error"
                 || segment == "_nolayout" // Skip nolayout markers
+                || segment == "loading" // Phase 4.3
+                || segment == "_template" // Phase 4.4
+                || segment == "not-found" // Phase 4.5
                 || segment == "index"
             {
                 continue;
@@ -1200,6 +1215,9 @@ impl Route {
             optional_params,
             is_error_page: false,
             is_nolayout_marker: false,
+            is_loading: false,
+            is_template: false,
+            is_not_found: false,
             layout_option: LayoutOption::None,
             layout_name: None,
             metadata: HashMap::new(),
@@ -1375,6 +1393,9 @@ impl<'a> Iterator for PathHierarchy<'a> {
 /// - Named layouts for explicit layout selection (HashMap by name)
 /// - Named routes for URL generation (HashMap for O(1) lookup)
 /// - Error page routes for error handling (HashMap for O(1) lookup)
+/// - Loading UI routes for loading states (HashMap for O(1) lookup) - Phase 4.3
+/// - Template routes for re-mounting layouts (HashMap for O(1) lookup) - Phase 4.4
+/// - Not-found routes for 404 pages (HashMap for O(1) lookup) - Phase 4.5
 /// - No-layout markers for directories that should render without layouts
 #[derive(Clone)]
 pub struct Router {
@@ -1383,6 +1404,9 @@ pub struct Router {
     named_layouts: HashMap<String, Route>,
     named_routes: HashMap<String, Route>,
     error_pages: HashMap<String, Route>,
+    loading_pages: HashMap<String, Route>,
+    templates: HashMap<String, Route>,
+    not_found_pages: HashMap<String, Route>,
     nolayout_patterns: std::collections::HashSet<String>,
     case_insensitive: bool,
 }
@@ -1396,6 +1420,9 @@ impl Router {
             named_layouts: HashMap::new(),
             named_routes: HashMap::new(),
             error_pages: HashMap::new(),
+            loading_pages: HashMap::new(),
+            templates: HashMap::new(),
+            not_found_pages: HashMap::new(),
             nolayout_patterns: std::collections::HashSet::new(),
             case_insensitive: false,
         }
@@ -1417,6 +1444,9 @@ impl Router {
             named_layouts: HashMap::new(),
             named_routes: HashMap::new(),
             error_pages: HashMap::new(),
+            loading_pages: HashMap::new(),
+            templates: HashMap::new(),
+            not_found_pages: HashMap::new(),
             nolayout_patterns: std::collections::HashSet::new(),
             case_insensitive,
         }
@@ -1460,29 +1490,37 @@ impl Router {
             self.named_routes.insert(name.clone(), route.clone());
         }
 
-        match (route.is_layout, route.is_error_page) {
-            (true, _) => {
-                // Store in layouts by pattern
-                self.layouts.insert(route.pattern.clone(), route.clone());
+        // Classify route into appropriate collection
+        if route.is_layout {
+            // Store in layouts by pattern
+            self.layouts.insert(route.pattern.clone(), route.clone());
 
-                // Also store in named_layouts if it has a name
-                if let Some(ref name) = route.layout_name {
-                    self.named_layouts.insert(name.clone(), route);
-                }
+            // Also store in named_layouts if it has a name
+            if let Some(ref name) = route.layout_name {
+                self.named_layouts.insert(name.clone(), route);
             }
-            (_, true) => {
-                self.error_pages.insert(route.pattern.clone(), route);
-            }
-            _ => {
-                self.routes.push(route);
-                self.routes.sort_by_key(|r| r.priority);
-            }
+        } else if route.is_error_page {
+            self.error_pages.insert(route.pattern.clone(), route);
+        } else if route.is_loading {
+            // Phase 4.3: Loading UI pages
+            self.loading_pages.insert(route.pattern.clone(), route);
+        } else if route.is_template {
+            // Phase 4.4: Template pages
+            self.templates.insert(route.pattern.clone(), route);
+        } else if route.is_not_found {
+            // Phase 4.5: Not-found pages
+            self.not_found_pages.insert(route.pattern.clone(), route);
+        } else {
+            // Regular route
+            self.routes.push(route);
+            self.routes.sort_by_key(|r| r.priority);
         }
     }
 
     /// Removes a route by its pattern
     ///
-    /// Removes the route from all collections (routes, layouts, named_layouts, named_routes, error_pages)
+    /// Removes the route from all collections (routes, layouts, named_layouts, named_routes,
+    /// error_pages, loading_pages, templates, not_found_pages)
     pub fn remove_route(&mut self, pattern: &str) {
         // Remove from routes and also from named_routes if it has a name
         if let Some(pos) = self.routes.iter().position(|r| r.pattern == pattern) {
@@ -1501,6 +1539,9 @@ impl Router {
         }
 
         self.error_pages.remove(pattern);
+        self.loading_pages.remove(pattern);
+        self.templates.remove(pattern);
+        self.not_found_pages.remove(pattern);
     }
 
     /// Manually sorts routes by priority
@@ -1769,6 +1810,78 @@ impl Router {
     /// Returns all registered error page routes
     pub fn error_pages(&self) -> &HashMap<String, Route> {
         &self.error_pages
+    }
+
+    // ========================================================================
+    // Loading UI, Template, and Not-Found Page Accessors (Phase 4.3-4.5)
+    // ========================================================================
+
+    /// Gets a loading UI page for a given pattern (with hierarchy)
+    ///
+    /// Similar to get_error_page, searches up the path hierarchy.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::{Router, Route};
+    ///
+    /// let mut router = Router::new();
+    /// router.add_route(Route::from_path("pages/dashboard/loading.rhtml", "pages"));
+    ///
+    /// let loading = router.get_loading_page("/dashboard/users").unwrap();
+    /// assert_eq!(loading.pattern, "/dashboard");
+    /// ```
+    pub fn get_loading_page(&self, pattern: &str) -> Option<&Route> {
+        self.get_scoped_resource(pattern, &self.loading_pages)
+    }
+
+    /// Returns all registered loading UI routes
+    pub fn loading_pages(&self) -> &HashMap<String, Route> {
+        &self.loading_pages
+    }
+
+    /// Gets a template for a given pattern (with hierarchy)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::{Router, Route};
+    ///
+    /// let mut router = Router::new();
+    /// router.add_route(Route::from_path("pages/_template.rhtml", "pages"));
+    ///
+    /// let template = router.get_template("/about").unwrap();
+    /// assert_eq!(template.pattern, "/");
+    /// ```
+    pub fn get_template(&self, pattern: &str) -> Option<&Route> {
+        self.get_scoped_resource(pattern, &self.templates)
+    }
+
+    /// Returns all registered template routes
+    pub fn templates(&self) -> &HashMap<String, Route> {
+        &self.templates
+    }
+
+    /// Gets a not-found page for a given pattern (with hierarchy)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::{Router, Route};
+    ///
+    /// let mut router = Router::new();
+    /// router.add_route(Route::from_path("pages/api/not-found.rhtml", "pages"));
+    ///
+    /// let not_found = router.get_not_found_page("/api/unknown").unwrap();
+    /// assert_eq!(not_found.pattern, "/api");
+    /// ```
+    pub fn get_not_found_page(&self, pattern: &str) -> Option<&Route> {
+        self.get_scoped_resource(pattern, &self.not_found_pages)
+    }
+
+    /// Returns all registered not-found routes
+    pub fn not_found_pages(&self) -> &HashMap<String, Route> {
+        &self.not_found_pages
     }
 
     // ========================================================================
@@ -4310,5 +4423,192 @@ mod tests {
         // All three groups should be skipped
         assert_eq!(route.pattern, "/home");
         assert_eq!(route.template_path, "pages/(app)/(dashboard)/(main)/home.rhtml");
+    }
+
+    // ===== Phase 4.3: Loading UI Tests =====
+
+    #[test]
+    fn test_loading_ui_detection() {
+        let loading = Route::from_path("pages/dashboard/loading.rhtml", "pages");
+
+        assert!(loading.is_loading);
+        assert_eq!(loading.pattern, "/dashboard");
+        assert_eq!(loading.template_path, "pages/dashboard/loading.rhtml");
+    }
+
+    #[test]
+    fn test_loading_ui_hierarchical_resolution() {
+        let mut router = Router::new();
+
+        // Root loading
+        router.add_route(Route::from_path("pages/loading.rhtml", "pages"));
+
+        // Dashboard loading
+        router.add_route(Route::from_path("pages/dashboard/loading.rhtml", "pages"));
+
+        // Stats loading
+        router.add_route(Route::from_path("pages/dashboard/stats/loading.rhtml", "pages"));
+
+        // Check hierarchical lookup
+        assert!(router.get_loading_page("/dashboard/stats").is_some());
+        assert!(router.get_loading_page("/dashboard").is_some());
+        assert!(router.get_loading_page("/").is_some());
+    }
+
+    #[test]
+    fn test_loading_pages_collection() {
+        let mut router = Router::new();
+
+        router.add_route(Route::from_path("pages/loading.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/loading.rhtml", "pages"));
+
+        assert_eq!(router.loading_pages().len(), 2);
+        assert!(router.loading_pages().contains_key("/"));
+        assert!(router.loading_pages().contains_key("/dashboard"));
+    }
+
+    // ===== Phase 4.4: Template Files Tests =====
+
+    #[test]
+    fn test_template_detection() {
+        let template = Route::from_path("pages/dashboard/_template.rhtml", "pages");
+
+        assert!(template.is_template);
+        assert_eq!(template.pattern, "/dashboard");
+        assert_eq!(template.template_path, "pages/dashboard/_template.rhtml");
+    }
+
+    #[test]
+    fn test_template_hierarchical_resolution() {
+        let mut router = Router::new();
+
+        // Root template
+        router.add_route(Route::from_path("pages/_template.rhtml", "pages"));
+
+        // Dashboard template
+        router.add_route(Route::from_path("pages/dashboard/_template.rhtml", "pages"));
+
+        // Stats template
+        router.add_route(Route::from_path("pages/dashboard/stats/_template.rhtml", "pages"));
+
+        // Check hierarchical lookup
+        assert!(router.get_template("/dashboard/stats").is_some());
+        assert!(router.get_template("/dashboard").is_some());
+        assert!(router.get_template("/").is_some());
+    }
+
+    #[test]
+    fn test_templates_collection() {
+        let mut router = Router::new();
+
+        router.add_route(Route::from_path("pages/_template.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/_template.rhtml", "pages"));
+
+        assert_eq!(router.templates().len(), 2);
+        assert!(router.templates().contains_key("/"));
+        assert!(router.templates().contains_key("/dashboard"));
+    }
+
+    // ===== Phase 4.5: Not-Found Pages Tests =====
+
+    #[test]
+    fn test_not_found_detection() {
+        let not_found = Route::from_path("pages/dashboard/not-found.rhtml", "pages");
+
+        assert!(not_found.is_not_found);
+        assert_eq!(not_found.pattern, "/dashboard");
+        assert_eq!(not_found.template_path, "pages/dashboard/not-found.rhtml");
+    }
+
+    #[test]
+    fn test_not_found_hierarchical_resolution() {
+        let mut router = Router::new();
+
+        // Root not-found
+        router.add_route(Route::from_path("pages/not-found.rhtml", "pages"));
+
+        // Dashboard not-found
+        router.add_route(Route::from_path("pages/dashboard/not-found.rhtml", "pages"));
+
+        // Stats not-found
+        router.add_route(Route::from_path("pages/dashboard/stats/not-found.rhtml", "pages"));
+
+        // Check hierarchical lookup
+        assert!(router.get_not_found_page("/dashboard/stats").is_some());
+        assert!(router.get_not_found_page("/dashboard").is_some());
+        assert!(router.get_not_found_page("/").is_some());
+    }
+
+    #[test]
+    fn test_not_found_pages_collection() {
+        let mut router = Router::new();
+
+        router.add_route(Route::from_path("pages/not-found.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/not-found.rhtml", "pages"));
+
+        assert_eq!(router.not_found_pages().len(), 2);
+        assert!(router.not_found_pages().contains_key("/"));
+        assert!(router.not_found_pages().contains_key("/dashboard"));
+    }
+
+    // ===== Integration Tests: All Special Files Together =====
+
+    #[test]
+    fn test_all_special_files_together() {
+        let mut router = Router::new();
+
+        // Add all special file types for dashboard section
+        router.add_route(Route::from_path("pages/dashboard/_layout.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/loading.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/_template.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/not-found.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/_error.rhtml", "pages"));
+
+        // Regular page
+        router.add_route(Route::from_path("pages/dashboard/index.rhtml", "pages"));
+
+        // Verify all are accessible
+        assert!(router.get_layout("/dashboard").is_some());
+        assert!(router.get_loading_page("/dashboard").is_some());
+        assert!(router.get_template("/dashboard").is_some());
+        assert!(router.get_not_found_page("/dashboard").is_some());
+        assert!(router.get_error_page("/dashboard").is_some());
+        assert!(router.match_route("/dashboard").is_some());
+    }
+
+    #[test]
+    fn test_special_files_do_not_create_routes() {
+        let mut router = Router::new();
+
+        router.add_route(Route::from_path("pages/loading.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/_template.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/not-found.rhtml", "pages"));
+
+        // These should NOT be in regular routes
+        assert_eq!(router.routes().len(), 0);
+
+        // But they should be in special collections
+        assert_eq!(router.loading_pages().len(), 1);
+        assert_eq!(router.templates().len(), 1);
+        assert_eq!(router.not_found_pages().len(), 1);
+    }
+
+    #[test]
+    fn test_special_files_with_route_groups() {
+        let mut router = Router::new();
+
+        // Special files inside route groups
+        router.add_route(Route::from_path("pages/(app)/loading.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/(app)/_template.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/(app)/not-found.rhtml", "pages"));
+
+        // Pattern should have route group removed
+        assert!(router.get_loading_page("/").is_some());
+        assert!(router.get_template("/").is_some());
+        assert!(router.get_not_found_page("/").is_some());
+
+        // But template_path should preserve the group
+        let loading = router.loading_pages().get("/").unwrap();
+        assert_eq!(loading.template_path, "pages/(app)/loading.rhtml");
     }
 }
