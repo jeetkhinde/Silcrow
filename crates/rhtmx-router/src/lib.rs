@@ -184,6 +184,12 @@ pub struct Route {
     pub aliases: Vec<String>,
     /// Optional name for this route (for URL generation and type-safe references)
     pub name: Option<String>,
+    /// Whether this is a redirect route
+    pub is_redirect: bool,
+    /// Target URL for redirect routes
+    pub redirect_to: Option<String>,
+    /// HTTP status code for redirects (301, 302, 307, 308)
+    pub redirect_status: Option<u16>,
 }
 
 /// Result of matching a route against a path
@@ -193,6 +199,64 @@ pub struct RouteMatch {
     pub route: Route,
     /// Extracted parameters from the path
     pub params: HashMap<String, String>,
+}
+
+impl RouteMatch {
+    /// Checks if this match is a redirect route
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::{Router, Route};
+    ///
+    /// let mut router = Router::new();
+    /// router.add_route(Route::redirect("/old-page", "/new-page", 301));
+    ///
+    /// let route_match = router.match_route("/old-page").unwrap();
+    /// assert!(route_match.is_redirect());
+    /// ```
+    pub fn is_redirect(&self) -> bool {
+        self.route.is_redirect
+    }
+
+    /// Gets the redirect target URL with parameters substituted
+    ///
+    /// Returns None if this is not a redirect route.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::{Router, Route};
+    ///
+    /// let mut router = Router::new();
+    /// router.add_route(Route::redirect("/blog/:slug", "/articles/:slug", 301));
+    ///
+    /// let route_match = router.match_route("/blog/hello-world").unwrap();
+    /// let target = route_match.redirect_target().unwrap();
+    /// assert_eq!(target, "/articles/hello-world");
+    /// ```
+    pub fn redirect_target(&self) -> Option<String> {
+        self.route.redirect_target(&self.params)
+    }
+
+    /// Gets the HTTP status code for this redirect
+    ///
+    /// Returns None if this is not a redirect route.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::{Router, Route};
+    ///
+    /// let mut router = Router::new();
+    /// router.add_route(Route::redirect("/temp", "/new-location", 302));
+    ///
+    /// let route_match = router.match_route("/temp").unwrap();
+    /// assert_eq!(route_match.redirect_status(), Some(302));
+    /// ```
+    pub fn redirect_status(&self) -> Option<u16> {
+        self.route.redirect_status
+    }
 }
 
 /// Represents different types of route pattern segments
@@ -327,6 +391,9 @@ impl Route {
             param_constraints,
             aliases: Vec::new(),
             name: None,
+            is_redirect: false,
+            redirect_to: None,
+            redirect_status: None,
         }
     }
 
@@ -470,6 +537,21 @@ impl Route {
         path: &str,
         case_insensitive: bool,
     ) -> Option<HashMap<String, String>> {
+        // For redirect routes with no parameters, do exact string matching
+        // This allows matching trailing slashes for canonical URL redirects
+        if self.is_redirect && self.params.is_empty() {
+            let matches = if case_insensitive {
+                self.pattern.eq_ignore_ascii_case(path)
+            } else {
+                self.pattern == path
+            };
+            return if matches {
+                Some(HashMap::new())
+            } else {
+                None
+            };
+        }
+
         let pattern_segments: Vec<&str> =
             self.pattern.split('/').filter(|s| !s.is_empty()).collect();
         let path_segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
@@ -960,6 +1042,152 @@ impl Route {
                 format!("/{}", filtered.join("/"))
             }
         })
+    }
+
+    // ========================================================================
+    // Redirect Route Methods (Phase 3.3)
+    // ========================================================================
+    //
+    // Functional methods for creating and managing redirect routes:
+    // - Static redirects for legacy URLs
+    // - Pattern-based redirects with parameter preservation
+    // - HTTP status code specification (301, 302, 307, 308)
+
+    /// Creates a redirect route (functional static constructor)
+    ///
+    /// Redirects are useful for:
+    /// - Legacy URL support (/old-url → /new-url)
+    /// - Canonical URL enforcement (/page/ → /page)
+    /// - Shortlinks (/blog → /articles)
+    ///
+    /// # Arguments
+    ///
+    /// * `from_pattern` - Source URL pattern to match
+    /// * `to_url` - Target URL to redirect to
+    /// * `status` - HTTP status code (301 = permanent, 302 = temporary, 307/308 = preserve method)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::Route;
+    ///
+    /// // Permanent redirect
+    /// let route = Route::redirect("/old-page", "/new-page", 301);
+    /// assert!(route.is_redirect);
+    /// assert_eq!(route.redirect_to, Some("/new-page".to_string()));
+    ///
+    /// // Temporary redirect
+    /// let route = Route::redirect("/maintenance", "/status", 302);
+    /// assert_eq!(route.redirect_status, Some(302));
+    /// ```
+    pub fn redirect(from_pattern: impl Into<String>, to_url: impl Into<String>, status: u16) -> Self {
+        let from = from_pattern.into();
+        let target = to_url.into();
+
+        // Check if pattern has parameters (using :param or [param] syntax)
+        let has_params = from.contains('[') || from.contains(':');
+
+        // For redirects, we support both :param and [param] syntax
+        // Convert :param to [param] for parsing
+        let normalized_from = if from.contains(':') && !from.contains('[') {
+            // Convert :param to [param] syntax for parsing
+            let mut result = String::new();
+            let segments: Vec<&str> = from.split('/').collect();
+            for (i, segment) in segments.iter().enumerate() {
+                if i > 0 {
+                    result.push('/');
+                }
+                if segment.starts_with(':') {
+                    // Convert :param to [param]
+                    result.push('[');
+                    result.push_str(&segment[1..]);
+                    result.push(']');
+                } else {
+                    result.push_str(segment);
+                }
+            }
+            result
+        } else {
+            from.clone()
+        };
+
+        let (pattern, params, optional_params, dynamic_count, has_catch_all, param_constraints) = if has_params {
+            Self::parse_pattern(&normalized_from)
+        } else {
+            // Static redirect - use pattern as-is, ensuring it starts with /
+            let normalized = if from.starts_with('/') {
+                from.clone()
+            } else {
+                format!("/{}", from)
+            };
+            (normalized, Vec::new(), Vec::new(), 0, false, HashMap::new())
+        };
+
+        let depth = pattern.matches('/').count();
+        let priority =
+            Self::calculate_priority(has_catch_all, dynamic_count, depth, &optional_params);
+
+        Route {
+            pattern,
+            template_path: format!("redirect:{}", target),
+            params,
+            priority,
+            is_layout: false,
+            has_catch_all,
+            optional_params,
+            is_error_page: false,
+            is_nolayout_marker: false,
+            layout_option: LayoutOption::None,
+            layout_name: None,
+            metadata: HashMap::new(),
+            param_constraints,
+            aliases: Vec::new(),
+            name: None,
+            is_redirect: true,
+            redirect_to: Some(target),
+            redirect_status: Some(status),
+        }
+    }
+
+    /// Generates the redirect target URL with parameter substitution
+    ///
+    /// For dynamic redirects, substitutes matched parameters into target URL.
+    /// Uses functional map/replace pattern.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::Route;
+    /// use std::collections::HashMap;
+    ///
+    /// let route = Route::redirect("/blog/:slug", "/articles/:slug", 301);
+    ///
+    /// let mut params = HashMap::new();
+    /// params.insert("slug".to_string(), "hello-world".to_string());
+    ///
+    /// let target = route.redirect_target(&params).unwrap();
+    /// assert_eq!(target, "/articles/hello-world");
+    /// ```
+    pub fn redirect_target(&self, params: &HashMap<String, String>) -> Option<String> {
+        if !self.is_redirect {
+            return None;
+        }
+
+        let target = self.redirect_to.as_ref()?;
+
+        // If no parameters, return target as-is
+        if params.is_empty() {
+            return Some(target.clone());
+        }
+
+        // Functional parameter substitution
+        let mut result = target.clone();
+        for (param_name, param_value) in params {
+            let placeholder = format!(":{}", param_name);
+            result = result.replace(&placeholder, param_value);
+        }
+
+        Some(result)
     }
 }
 
@@ -3230,5 +3458,318 @@ mod tests {
 
         let url = router.url_for("api.v1.users.show", &params).unwrap();
         assert_eq!(url, "/api/v2/users/789");
+    }
+
+    // ========================================================================
+    // Redirect Route Tests (Phase 3.3)
+    // ========================================================================
+
+    #[test]
+    fn test_redirect_route_creation() {
+        let route = Route::redirect("/old-page", "/new-page", 301);
+
+        assert!(route.is_redirect);
+        assert_eq!(route.pattern, "/old-page");
+        assert_eq!(route.redirect_to, Some("/new-page".to_string()));
+        assert_eq!(route.redirect_status, Some(301));
+    }
+
+    #[test]
+    fn test_redirect_route_permanent() {
+        let route = Route::redirect("/permanent", "/new-location", 301);
+        assert_eq!(route.redirect_status, Some(301));
+    }
+
+    #[test]
+    fn test_redirect_route_temporary() {
+        let route = Route::redirect("/temporary", "/new-location", 302);
+        assert_eq!(route.redirect_status, Some(302));
+    }
+
+    #[test]
+    fn test_redirect_route_preserve_method() {
+        let route307 = Route::redirect("/preserve-get", "/new-get", 307);
+        assert_eq!(route307.redirect_status, Some(307));
+
+        let route308 = Route::redirect("/preserve-post", "/new-post", 308);
+        assert_eq!(route308.redirect_status, Some(308));
+    }
+
+    #[test]
+    fn test_redirect_static_route() {
+        let route = Route::redirect("/old-about", "/about", 301);
+
+        let params = HashMap::new();
+        let target = route.redirect_target(&params).unwrap();
+        assert_eq!(target, "/about");
+    }
+
+    #[test]
+    fn test_redirect_with_parameters() {
+        let route = Route::redirect("/blog/:slug", "/articles/:slug", 301);
+
+        assert_eq!(route.pattern, "/blog/:slug");
+        assert_eq!(route.params, vec!["slug"]);
+
+        let mut params = HashMap::new();
+        params.insert("slug".to_string(), "hello-world".to_string());
+
+        let target = route.redirect_target(&params).unwrap();
+        assert_eq!(target, "/articles/hello-world");
+    }
+
+    #[test]
+    fn test_redirect_with_multiple_parameters() {
+        let route = Route::redirect("/old/:year/:month/:slug", "/archive/:year/:month/:slug", 301);
+
+        let mut params = HashMap::new();
+        params.insert("year".to_string(), "2024".to_string());
+        params.insert("month".to_string(), "12".to_string());
+        params.insert("slug".to_string(), "hello-world".to_string());
+
+        let target = route.redirect_target(&params).unwrap();
+        assert_eq!(target, "/archive/2024/12/hello-world");
+    }
+
+    #[test]
+    fn test_redirect_router_matching() {
+        let mut router = Router::new();
+
+        router.add_route(Route::redirect("/old-page", "/new-page", 301));
+
+        let route_match = router.match_route("/old-page").unwrap();
+
+        assert!(route_match.is_redirect());
+        assert_eq!(route_match.redirect_target().unwrap(), "/new-page");
+        assert_eq!(route_match.redirect_status().unwrap(), 301);
+    }
+
+    #[test]
+    fn test_redirect_with_dynamic_params_in_router() {
+        let mut router = Router::new();
+
+        router.add_route(Route::redirect("/blog/:slug", "/articles/:slug", 301));
+
+        let route_match = router.match_route("/blog/hello-world").unwrap();
+
+        assert!(route_match.is_redirect());
+        assert_eq!(route_match.redirect_target().unwrap(), "/articles/hello-world");
+        assert_eq!(route_match.redirect_status().unwrap(), 301);
+    }
+
+    #[test]
+    fn test_redirect_priority_with_static_routes() {
+        let mut router = Router::new();
+
+        // Add static route first
+        router.add_route(Route::from_path("pages/about.rhtml", "pages"));
+
+        // Add redirect
+        router.add_route(Route::redirect("/old-about", "/about", 301));
+
+        // Static route should be accessible
+        let m = router.match_route("/about").unwrap();
+        assert!(!m.is_redirect());
+
+        // Redirect should work
+        let m = router.match_route("/old-about").unwrap();
+        assert!(m.is_redirect());
+        assert_eq!(m.redirect_target().unwrap(), "/about");
+    }
+
+    #[test]
+    fn test_redirect_legacy_url_support() {
+        let mut router = Router::new();
+
+        // New route
+        router.add_route(Route::from_path("pages/products/index.rhtml", "pages"));
+
+        // Legacy redirects
+        router.add_route(Route::redirect("/old-products", "/products", 301));
+        router.add_route(Route::redirect("/shop", "/products", 301));
+
+        // New URL works
+        assert!(!router.match_route("/products").unwrap().is_redirect());
+
+        // Legacy URLs redirect
+        assert_eq!(
+            router.match_route("/old-products").unwrap().redirect_target().unwrap(),
+            "/products"
+        );
+        assert_eq!(
+            router.match_route("/shop").unwrap().redirect_target().unwrap(),
+            "/products"
+        );
+    }
+
+    #[test]
+    fn test_redirect_shortlink() {
+        let mut router = Router::new();
+
+        router.add_route(Route::redirect("/docs", "/documentation/getting-started", 302));
+
+        let m = router.match_route("/docs").unwrap();
+        assert!(m.is_redirect());
+        assert_eq!(m.redirect_target().unwrap(), "/documentation/getting-started");
+        assert_eq!(m.redirect_status().unwrap(), 302);
+    }
+
+    #[test]
+    fn test_redirect_canonical_url() {
+        let mut router = Router::new();
+
+        // Redirect trailing slash to canonical (add redirect first)
+        router.add_route(Route::redirect("/about/", "/about", 301));
+
+        // Canonical route
+        router.add_route(Route::from_path("pages/about.rhtml", "pages"));
+
+        let m = router.match_route("/about/").unwrap();
+        assert!(m.is_redirect());
+        assert_eq!(m.redirect_target().unwrap(), "/about");
+    }
+
+    #[test]
+    fn test_redirect_target_non_redirect_route() {
+        let route = Route::from_path("pages/about.rhtml", "pages");
+        let params = HashMap::new();
+
+        assert!(!route.is_redirect);
+        assert_eq!(route.redirect_target(&params), None);
+    }
+
+    #[test]
+    fn test_route_match_redirect_methods_non_redirect() {
+        let mut router = Router::new();
+        router.add_route(Route::from_path("pages/about.rhtml", "pages"));
+
+        let m = router.match_route("/about").unwrap();
+
+        assert!(!m.is_redirect());
+        assert_eq!(m.redirect_target(), None);
+        assert_eq!(m.redirect_status(), None);
+    }
+
+    #[test]
+    fn test_redirect_pattern_matching() {
+        let route = Route::redirect("/users/:id/profile", "/profiles/:id", 301);
+
+        // Check pattern parsing
+        assert_eq!(route.pattern, "/users/:id/profile");
+        assert_eq!(route.params, vec!["id"]);
+
+        // Check redirect target
+        let mut params = HashMap::new();
+        params.insert("id".to_string(), "123".to_string());
+
+        let target = route.redirect_target(&params).unwrap();
+        assert_eq!(target, "/profiles/123");
+    }
+
+    #[test]
+    fn test_redirect_with_different_param_names() {
+        let route = Route::redirect("/blog/:slug", "/articles/:post", 301);
+
+        let mut params = HashMap::new();
+        params.insert("slug".to_string(), "hello-world".to_string());
+
+        // Target has :post but we're passing :slug
+        // This should work - it just won't substitute :post
+        let target = route.redirect_target(&params).unwrap();
+        // :slug doesn't exist in target, so it stays as-is
+        // :post doesn't have a value, so it stays as placeholder
+        assert_eq!(target, "/articles/:post");
+    }
+
+    #[test]
+    fn test_redirect_empty_params() {
+        let route = Route::redirect("/old", "/new", 301);
+
+        let params = HashMap::new();
+        let target = route.redirect_target(&params).unwrap();
+
+        assert_eq!(target, "/new");
+    }
+
+    #[test]
+    fn test_multiple_redirects_in_router() {
+        let mut router = Router::new();
+
+        router.add_route(Route::redirect("/old-1", "/new-1", 301));
+        router.add_route(Route::redirect("/old-2", "/new-2", 302));
+        router.add_route(Route::redirect("/old-3", "/new-3", 307));
+
+        let m1 = router.match_route("/old-1").unwrap();
+        assert_eq!(m1.redirect_target().unwrap(), "/new-1");
+        assert_eq!(m1.redirect_status().unwrap(), 301);
+
+        let m2 = router.match_route("/old-2").unwrap();
+        assert_eq!(m2.redirect_target().unwrap(), "/new-2");
+        assert_eq!(m2.redirect_status().unwrap(), 302);
+
+        let m3 = router.match_route("/old-3").unwrap();
+        assert_eq!(m3.redirect_target().unwrap(), "/new-3");
+        assert_eq!(m3.redirect_status().unwrap(), 307);
+    }
+
+    #[test]
+    fn test_redirect_template_path_marker() {
+        let route = Route::redirect("/old", "/new", 301);
+
+        // template_path should have "redirect:" prefix for identification
+        assert!(route.template_path.starts_with("redirect:"));
+        assert_eq!(route.template_path, "redirect:/new");
+    }
+
+    #[test]
+    fn test_redirect_priority_ordering() {
+        let mut router = Router::new();
+
+        // Static redirect has priority 0 (like static routes)
+        router.add_route(Route::redirect("/exact-match", "/target-1", 301));
+
+        // Dynamic redirect has higher priority number (lower actual priority)
+        router.add_route(Route::redirect("/:slug", "/target-2", 301));
+
+        // Static redirect should match first
+        let m = router.match_route("/exact-match").unwrap();
+        assert_eq!(m.redirect_target().unwrap(), "/target-1");
+
+        // Dynamic redirect should match others
+        let m = router.match_route("/other").unwrap();
+        assert_eq!(m.redirect_target().unwrap(), "/target-2");
+    }
+
+    #[test]
+    fn test_redirect_internationalization() {
+        let mut router = Router::new();
+
+        // Main route
+        router.add_route(Route::from_path("pages/about.rhtml", "pages"));
+
+        // i18n redirects
+        router.add_route(Route::redirect("/über", "/about", 302));
+        router.add_route(Route::redirect("/acerca", "/about", 302));
+
+        assert_eq!(router.match_route("/über").unwrap().redirect_target().unwrap(), "/about");
+        assert_eq!(router.match_route("/acerca").unwrap().redirect_target().unwrap(), "/about");
+    }
+
+    #[test]
+    fn test_redirect_chain_not_followed() {
+        let mut router = Router::new();
+
+        // Redirect chain: /a → /b → /c
+        router.add_route(Route::redirect("/a", "/b", 301));
+        router.add_route(Route::redirect("/b", "/c", 301));
+        router.add_route(Route::from_path("pages/c.rhtml", "pages"));
+
+        // Router doesn't follow chains - just returns first redirect
+        let m = router.match_route("/a").unwrap();
+        assert_eq!(m.redirect_target().unwrap(), "/b");
+
+        // User would need to match again to follow chain
+        let m = router.match_route("/b").unwrap();
+        assert_eq!(m.redirect_target().unwrap(), "/c");
     }
 }
