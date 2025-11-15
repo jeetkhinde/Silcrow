@@ -182,6 +182,8 @@ pub struct Route {
     pub param_constraints: HashMap<String, ParameterConstraint>,
     /// Alternative URL patterns that map to this route (for legacy URLs, i18n, etc.)
     pub aliases: Vec<String>,
+    /// Optional name for this route (for URL generation and type-safe references)
+    pub name: Option<String>,
 }
 
 /// Result of matching a route against a path
@@ -324,6 +326,7 @@ impl Route {
             metadata: HashMap::new(),
             param_constraints,
             aliases: Vec::new(),
+            name: None,
         }
     }
 
@@ -853,6 +856,111 @@ impl Route {
 
         normalized_path == normalized_alias
     }
+
+    // ========================================================================
+    // Named Route Builder Methods (Phase 3.2)
+    // ========================================================================
+    //
+    // Functional methods for route naming and URL generation:
+    // - Type-safe route references
+    // - URL generation from parameters
+    // - Route refactoring support (change pattern, keep name)
+
+    /// Sets a name for this route (for URL generation and type-safe references)
+    ///
+    /// Named routes enable URL generation and provide stable references
+    /// even when route patterns change.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::Route;
+    ///
+    /// let route = Route::from_path("pages/users/[id].rhtml", "pages")
+    ///     .with_name("user.profile");
+    ///
+    /// assert_eq!(route.name, Some("user.profile".to_string()));
+    /// ```
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Generates a URL for this route by substituting parameters
+    ///
+    /// Uses functional programming to transform pattern into URL:
+    /// - Maps over pattern segments
+    /// - Substitutes parameters where found
+    /// - Validates all required parameters are provided
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::Route;
+    /// use std::collections::HashMap;
+    ///
+    /// let route = Route::from_path("pages/users/[id].rhtml", "pages");
+    ///
+    /// let mut params = HashMap::new();
+    /// params.insert("id".to_string(), "123".to_string());
+    ///
+    /// let url = route.generate_url(&params).unwrap();
+    /// assert_eq!(url, "/users/123");
+    /// ```
+    pub fn generate_url(&self, params: &HashMap<String, String>) -> Option<String> {
+        // Split pattern into segments
+        let segments: Vec<&str> = self.pattern.split('/').filter(|s| !s.is_empty()).collect();
+
+        // Transform each segment using functional map
+        let result_segments: Option<Vec<String>> = segments
+            .iter()
+            .map(|segment| {
+                match segment.chars().next() {
+                    // Dynamic parameter: :id or :id?
+                    Some(':') => {
+                        let param_name = segment
+                            .trim_start_matches(':')
+                            .trim_end_matches('?');
+
+                        // Optional parameter
+                        if segment.ends_with('?') {
+                            // Optional - use param if provided, otherwise skip
+                            Some(
+                                params
+                                    .get(param_name)
+                                    .map(|v| v.clone())
+                                    .unwrap_or_default()
+                            )
+                        } else {
+                            // Required - must be present
+                            params.get(param_name).map(|v| v.clone())
+                        }
+                    }
+                    // Catch-all parameter: *slug
+                    Some('*') => {
+                        let param_name = &segment[1..];
+                        params.get(param_name).map(|v| v.clone())
+                    }
+                    // Static segment
+                    _ => Some(segment.to_string()),
+                }
+            })
+            .collect(); // Collect into Option<Vec<String>>
+
+        // If any required parameter was missing, result_segments will be None
+        result_segments.map(|segs| {
+            let filtered: Vec<String> = segs
+                .into_iter()
+                .filter(|s| !s.is_empty())
+                .collect();
+
+            if filtered.is_empty() {
+                "/".to_string()
+            } else {
+                format!("/{}", filtered.join("/"))
+            }
+        })
+    }
 }
 
 // ============================================================================
@@ -974,6 +1082,7 @@ impl<'a> Iterator for PathHierarchy<'a> {
 /// - Regular routes for page rendering (Vec for priority ordering)
 /// - Layout routes for nested layouts (HashMap for O(1) lookup)
 /// - Named layouts for explicit layout selection (HashMap by name)
+/// - Named routes for URL generation (HashMap for O(1) lookup)
 /// - Error page routes for error handling (HashMap for O(1) lookup)
 /// - No-layout markers for directories that should render without layouts
 #[derive(Clone)]
@@ -981,6 +1090,7 @@ pub struct Router {
     routes: Vec<Route>,
     layouts: HashMap<String, Route>,
     named_layouts: HashMap<String, Route>,
+    named_routes: HashMap<String, Route>,
     error_pages: HashMap<String, Route>,
     nolayout_patterns: std::collections::HashSet<String>,
     case_insensitive: bool,
@@ -993,6 +1103,7 @@ impl Router {
             routes: Vec::new(),
             layouts: HashMap::new(),
             named_layouts: HashMap::new(),
+            named_routes: HashMap::new(),
             error_pages: HashMap::new(),
             nolayout_patterns: std::collections::HashSet::new(),
             case_insensitive: false,
@@ -1013,6 +1124,7 @@ impl Router {
             routes: Vec::new(),
             layouts: HashMap::new(),
             named_layouts: HashMap::new(),
+            named_routes: HashMap::new(),
             error_pages: HashMap::new(),
             nolayout_patterns: std::collections::HashSet::new(),
             case_insensitive,
@@ -1029,11 +1141,13 @@ impl Router {
     /// Routes are automatically sorted by priority after addition.
     /// Layout and error page routes are stored in separate collections.
     /// Named layouts are stored both by pattern and by name for O(1) lookup.
+    /// Named routes are stored for URL generation (Phase 3.2).
     ///
     /// # Functional Design
     /// - Uses pattern matching for classification
     /// - Automatic organization into appropriate collections
     /// - Named layouts stored in dual indexes for flexible lookup
+    /// - Named routes indexed by name for URL generation
     ///
     /// # Examples
     ///
@@ -1048,6 +1162,11 @@ impl Router {
         if route.is_nolayout_marker {
             self.nolayout_patterns.insert(route.pattern.clone());
             return;
+        }
+
+        // Store named routes for URL generation (Phase 3.2)
+        if let Some(ref name) = route.name {
+            self.named_routes.insert(name.clone(), route.clone());
         }
 
         match (route.is_layout, route.is_error_page) {
@@ -1072,9 +1191,16 @@ impl Router {
 
     /// Removes a route by its pattern
     ///
-    /// Removes the route from all collections (routes, layouts, named_layouts, error_pages)
+    /// Removes the route from all collections (routes, layouts, named_layouts, named_routes, error_pages)
     pub fn remove_route(&mut self, pattern: &str) {
-        self.routes.retain(|r| r.pattern != pattern);
+        // Remove from routes and also from named_routes if it has a name
+        if let Some(pos) = self.routes.iter().position(|r| r.pattern == pattern) {
+            let route = &self.routes[pos];
+            if let Some(name) = &route.name {
+                self.named_routes.remove(name);
+            }
+            self.routes.remove(pos);
+        }
 
         // Remove from layouts and also from named_layouts if it has a name
         if let Some(layout) = self.layouts.remove(pattern) {
@@ -1352,6 +1478,107 @@ impl Router {
     /// Returns all registered error page routes
     pub fn error_pages(&self) -> &HashMap<String, Route> {
         &self.error_pages
+    }
+
+    // ========================================================================
+    // Named Route URL Generation (Phase 3.2)
+    // ========================================================================
+
+    /// Generates a URL from a named route and parameters
+    ///
+    /// Uses functional programming for URL generation:
+    /// - O(1) route lookup by name (HashMap)
+    /// - Functional parameter substitution
+    /// - Type-safe URL generation
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the route
+    /// * `params` - Parameter values to substitute into the URL
+    ///
+    /// # Returns
+    ///
+    /// `Some(url)` if the route exists and all required parameters are provided,
+    /// `None` if the route doesn't exist or required parameters are missing
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::{Router, Route};
+    /// use std::collections::HashMap;
+    ///
+    /// let mut router = Router::new();
+    ///
+    /// router.add_route(
+    ///     Route::from_path("pages/users/[id].rhtml", "pages")
+    ///         .with_name("user.profile")
+    /// );
+    ///
+    /// let mut params = HashMap::new();
+    /// params.insert("id".to_string(), "123".to_string());
+    ///
+    /// let url = router.url_for("user.profile", &params).unwrap();
+    /// assert_eq!(url, "/users/123");
+    /// ```
+    pub fn url_for(&self, name: &str, params: &HashMap<String, String>) -> Option<String> {
+        // O(1) lookup of named route
+        self.named_routes
+            .get(name)
+            .and_then(|route| route.generate_url(params))
+    }
+
+    /// Convenience method for generating URLs with an array of parameter tuples
+    ///
+    /// Functional alternative to manually constructing HashMap.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::{Router, Route};
+    ///
+    /// let mut router = Router::new();
+    ///
+    /// router.add_route(
+    ///     Route::from_path("pages/posts/[year]/[slug].rhtml", "pages")
+    ///         .with_name("post.show")
+    /// );
+    ///
+    /// let url = router.url_for_params("post.show", &[
+    ///     ("year", "2024"),
+    ///     ("slug", "hello-world")
+    /// ]).unwrap();
+    ///
+    /// assert_eq!(url, "/posts/2024/hello-world");
+    /// ```
+    pub fn url_for_params(&self, name: &str, params: &[(&str, &str)]) -> Option<String> {
+        // Functional transformation: array of tuples → HashMap
+        let param_map: HashMap<String, String> = params
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
+        self.url_for(name, &param_map)
+    }
+
+    /// Gets a route by its name (O(1) HashMap lookup)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::{Router, Route};
+    ///
+    /// let mut router = Router::new();
+    ///
+    /// router.add_route(
+    ///     Route::from_path("pages/about.rhtml", "pages")
+    ///         .with_name("about")
+    /// );
+    ///
+    /// let route = router.get_route_by_name("about").unwrap();
+    /// assert_eq!(route.pattern, "/about");
+    /// ```
+    pub fn get_route_by_name(&self, name: &str) -> Option<&Route> {
+        self.named_routes.get(name)
     }
 }
 
@@ -2690,5 +2917,318 @@ mod tests {
         assert!(route.aliases.contains(&"/main".to_string()));
         assert!(route.aliases.contains(&"/home".to_string()));
         assert!(route.aliases.contains(&"/landing".to_string()));
+    }
+
+    // ========================================================================
+    // Named Route Tests (Phase 3.2)
+    // ========================================================================
+
+    #[test]
+    fn test_route_with_name() {
+        let route = Route::from_path("pages/users/[id].rhtml", "pages")
+            .with_name("user.profile");
+
+        assert_eq!(route.name, Some("user.profile".to_string()));
+        assert_eq!(route.pattern, "/users/:id");
+    }
+
+    #[test]
+    fn test_route_without_name() {
+        let route = Route::from_path("pages/about.rhtml", "pages");
+        assert_eq!(route.name, None);
+    }
+
+    #[test]
+    fn test_generate_url_static_route() {
+        let route = Route::from_path("pages/about.rhtml", "pages");
+        let params = HashMap::new();
+
+        let url = route.generate_url(&params).unwrap();
+        assert_eq!(url, "/about");
+    }
+
+    #[test]
+    fn test_generate_url_with_single_parameter() {
+        let route = Route::from_path("pages/users/[id].rhtml", "pages");
+
+        let mut params = HashMap::new();
+        params.insert("id".to_string(), "123".to_string());
+
+        let url = route.generate_url(&params).unwrap();
+        assert_eq!(url, "/users/123");
+    }
+
+    #[test]
+    fn test_generate_url_with_multiple_parameters() {
+        let route = Route::from_path("pages/posts/[year]/[slug].rhtml", "pages");
+
+        let mut params = HashMap::new();
+        params.insert("year".to_string(), "2024".to_string());
+        params.insert("slug".to_string(), "hello-world".to_string());
+
+        let url = route.generate_url(&params).unwrap();
+        assert_eq!(url, "/posts/2024/hello-world");
+    }
+
+    #[test]
+    fn test_generate_url_missing_required_parameter() {
+        let route = Route::from_path("pages/users/[id].rhtml", "pages");
+
+        let params = HashMap::new(); // Missing "id"
+
+        let url = route.generate_url(&params);
+        assert!(url.is_none(), "Should return None when required parameter is missing");
+    }
+
+    #[test]
+    fn test_generate_url_optional_parameter_provided() {
+        let route = Route::from_path("pages/posts/[id?].rhtml", "pages");
+
+        let mut params = HashMap::new();
+        params.insert("id".to_string(), "123".to_string());
+
+        let url = route.generate_url(&params).unwrap();
+        assert_eq!(url, "/posts/123");
+    }
+
+    #[test]
+    fn test_generate_url_optional_parameter_missing() {
+        let route = Route::from_path("pages/posts/[id?].rhtml", "pages");
+
+        let params = HashMap::new(); // No "id" provided
+
+        let url = route.generate_url(&params).unwrap();
+        assert_eq!(url, "/posts");
+    }
+
+    #[test]
+    fn test_generate_url_catch_all() {
+        let route = Route::from_path("pages/docs/[...slug].rhtml", "pages");
+
+        let mut params = HashMap::new();
+        params.insert("slug".to_string(), "guide/getting-started".to_string());
+
+        let url = route.generate_url(&params).unwrap();
+        assert_eq!(url, "/docs/guide/getting-started");
+    }
+
+    #[test]
+    fn test_router_url_for() {
+        let mut router = Router::new();
+
+        router.add_route(
+            Route::from_path("pages/users/[id].rhtml", "pages")
+                .with_name("user.profile")
+        );
+
+        let mut params = HashMap::new();
+        params.insert("id".to_string(), "123".to_string());
+
+        let url = router.url_for("user.profile", &params).unwrap();
+        assert_eq!(url, "/users/123");
+    }
+
+    #[test]
+    fn test_router_url_for_nonexistent_name() {
+        let router = Router::new();
+
+        let params = HashMap::new();
+        let url = router.url_for("nonexistent", &params);
+
+        assert!(url.is_none(), "Should return None for non-existent route name");
+    }
+
+    #[test]
+    fn test_router_url_for_params() {
+        let mut router = Router::new();
+
+        router.add_route(
+            Route::from_path("pages/posts/[year]/[slug].rhtml", "pages")
+                .with_name("post.show")
+        );
+
+        let url = router.url_for_params("post.show", &[
+            ("year", "2024"),
+            ("slug", "hello-world")
+        ]).unwrap();
+
+        assert_eq!(url, "/posts/2024/hello-world");
+    }
+
+    #[test]
+    fn test_router_get_route_by_name() {
+        let mut router = Router::new();
+
+        router.add_route(
+            Route::from_path("pages/about.rhtml", "pages")
+                .with_name("about")
+        );
+
+        let route = router.get_route_by_name("about").unwrap();
+        assert_eq!(route.pattern, "/about");
+        assert_eq!(route.template_path, "pages/about.rhtml");
+    }
+
+    #[test]
+    fn test_router_get_route_by_name_nonexistent() {
+        let router = Router::new();
+        assert!(router.get_route_by_name("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_named_route_with_metadata() {
+        let route = Route::from_path("pages/users/[id].rhtml", "pages")
+            .with_name("user.profile")
+            .with_meta("title", "User Profile")
+            .with_meta("permission", "users.read");
+
+        assert_eq!(route.name, Some("user.profile".to_string()));
+        assert_eq!(route.get_meta("title"), Some(&"User Profile".to_string()));
+    }
+
+    #[test]
+    fn test_named_route_with_alias() {
+        let mut router = Router::new();
+
+        router.add_route(
+            Route::from_path("pages/about.rhtml", "pages")
+                .with_name("about")
+                .with_alias("/about-us")
+        );
+
+        // Can generate URL from name
+        let url = router.url_for("about", &HashMap::new()).unwrap();
+        assert_eq!(url, "/about");
+
+        // Can also match via alias
+        assert!(router.match_route("/about-us").is_some());
+    }
+
+    #[test]
+    fn test_multiple_named_routes() {
+        let mut router = Router::new();
+
+        router.add_route(
+            Route::from_path("pages/index.rhtml", "pages")
+                .with_name("home")
+        );
+
+        router.add_route(
+            Route::from_path("pages/about.rhtml", "pages")
+                .with_name("about")
+        );
+
+        router.add_route(
+            Route::from_path("pages/users/[id].rhtml", "pages")
+                .with_name("user.profile")
+        );
+
+        // Test each route
+        assert_eq!(router.url_for("home", &HashMap::new()).unwrap(), "/");
+        assert_eq!(router.url_for("about", &HashMap::new()).unwrap(), "/about");
+
+        let mut params = HashMap::new();
+        params.insert("id".to_string(), "456".to_string());
+        assert_eq!(router.url_for("user.profile", &params).unwrap(), "/users/456");
+    }
+
+    #[test]
+    fn test_url_generation_root_route() {
+        let route = Route::from_path("pages/index.rhtml", "pages");
+        let url = route.generate_url(&HashMap::new()).unwrap();
+        assert_eq!(url, "/");
+    }
+
+    #[test]
+    fn test_url_for_params_empty() {
+        let mut router = Router::new();
+
+        router.add_route(
+            Route::from_path("pages/about.rhtml", "pages")
+                .with_name("about")
+        );
+
+        let url = router.url_for_params("about", &[]).unwrap();
+        assert_eq!(url, "/about");
+    }
+
+    #[test]
+    fn test_named_route_functional_chaining() {
+        let route = Route::from_path("pages/users/[id].rhtml", "pages")
+            .with_name("user.profile")
+            .with_meta("title", "User Profile")
+            .with_alias("/profile")
+            .with_root_layout();
+
+        assert_eq!(route.name, Some("user.profile".to_string()));
+        assert_eq!(route.aliases.len(), 1);
+        assert_eq!(route.layout_option, LayoutOption::Root);
+        assert_eq!(route.get_meta("title"), Some(&"User Profile".to_string()));
+    }
+
+    #[test]
+    fn test_url_generation_preserves_order() {
+        let route = Route::from_path("pages/events/[year]/[month]/[day].rhtml", "pages");
+
+        let mut params = HashMap::new();
+        params.insert("year".to_string(), "2024".to_string());
+        params.insert("month".to_string(), "12".to_string());
+        params.insert("day".to_string(), "25".to_string());
+
+        let url = route.generate_url(&params).unwrap();
+        assert_eq!(url, "/events/2024/12/25");
+    }
+
+    #[test]
+    fn test_remove_route_removes_from_named_routes() {
+        let mut router = Router::new();
+
+        router.add_route(
+            Route::from_path("pages/about.rhtml", "pages")
+                .with_name("about")
+        );
+
+        assert!(router.get_route_by_name("about").is_some());
+
+        router.remove_route("/about");
+
+        assert!(router.get_route_by_name("about").is_none());
+    }
+
+    #[test]
+    fn test_url_generation_with_extra_params() {
+        let route = Route::from_path("pages/users/[id].rhtml", "pages");
+
+        let mut params = HashMap::new();
+        params.insert("id".to_string(), "123".to_string());
+        params.insert("extra".to_string(), "ignored".to_string());
+
+        let url = route.generate_url(&params).unwrap();
+        assert_eq!(url, "/users/123"); // Extra params are ignored
+    }
+
+    #[test]
+    fn test_named_route_type_safe_reference() {
+        let mut router = Router::new();
+
+        // Add route with name
+        router.add_route(
+            Route::from_path("pages/api/v1/users/[id].rhtml", "pages")
+                .with_name("api.v1.users.show")
+        );
+
+        // Change pattern (simulating refactoring)
+        router.remove_route("/api/v1/users/:id");
+        router.add_route(
+            Route::from_path("pages/api/v2/users/[id].rhtml", "pages")
+                .with_name("api.v1.users.show") // Keep same name
+        );
+
+        // Name still works after pattern change
+        let mut params = HashMap::new();
+        params.insert("id".to_string(), "789".to_string());
+
+        let url = router.url_for("api.v1.users.show", &params).unwrap();
+        assert_eq!(url, "/api/v2/users/789");
     }
 }
