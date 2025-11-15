@@ -48,6 +48,32 @@ use std::collections::HashMap;
 // Core Types
 // ============================================================================
 
+/// Defines how a route should resolve its layout
+///
+/// Uses functional programming principles:
+/// - Immutable values
+/// - Composable options
+/// - Pattern matching for resolution
+#[derive(Debug, Clone, PartialEq)]
+pub enum LayoutOption {
+    /// Inherit from nearest parent layout (default behavior)
+    Inherit,
+    /// No layout - render route standalone
+    None,
+    /// Use root layout only, skip all intermediate layouts
+    Root,
+    /// Use a specific named layout (e.g., "admin", "marketing")
+    Named(String),
+    /// Use layout at a specific pattern (e.g., "/dashboard")
+    Pattern(String),
+}
+
+impl Default for LayoutOption {
+    fn default() -> Self {
+        Self::Inherit
+    }
+}
+
 /// Represents a single route with its pattern, parameters, and metadata
 #[derive(Debug, Clone)]
 pub struct Route {
@@ -67,6 +93,12 @@ pub struct Route {
     pub optional_params: Vec<String>,
     /// Whether this is an error page
     pub is_error_page: bool,
+    /// Whether this is a no-layout marker
+    pub is_nolayout_marker: bool,
+    /// Layout resolution strategy
+    pub layout_option: LayoutOption,
+    /// Name of this layout (if it's a named layout)
+    pub layout_name: Option<String>,
 }
 
 /// Result of matching a route against a path
@@ -116,6 +148,11 @@ impl Route {
     ///
     /// Converts file paths like `pages/users/[id].rhtml` into route patterns like `/users/:id`
     ///
+    /// Detects layout options from file naming conventions:
+    /// - `_nolayout` marker file → LayoutOption::None
+    /// - `_layout.root.rhtml` → LayoutOption::Root (named "root")
+    /// - `_layout.admin.rhtml` → Named layout "admin"
+    ///
     /// # Arguments
     ///
     /// * `file_path` - Full path to the template file
@@ -137,8 +174,21 @@ impl Route {
             .trim_start_matches('/');
 
         let without_ext = relative.strip_suffix(".rhtml").unwrap_or(relative);
-        let is_layout = without_ext.ends_with("/_layout") || without_ext == "_layout";
-        let is_error_page = without_ext.ends_with("/_error") || without_ext == "_error";
+
+        // Extract filename to check for special files
+        let filename = without_ext.split('/').last().unwrap_or("");
+
+        // Check if it's a layout file (either _layout or _layout.name)
+        let is_layout = filename == "_layout" || filename.starts_with("_layout.");
+        let is_error_page = filename == "_error";
+        let is_nolayout_marker = filename == "_nolayout";
+
+        // Detect named layouts: _layout.name.rhtml
+        let layout_name = if is_layout {
+            Self::extract_layout_name(filename)
+        } else {
+            None
+        };
 
         let (pattern, params, optional_params, dynamic_count, has_catch_all) =
             Self::parse_pattern(without_ext);
@@ -156,7 +206,23 @@ impl Route {
             has_catch_all,
             optional_params,
             is_error_page,
+            is_nolayout_marker,
+            layout_option: LayoutOption::default(),
+            layout_name,
         }
+    }
+
+    /// Extracts layout name from filename using functional pattern matching
+    ///
+    /// # Examples
+    /// - `_layout` → None (default layout)
+    /// - `_layout.admin` → Some("admin")
+    /// - `_layout.root` → Some("root")
+    fn extract_layout_name(filename: &str) -> Option<String> {
+        // Match: _layout.name
+        filename
+            .strip_prefix("_layout.")
+            .map(|name| name.to_string())
     }
 
     /// Parses a file path pattern into route components
@@ -171,7 +237,9 @@ impl Route {
             // Skip empty segments and special directory names
             if segment.is_empty()
                 || segment == "_layout"
+                || segment.starts_with("_layout.") // Skip named layouts like _layout.admin
                 || segment == "_error"
+                || segment == "_nolayout" // Skip nolayout markers
                 || segment == "index"
             {
                 continue;
@@ -363,6 +431,87 @@ impl Route {
             None
         }
     }
+
+    // ========================================================================
+    // Functional Builder Methods
+    // ========================================================================
+    //
+    // These methods follow functional programming principles:
+    // - Consume self and return new instance (move semantics)
+    // - Composable via method chaining
+    // - Immutable transformations
+    // - Type-safe configuration
+
+    /// Sets the layout option for this route
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::{Route, LayoutOption};
+    ///
+    /// let route = Route::from_path("pages/print.rhtml", "pages")
+    ///     .with_layout_option(LayoutOption::None);
+    /// ```
+    pub fn with_layout_option(mut self, option: LayoutOption) -> Self {
+        self.layout_option = option;
+        self
+    }
+
+    /// Configures route to use no layout (standalone rendering)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::Route;
+    ///
+    /// let route = Route::from_path("pages/login.rhtml", "pages")
+    ///     .with_no_layout();
+    /// ```
+    pub fn with_no_layout(self) -> Self {
+        self.with_layout_option(LayoutOption::None)
+    }
+
+    /// Configures route to use root layout only (skip intermediate)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::Route;
+    ///
+    /// let route = Route::from_path("pages/dashboard/print.rhtml", "pages")
+    ///     .with_root_layout();
+    /// ```
+    pub fn with_root_layout(self) -> Self {
+        self.with_layout_option(LayoutOption::Root)
+    }
+
+    /// Configures route to use a named layout
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::Route;
+    ///
+    /// let route = Route::from_path("pages/dashboard/settings.rhtml", "pages")
+    ///     .with_named_layout("admin");
+    /// ```
+    pub fn with_named_layout(self, name: impl Into<String>) -> Self {
+        self.with_layout_option(LayoutOption::Named(name.into()))
+    }
+
+    /// Configures route to use layout at specific pattern
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::Route;
+    ///
+    /// let route = Route::from_path("pages/dashboard/admin/users.rhtml", "pages")
+    ///     .with_layout_pattern("/dashboard");
+    /// ```
+    pub fn with_layout_pattern(self, pattern: impl Into<String>) -> Self {
+        self.with_layout_option(LayoutOption::Pattern(pattern.into()))
+    }
 }
 
 // ============================================================================
@@ -480,15 +629,19 @@ impl<'a> Iterator for PathHierarchy<'a> {
 
 /// Main router that manages route collections and performs matching
 ///
-/// The router maintains three separate collections:
-/// - Regular routes for page rendering
-/// - Layout routes for nested layouts
-/// - Error page routes for error handling
+/// The router maintains separate collections using functional principles:
+/// - Regular routes for page rendering (Vec for priority ordering)
+/// - Layout routes for nested layouts (HashMap for O(1) lookup)
+/// - Named layouts for explicit layout selection (HashMap by name)
+/// - Error page routes for error handling (HashMap for O(1) lookup)
+/// - No-layout markers for directories that should render without layouts
 #[derive(Clone)]
 pub struct Router {
     routes: Vec<Route>,
     layouts: HashMap<String, Route>,
+    named_layouts: HashMap<String, Route>,
     error_pages: HashMap<String, Route>,
+    nolayout_patterns: std::collections::HashSet<String>,
     case_insensitive: bool,
 }
 
@@ -498,7 +651,9 @@ impl Router {
         Self {
             routes: Vec::new(),
             layouts: HashMap::new(),
+            named_layouts: HashMap::new(),
             error_pages: HashMap::new(),
+            nolayout_patterns: std::collections::HashSet::new(),
             case_insensitive: false,
         }
     }
@@ -516,7 +671,9 @@ impl Router {
         Self {
             routes: Vec::new(),
             layouts: HashMap::new(),
+            named_layouts: HashMap::new(),
             error_pages: HashMap::new(),
+            nolayout_patterns: std::collections::HashSet::new(),
             case_insensitive,
         }
     }
@@ -530,6 +687,12 @@ impl Router {
     ///
     /// Routes are automatically sorted by priority after addition.
     /// Layout and error page routes are stored in separate collections.
+    /// Named layouts are stored both by pattern and by name for O(1) lookup.
+    ///
+    /// # Functional Design
+    /// - Uses pattern matching for classification
+    /// - Automatic organization into appropriate collections
+    /// - Named layouts stored in dual indexes for flexible lookup
     ///
     /// # Examples
     ///
@@ -540,9 +703,21 @@ impl Router {
     /// router.add_route(Route::from_path("pages/about.rhtml", "pages"));
     /// ```
     pub fn add_route(&mut self, route: Route) {
+        // Handle nolayout markers first
+        if route.is_nolayout_marker {
+            self.nolayout_patterns.insert(route.pattern.clone());
+            return;
+        }
+
         match (route.is_layout, route.is_error_page) {
             (true, _) => {
-                self.layouts.insert(route.pattern.clone(), route);
+                // Store in layouts by pattern
+                self.layouts.insert(route.pattern.clone(), route.clone());
+
+                // Also store in named_layouts if it has a name
+                if let Some(ref name) = route.layout_name {
+                    self.named_layouts.insert(name.clone(), route);
+                }
             }
             (_, true) => {
                 self.error_pages.insert(route.pattern.clone(), route);
@@ -556,10 +731,17 @@ impl Router {
 
     /// Removes a route by its pattern
     ///
-    /// Removes the route from all collections (routes, layouts, error_pages)
+    /// Removes the route from all collections (routes, layouts, named_layouts, error_pages)
     pub fn remove_route(&mut self, pattern: &str) {
         self.routes.retain(|r| r.pattern != pattern);
-        self.layouts.remove(pattern);
+
+        // Remove from layouts and also from named_layouts if it has a name
+        if let Some(layout) = self.layouts.remove(pattern) {
+            if let Some(name) = &layout.layout_name {
+                self.named_layouts.remove(name);
+            }
+        }
+
         self.error_pages.remove(pattern);
     }
 
@@ -666,6 +848,109 @@ impl Router {
     /// ```
     pub fn get_layout(&self, pattern: &str) -> Option<&Route> {
         self.get_scoped_resource(pattern, &self.layouts)
+    }
+
+    /// Finds layout for a route match, respecting the route's layout option
+    ///
+    /// Uses functional pattern matching to resolve layouts based on preferences:
+    /// - `Inherit` → Walk up hierarchy (default behavior)
+    /// - `None` → No layout
+    /// - `Root` → Use root layout only
+    /// - `Named(name)` → Find layout with matching name
+    /// - `Pattern(pat)` → Use layout at specific pattern
+    ///
+    /// # Functional Design
+    /// - Pattern matching for control flow
+    /// - Composition of functional helpers
+    /// - Short-circuit evaluation
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::{Router, Route};
+    ///
+    /// let mut router = Router::new();
+    /// router.add_route(Route::from_path("pages/_layout.rhtml", "pages"));
+    /// router.add_route(Route::from_path("pages/dashboard/_layout.rhtml", "pages"));
+    ///
+    /// // Use root layout, skip dashboard
+    /// let route = Route::from_path("pages/dashboard/print.rhtml", "pages")
+    ///     .with_root_layout();
+    /// router.add_route(route.clone());
+    ///
+    /// let route_match = router.match_route("/dashboard/print").unwrap();
+    /// let layout = router.get_layout_for_match(&route_match).unwrap();
+    /// assert_eq!(layout.pattern, "/");
+    /// ```
+    pub fn get_layout_for_match(&self, route_match: &RouteMatch) -> Option<&Route> {
+        self.get_layout_with_option(&route_match.route.pattern, &route_match.route.layout_option)
+    }
+
+    /// Finds layout with specific option (functional core logic)
+    ///
+    /// Pure function that maps LayoutOption → Option<&Route>
+    ///
+    /// Uses pattern matching and HashMap lookups for O(1) performance.
+    /// Checks nolayout markers when using Inherit option.
+    pub fn get_layout_with_option(
+        &self,
+        pattern: &str,
+        option: &LayoutOption,
+    ) -> Option<&Route> {
+        // Functional pattern matching for layout resolution
+        match option {
+            // No layout - early return (short-circuit)
+            LayoutOption::None => None,
+
+            // Root layout only - direct lookup at "/"
+            LayoutOption::Root => self.layouts.get("/"),
+
+            // Named layout - O(1) lookup in named_layouts HashMap
+            LayoutOption::Named(name) => self.named_layouts.get(name),
+
+            // Specific pattern - direct lookup with normalization
+            LayoutOption::Pattern(pat) => {
+                let normalized = normalize_path(pat);
+                self.layouts.get(normalized.as_ref())
+            }
+
+            // Inherit - check nolayout markers first, then walk up hierarchy
+            LayoutOption::Inherit => {
+                // Check if this path is under a nolayout marker
+                if self.is_under_nolayout_marker(pattern) {
+                    return None;
+                }
+                self.get_scoped_resource(pattern, &self.layouts)
+            }
+        }
+    }
+
+    /// Checks if a path is under a nolayout marker (functional helper)
+    ///
+    /// Uses functional iteration over hierarchy to find nolayout markers
+    fn is_under_nolayout_marker(&self, pattern: &str) -> bool {
+        let normalized = normalize_path(pattern);
+
+        // Walk up hierarchy and check if any parent has a nolayout marker
+        PathHierarchy::new(&normalized)
+            .any(|path| self.nolayout_patterns.contains(path))
+    }
+
+    /// Finds layout by name (O(1) HashMap lookup)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::{Router, Route};
+    ///
+    /// let mut router = Router::new();
+    /// router.add_route(Route::from_path("pages/_layout.admin.rhtml", "pages"));
+    ///
+    /// let layout = router.get_layout_by_name("admin").unwrap();
+    /// assert_eq!(layout.layout_name, Some("admin".to_string()));
+    /// ```
+    pub fn get_layout_by_name(&self, name: &str) -> Option<&Route> {
+        self.named_layouts.get(name)
     }
 
     /// Returns all registered routes (excluding layouts and error pages)
@@ -1145,5 +1430,318 @@ mod tests {
 
         let paths: Vec<&str> = PathHierarchy::new("/").collect();
         assert_eq!(paths, vec!["/"]);
+    }
+
+    // ========================================================================
+    // Layout Control Tests (Phase 1: Skip Parent Layouts)
+    // ========================================================================
+
+    #[test]
+    fn test_layout_option_none() {
+        let mut router = Router::new();
+        router.add_route(Route::from_path("pages/_layout.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/_layout.rhtml", "pages"));
+
+        let route = Route::from_path("pages/dashboard/print.rhtml", "pages").with_no_layout();
+        router.add_route(route.clone());
+
+        let route_match = router.match_route("/dashboard/print").unwrap();
+        let layout = router.get_layout_for_match(&route_match);
+
+        assert!(layout.is_none(), "Should have no layout");
+    }
+
+    #[test]
+    fn test_layout_option_root() {
+        let mut router = Router::new();
+        router.add_route(Route::from_path("pages/_layout.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/_layout.rhtml", "pages"));
+        router.add_route(Route::from_path(
+            "pages/dashboard/admin/_layout.rhtml",
+            "pages",
+        ));
+
+        let route =
+            Route::from_path("pages/dashboard/admin/print.rhtml", "pages").with_root_layout();
+        router.add_route(route.clone());
+
+        let route_match = router.match_route("/dashboard/admin/print").unwrap();
+        let layout = router.get_layout_for_match(&route_match).unwrap();
+
+        assert_eq!(layout.pattern, "/", "Should use root layout only");
+    }
+
+    #[test]
+    fn test_layout_option_pattern() {
+        let mut router = Router::new();
+        router.add_route(Route::from_path("pages/_layout.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/_layout.rhtml", "pages"));
+        router.add_route(Route::from_path(
+            "pages/dashboard/admin/_layout.rhtml",
+            "pages",
+        ));
+
+        let route = Route::from_path("pages/dashboard/admin/users/edit.rhtml", "pages")
+            .with_layout_pattern("/dashboard");
+        router.add_route(route.clone());
+
+        let route_match = router.match_route("/dashboard/admin/users/edit").unwrap();
+        let layout = router.get_layout_for_match(&route_match).unwrap();
+
+        assert_eq!(
+            layout.pattern, "/dashboard",
+            "Should use dashboard layout, skipping admin"
+        );
+    }
+
+    #[test]
+    fn test_named_layout_detection() {
+        let route = Route::from_path("pages/_layout.admin.rhtml", "pages");
+        assert_eq!(route.layout_name, Some("admin".to_string()));
+        assert_eq!(route.pattern, "/");
+
+        let route = Route::from_path("pages/dashboard/_layout.marketing.rhtml", "pages");
+        assert_eq!(route.layout_name, Some("marketing".to_string()));
+        assert_eq!(route.pattern, "/dashboard");
+
+        let route = Route::from_path("pages/_layout.rhtml", "pages");
+        assert_eq!(route.layout_name, None);
+    }
+
+    #[test]
+    fn test_layout_option_named() {
+        let mut router = Router::new();
+        router.add_route(Route::from_path("pages/_layout.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/_layout.admin.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/_layout.rhtml", "pages"));
+
+        let route = Route::from_path("pages/dashboard/settings.rhtml", "pages")
+            .with_named_layout("admin");
+        router.add_route(route.clone());
+
+        let route_match = router.match_route("/dashboard/settings").unwrap();
+        let layout = router.get_layout_for_match(&route_match).unwrap();
+
+        assert_eq!(layout.layout_name, Some("admin".to_string()));
+    }
+
+    #[test]
+    fn test_get_layout_by_name() {
+        let mut router = Router::new();
+        router.add_route(Route::from_path("pages/_layout.admin.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/_layout.marketing.rhtml", "pages"));
+
+        let admin_layout = router.get_layout_by_name("admin").unwrap();
+        assert_eq!(admin_layout.layout_name, Some("admin".to_string()));
+
+        let marketing_layout = router.get_layout_by_name("marketing").unwrap();
+        assert_eq!(marketing_layout.layout_name, Some("marketing".to_string()));
+
+        assert!(router.get_layout_by_name("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_functional_builder_chaining() {
+        let route = Route::from_path("pages/dashboard/print.rhtml", "pages")
+            .with_root_layout();
+
+        assert_eq!(route.layout_option, LayoutOption::Root);
+        assert_eq!(route.pattern, "/dashboard/print");
+
+        let route = Route::from_path("pages/login.rhtml", "pages").with_no_layout();
+        assert_eq!(route.layout_option, LayoutOption::None);
+
+        let route = Route::from_path("pages/admin/users.rhtml", "pages")
+            .with_named_layout("admin");
+        assert_eq!(
+            route.layout_option,
+            LayoutOption::Named("admin".to_string())
+        );
+    }
+
+    #[test]
+    fn test_layout_inherit_default() {
+        let mut router = Router::new();
+        router.add_route(Route::from_path("pages/_layout.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/_layout.rhtml", "pages"));
+
+        // Default behavior - should inherit
+        let route = Route::from_path("pages/dashboard/settings.rhtml", "pages");
+        router.add_route(route.clone());
+
+        let route_match = router.match_route("/dashboard/settings").unwrap();
+        let layout = router.get_layout_for_match(&route_match).unwrap();
+
+        assert_eq!(layout.pattern, "/dashboard", "Should inherit from parent");
+    }
+
+    #[test]
+    fn test_complex_layout_scenario() {
+        let mut router = Router::new();
+        router.add_route(Route::from_path("pages/_layout.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/_layout.admin.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/_layout.rhtml", "pages"));
+
+        // Route 1: Use admin layout
+        let route1 =
+            Route::from_path("pages/dashboard/users.rhtml", "pages").with_named_layout("admin");
+        router.add_route(route1);
+
+        // Route 2: No layout
+        let route2 = Route::from_path("pages/dashboard/print.rhtml", "pages").with_no_layout();
+        router.add_route(route2);
+
+        // Route 3: Root layout only
+        let route3 =
+            Route::from_path("pages/dashboard/export.rhtml", "pages").with_root_layout();
+        router.add_route(route3);
+
+        // Route 4: Default (inherit)
+        let route4 = Route::from_path("pages/dashboard/settings.rhtml", "pages");
+        router.add_route(route4);
+
+        // Test each route
+        let m1 = router.match_route("/dashboard/users").unwrap();
+        let layout1 = router.get_layout_for_match(&m1).unwrap();
+        assert_eq!(layout1.layout_name, Some("admin".to_string()));
+
+        let m2 = router.match_route("/dashboard/print").unwrap();
+        assert!(router.get_layout_for_match(&m2).is_none());
+
+        let m3 = router.match_route("/dashboard/export").unwrap();
+        let layout3 = router.get_layout_for_match(&m3).unwrap();
+        assert_eq!(layout3.pattern, "/");
+
+        let m4 = router.match_route("/dashboard/settings").unwrap();
+        let layout4 = router.get_layout_for_match(&m4).unwrap();
+        assert_eq!(layout4.pattern, "/dashboard");
+    }
+
+    #[test]
+    fn test_layout_option_with_option() {
+        let router = Router::new();
+
+        // Test all layout options directly
+        assert!(router
+            .get_layout_with_option("/any/path", &LayoutOption::None)
+            .is_none());
+
+        // Root requires root layout to exist
+        let mut router = Router::new();
+        router.add_route(Route::from_path("pages/_layout.rhtml", "pages"));
+        assert!(router
+            .get_layout_with_option("/any/path", &LayoutOption::Root)
+            .is_some());
+
+        // Named layout
+        router.add_route(Route::from_path("pages/_layout.admin.rhtml", "pages"));
+        let layout = router
+            .get_layout_with_option("/any", &LayoutOption::Named("admin".to_string()))
+            .unwrap();
+        assert_eq!(layout.layout_name, Some("admin".to_string()));
+
+        // Pattern
+        router.add_route(Route::from_path("pages/dashboard/_layout.rhtml", "pages"));
+        let layout = router
+            .get_layout_with_option("/anywhere", &LayoutOption::Pattern("/dashboard".to_string()))
+            .unwrap();
+        assert_eq!(layout.pattern, "/dashboard");
+    }
+
+    // ========================================================================
+    // No-Layout Marker Tests (Phase 1.2)
+    // ========================================================================
+
+    #[test]
+    fn test_nolayout_marker_detection() {
+        let route = Route::from_path("pages/dashboard/_nolayout.rhtml", "pages");
+        assert!(route.is_nolayout_marker);
+        assert_eq!(route.pattern, "/dashboard");
+
+        let route = Route::from_path("pages/_nolayout.rhtml", "pages");
+        assert!(route.is_nolayout_marker);
+        assert_eq!(route.pattern, "/");
+    }
+
+    #[test]
+    fn test_nolayout_marker_effect() {
+        let mut router = Router::new();
+        router.add_route(Route::from_path("pages/_layout.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/_layout.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/print/_nolayout.rhtml", "pages"));
+        router.add_route(Route::from_path(
+            "pages/dashboard/print/invoice.rhtml",
+            "pages",
+        ));
+
+        // Route under nolayout marker should have no layout
+        let route_match = router.match_route("/dashboard/print/invoice").unwrap();
+        let layout = router.get_layout_for_match(&route_match);
+        assert!(layout.is_none(), "Routes under _nolayout should have no layout");
+    }
+
+    #[test]
+    fn test_nolayout_marker_hierarchy() {
+        let mut router = Router::new();
+        router.add_route(Route::from_path("pages/_layout.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/_layout.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/_nolayout.rhtml", "pages"));
+
+        // Direct child - no layout
+        router.add_route(Route::from_path("pages/dashboard/print.rhtml", "pages"));
+        let m = router.match_route("/dashboard/print").unwrap();
+        assert!(router.get_layout_for_match(&m).is_none());
+
+        // Nested child - also no layout
+        router.add_route(Route::from_path(
+            "pages/dashboard/reports/monthly.rhtml",
+            "pages",
+        ));
+        let m = router.match_route("/dashboard/reports/monthly").unwrap();
+        assert!(router.get_layout_for_match(&m).is_none());
+
+        // Outside the nolayout directory - has layout
+        router.add_route(Route::from_path("pages/settings.rhtml", "pages"));
+        let m = router.match_route("/settings").unwrap();
+        let layout = router.get_layout_for_match(&m).unwrap();
+        assert_eq!(layout.pattern, "/");
+    }
+
+    #[test]
+    fn test_nolayout_marker_vs_explicit_option() {
+        let mut router = Router::new();
+        router.add_route(Route::from_path("pages/_layout.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/_layout.admin.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/dashboard/_nolayout.rhtml", "pages"));
+
+        // Explicit layout option should override nolayout marker
+        let route = Route::from_path("pages/dashboard/settings.rhtml", "pages")
+            .with_named_layout("admin");
+        router.add_route(route);
+
+        let m = router.match_route("/dashboard/settings").unwrap();
+        let layout = router.get_layout_for_match(&m).unwrap();
+        assert_eq!(
+            layout.layout_name,
+            Some("admin".to_string()),
+            "Explicit layout option should override nolayout marker"
+        );
+    }
+
+    #[test]
+    fn test_is_under_nolayout_marker() {
+        let mut router = Router::new();
+        router.add_route(Route::from_path("pages/dashboard/_nolayout.rhtml", "pages"));
+        router.add_route(Route::from_path("pages/api/v1/_nolayout.rhtml", "pages"));
+
+        assert!(router.is_under_nolayout_marker("/dashboard"));
+        assert!(router.is_under_nolayout_marker("/dashboard/print"));
+        assert!(router.is_under_nolayout_marker("/dashboard/print/invoice"));
+        assert!(router.is_under_nolayout_marker("/api/v1/users"));
+
+        assert!(!router.is_under_nolayout_marker("/"));
+        assert!(!router.is_under_nolayout_marker("/settings"));
+        assert!(!router.is_under_nolayout_marker("/api"));
+        assert!(!router.is_under_nolayout_marker("/api/v2"));
     }
 }
