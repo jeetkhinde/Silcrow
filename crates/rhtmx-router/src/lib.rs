@@ -51,11 +51,13 @@ use std::collections::HashMap;
 mod constraint;
 mod layout;
 mod intercept;
+pub mod path;
 
 // Re-export public types for backward compatibility
 pub use constraint::ParameterConstraint;
 pub use layout::LayoutOption;
 pub use intercept::InterceptLevel;
+pub use path::{PathHierarchy, is_valid_path, normalize_path};
 
 // ============================================================================
 // Core Types
@@ -1278,109 +1280,7 @@ impl Route {
 // ============================================================================
 
 /// Checks if a path is already in valid canonical form
-fn is_valid_path(path: &str) -> bool {
-    if path.is_empty() {
-        return false;
-    }
-
-    // Must start with /
-    if !path.starts_with('/') {
-        return false;
-    }
-
-    // Check for invalid sequences
-    if path.contains("//") || path.contains('\\') {
-        return false;
-    }
-
-    // Root is always valid
-    if path == "/" {
-        return true;
-    }
-
-    // Must not end with / (except root)
-    !path.ends_with('/')
-}
-
-/// Normalize a path to canonical form
-///
-/// Returns `Cow` to avoid allocation when input is already valid.
-/// Handles all user mistakes:
-/// - Trailing slashes: `/path/` → `/path`
-/// - Double slashes: `/path//to` → `/path/to`
-/// - Backslashes: `\path\to` → `/path/to`
-/// - Windows paths: `C:\path` → `/path`
-/// - Empty segments
-///
-/// # Performance
-/// - Valid paths: Zero allocations (Cow::Borrowed)
-/// - Invalid paths: Single allocation (Cow::Owned)
-fn normalize_path(path: &str) -> Cow<'_, str> {
-    // Fast path: if already valid, return borrowed (zero-copy!)
-    if is_valid_path(path) {
-        return Cow::Borrowed(path);
-    }
-
-    // Slow path: need to normalize
-    let normalized = path
-        .replace('\\', "/") // Handle backslashes
-        .split('/') // Split on separator
-        .filter(|s| !s.is_empty()) // Remove empty segments
-        .collect::<Vec<_>>()
-        .join("/");
-
-    // Handle root case
-    if normalized.is_empty() {
-        Cow::Borrowed("/")
-    } else {
-        Cow::Owned(format!("/{}", normalized))
-    }
-}
-
-/// Lazy iterator that generates parent paths on-demand
-///
-/// For path `/a/b/c/d`, yields: `/a/b/c/d` → `/a/b/c` → `/a/b` → `/a` → `/`
-///
-/// Stops as soon as a match is found (short-circuit evaluation).
-///
-/// # Performance
-/// - Memory: 16 bytes (single pointer on stack)
-/// - Allocations: Zero (only borrows from input string)
-struct PathHierarchy<'a> {
-    current: Option<&'a str>,
-}
-
-impl<'a> PathHierarchy<'a> {
-    fn new(path: &'a str) -> Self {
-        Self {
-            current: Some(path),
-        }
-    }
-}
-
-impl<'a> Iterator for PathHierarchy<'a> {
-    type Item = &'a str;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let current = self.current?;
-        let result = current;
-
-        // Calculate next parent
-        self.current = if current == "/" {
-            None // Reached root, stop iteration
-        } else if let Some(slash_pos) = current.rfind('/') {
-            if slash_pos == 0 {
-                Some("/") // Next is root
-            } else {
-                Some(&current[..slash_pos]) // Move to parent
-            }
-        } else {
-            None // No more parents
-        };
-
-        Some(result)
-    }
-}
+// Path utilities now in path module
 
 // ============================================================================
 // Router Implementation
