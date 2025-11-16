@@ -52,12 +52,14 @@ mod constraint;
 mod layout;
 mod intercept;
 pub mod path;
+pub mod route;
 
 // Re-export public types for backward compatibility
 pub use constraint::ParameterConstraint;
 pub use layout::LayoutOption;
 pub use intercept::InterceptLevel;
 pub use path::{PathHierarchy, is_valid_path, normalize_path};
+pub use route::pattern::{classify_segment, parse_param_with_constraint, PatternSegmentType};
 
 // ============================================================================
 // Core Types
@@ -187,79 +189,11 @@ impl RouteMatch {
     }
 }
 
-/// Represents different types of route pattern segments
-#[derive(Debug, Clone, PartialEq)]
-enum PatternSegmentType {
-    /// Catch-all segment: [...slug] or [...slug:alpha]
-    CatchAll(String, Option<ParameterConstraint>),
-    /// Optional catch-all segment: [[...slug]] or [[...slug:alpha]] (Phase 4.1)
-    OptionalCatchAll(String, Option<ParameterConstraint>),
-    /// Optional parameter: [id?] or [id:int?]
-    Optional(String, Option<ParameterConstraint>),
-    /// Required parameter: [id] or [id:int]
-    Required(String, Option<ParameterConstraint>),
-    /// Static text segment
-    Static(String),
-}
+// Pattern parsing types and functions now in route::pattern module
 
 // ============================================================================
 // Route Implementation
 // ============================================================================
-
-/// Helper function to classify a segment into a pattern type
-///
-/// Parses parameter names and constraints from segments like:
-/// - `[id]` → Required("id", None)
-/// - `[id:int]` → Required("id", Some(Int))
-/// - `[id:int?]` → Optional("id", Some(Int))
-/// - `[...slug:alpha]` → CatchAll("slug", Some(Alpha))
-/// - `[[...slug:alpha]]` → OptionalCatchAll("slug", Some(Alpha))
-fn classify_segment(segment: &str) -> PatternSegmentType {
-    // Check for optional catch-all: [[...name]] (double brackets)
-    if segment.starts_with("[[") && segment.ends_with("]]") {
-        let inner = &segment[2..segment.len() - 2]; // Strip [[ and ]]
-        if let Some(param_part) = inner.strip_prefix("...") {
-            let (param_name, constraint) = parse_param_with_constraint(param_part);
-            return PatternSegmentType::OptionalCatchAll(param_name, constraint);
-        }
-    }
-
-    match segment.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
-        Some(inner) => {
-            // Parse catch-all: [...name] or [...name:constraint]
-            if let Some(param_part) = inner.strip_prefix("...") {
-                let (param_name, constraint) = parse_param_with_constraint(param_part);
-                return PatternSegmentType::CatchAll(param_name, constraint);
-            }
-
-            // Parse optional: [name?] or [name:constraint?]
-            if let Some(param_part) = inner.strip_suffix('?') {
-                let (param_name, constraint) = parse_param_with_constraint(param_part);
-                return PatternSegmentType::Optional(param_name, constraint);
-            }
-
-            // Parse required: [name] or [name:constraint]
-            let (param_name, constraint) = parse_param_with_constraint(inner);
-            PatternSegmentType::Required(param_name, constraint)
-        }
-        None => PatternSegmentType::Static(segment.to_string()),
-    }
-}
-
-/// Parses parameter name and optional constraint from "name" or "name:constraint"
-///
-/// Functional parser that splits on ':' and returns (name, maybe_constraint)
-fn parse_param_with_constraint(param: &str) -> (String, Option<ParameterConstraint>) {
-    param
-        .split_once(':')
-        .map(|(name, constraint_str)| {
-            (
-                name.to_string(),
-                Some(ParameterConstraint::from_str(constraint_str)),
-            )
-        })
-        .unwrap_or_else(|| (param.to_string(), None))
-}
 
 impl Route {
     /// Creates a route from a file system path
