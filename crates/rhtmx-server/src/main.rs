@@ -14,7 +14,7 @@ use axum::{
     Router,
 };
 use rhtmx::{
-    database, Config, FormData, LayoutDirective,
+    database, Config, FormData,
     QueryParams, Renderer, RequestContext, TemplateLoader,
 };
 use crate::hot_reload::{create_watcher, ChangeType};
@@ -308,8 +308,13 @@ async fn create_request_context(
 /// Render a route with layout
 async fn render_route(state: &AppState, route: &str, request_context: RequestContext) -> Response {
     // Check if there's an action handler for this route and method
+    // Try with query parameters first (more specific match)
     let method_str = request_context.method.as_str();
-    if let Some(handler) = state.action_registry.find(route, method_str) {
+    if let Some(handler) = state.action_registry.find_with_query(
+        route,
+        method_str,
+        request_context.query.as_map(),
+    ) {
         // Execute the action handler instead of rendering the template
         return handler(request_context).await.into_response();
     }
@@ -399,83 +404,22 @@ async fn render_route(state: &AppState, route: &str, request_context: RequestCon
         return Json(response_data).into_response();
     }
 
-    // Check for named partial request: ?partial=Name
-    if let Some(partial_name) = request_context.query.get("partial") {
-        // Check if it's a boolean "true" (old behavior) or a name (new behavior)
-        if partial_name != "true" {
-            // Named partial requested
-            match renderer.render_named_partial(&page_template.content, partial_name) {
-                Ok(html) => return Html(html).into_response(),
-                Err(_e) => {
-                    // List available partials for helpful error message
-                    let available = renderer.list_partials(&page_template.content);
-                    let available_str = if available.is_empty() {
-                        "none".to_string()
-                    } else {
-                        available.join(", ")
-                    };
-                    return error_response(
-                        404,
-                        "Partial Not Found",
-                        &format!(
-                            "Partial '{}' not found in {}\nAvailable partials: {}",
-                            partial_name, route, available_str
-                        ),
-                    );
-                }
-            }
-        }
-    }
+    // Determine rendering strategy based on content and request
+    let is_partial_file = renderer.is_partial(&page_template.content);
+    let wants_partial = request_context.wants_partial();
 
-    // Check for @layout directive in page content
-    let layout_directive = renderer.parse_layout_directive(&page_template.content);
-
-    // Determine rendering strategy based on @layout directive and other factors
-    match layout_directive {
-        Some(LayoutDirective::None) => {
-            // @layout(false) - explicitly no layout
-            match renderer.render_partial(&page_template.content) {
-                Ok(html) => Html(html).into_response(),
-                Err(e) => error_response(500, "Render Error", &format!("{}", e)),
-            }
+    if is_partial_file || wants_partial {
+        // Render as partial (without layout)
+        match renderer.render_partial(&page_template.content) {
+            Ok(html) => Html(html).into_response(),
+            Err(e) => error_response(500, "Render Error", &format!("{}", e)),
         }
-        Some(LayoutDirective::Custom(layout_name)) => {
-            // @layout("custom") - use specific layout
-            let custom_layout_route = format!("/{}", layout_name);
-            let custom_layout = match state.template_loader.read().await.get(&custom_layout_route) {
-                Some(t) => t.clone(),
-                None => {
-                    return error_response(
-                        500,
-                        "Custom Layout Not Found",
-                        &format!("Layout '{}' specified in @layout not found", layout_name),
-                    );
-                }
-            };
-            match renderer.render_with_layout(&custom_layout.content, &page_template.content) {
-                Ok(html) => Html(html).into_response(),
-                Err(e) => error_response(500, "Render Error", &format!("{}", e)),
-            }
-        }
-        None => {
-            // No @layout directive - use default behavior
-            let is_partial_file = renderer.is_partial(&page_template.content);
-            let wants_partial = request_context.wants_partial();
-
-            if is_partial_file || wants_partial {
-                // Render as partial (without layout)
-                match renderer.render_partial(&page_template.content) {
-                    Ok(html) => Html(html).into_response(),
-                    Err(e) => error_response(500, "Render Error", &format!("{}", e)),
-                }
-            } else {
-                // Render the page with default layout (HTML response)
-                match renderer.render_with_layout(&layout_template.content, &page_template.content)
-                {
-                    Ok(html) => Html(html).into_response(),
-                    Err(e) => error_response(500, "Render Error", &format!("{}", e)),
-                }
-            }
+    } else {
+        // Render the page with default layout (HTML response)
+        match renderer.render_with_layout(&layout_template.content, &page_template.content)
+        {
+            Ok(html) => Html(html).into_response(),
+            Err(e) => error_response(500, "Render Error", &format!("{}", e)),
         }
     }
 }
@@ -535,79 +479,21 @@ async fn render_route_direct(
         return Json(response_data).into_response();
     }
 
-    // Check for named partial request: ?partial=Name
-    if let Some(partial_name) = request_context.query.get("partial") {
-        if partial_name != "true" {
-            match renderer.render_named_partial(&page_template.content, partial_name) {
-                Ok(html) => return Html(html).into_response(),
-                Err(_) => {
-                    let available = renderer.list_partials(&page_template.content);
-                    let available_str = if available.is_empty() {
-                        "none".to_string()
-                    } else {
-                        available.join(", ")
-                    };
-                    return error_response(
-                        404,
-                        "Partial Not Found",
-                        &format!(
-                            "Partial '{}' not found in {}\nAvailable partials: {}",
-                            partial_name, route, available_str
-                        ),
-                    );
-                }
-            }
-        }
-    }
+    // Determine rendering strategy based on content and request
+    let is_partial_file = renderer.is_partial(&page_template.content);
+    let wants_partial = request_context.wants_partial();
 
-    // Check for @layout directive in page content
-    let layout_directive = renderer.parse_layout_directive(&page_template.content);
-
-    // Determine rendering strategy based on @layout directive and other factors
-    match layout_directive {
-        Some(LayoutDirective::None) => {
-            // @layout(false) - explicitly no layout
-            match renderer.render_partial(&page_template.content) {
-                Ok(html) => Html(html).into_response(),
-                Err(e) => error_response(500, "Render Error", &format!("{}", e)),
-            }
+    if is_partial_file || wants_partial {
+        // Render as partial (without layout)
+        match renderer.render_partial(&page_template.content) {
+            Ok(html) => Html(html).into_response(),
+            Err(e) => error_response(500, "Render Error", &format!("{}", e)),
         }
-        Some(LayoutDirective::Custom(layout_name)) => {
-            // @layout("custom") - use specific layout
-            let custom_layout_route = format!("/{}", layout_name);
-            let custom_layout = match state.template_loader.read().await.get(&custom_layout_route) {
-                Some(t) => t.clone(),
-                None => {
-                    return error_response(
-                        500,
-                        "Custom Layout Not Found",
-                        &format!("Layout '{}' specified in @layout not found", layout_name),
-                    );
-                }
-            };
-            match renderer.render_with_layout(&custom_layout.content, &page_template.content) {
-                Ok(html) => Html(html).into_response(),
-                Err(e) => error_response(500, "Render Error", &format!("{}", e)),
-            }
-        }
-        None => {
-            // No @layout directive - use default behavior
-            let is_partial_file = renderer.is_partial(&page_template.content);
-            let wants_partial = request_context.wants_partial();
-
-            if is_partial_file || wants_partial {
-                // Render as partial (without layout)
-                match renderer.render_partial(&page_template.content) {
-                    Ok(html) => Html(html).into_response(),
-                    Err(e) => error_response(500, "Render Error", &format!("{}", e)),
-                }
-            } else {
-                match renderer.render_with_layout(&layout_template.content, &page_template.content)
-                {
-                    Ok(html) => Html(html).into_response(),
-                    Err(e) => error_response(500, "Render Error", &format!("{}", e)),
-                }
-            }
+    } else {
+        match renderer.render_with_layout(&layout_template.content, &page_template.content)
+        {
+            Ok(html) => Html(html).into_response(),
+            Err(e) => error_response(500, "Render Error", &format!("{}", e)),
         }
     }
 }

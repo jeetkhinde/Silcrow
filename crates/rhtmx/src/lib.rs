@@ -31,7 +31,6 @@ pub use html::{
 
 // Re-export framework types
 pub use renderer::Renderer;
-pub use renderer::LayoutDirective;
 pub use template_loader::TemplateLoader;
 pub use request_context::{RequestContext, QueryParams, FormData};
 pub use config::Config;

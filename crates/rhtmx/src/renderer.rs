@@ -8,15 +8,6 @@ use rhtmx_parser::{DirectiveParser, ExpressionEvaluator, Value};
 use std::collections::HashSet;
 use std::sync::Arc;
 
-/// Layout directive parsed from @layout(...) decorator
-#[derive(Debug, Clone, PartialEq)]
-pub enum LayoutDirective {
-    /// @layout(false) - No layout should be applied
-    None,
-    /// @layout("name") - Use custom layout by name
-    Custom(String),
-}
-
 /// HTML renderer with directive support
 pub struct Renderer {
     evaluator: ExpressionEvaluator,
@@ -57,106 +48,15 @@ impl Renderer {
 
     /// Render a template to HTML
     pub fn render(&mut self, template_content: &str) -> Result<String> {
-        let html = self.extract_html(template_content);
+        let html = template_content.trim().to_string();
         let processed = self.process_directives(&html);
         let interpolated = self.process_interpolations(&processed);
         Ok(interpolated)
     }
 
-    /// Find the position of slots block (either old "slots {" or new "__rhtmx_slots__ {")
-    fn find_slots_block(&self, content: &str) -> Option<usize> {
-        content
-            .find("__rhtmx_slots__ {")
-            .or_else(|| content.find("slots {"))
-    }
-
-    /// Check if content has a WebPage component
-    fn has_component(&self, content: &str) -> bool {
-        // Skip slots block if exists
-        let search_start = if let Some(slots_pos) = self.find_slots_block(content) {
-            let mut depth = 0;
-            let mut found_opening = false;
-            let mut slots_end = slots_pos;
-
-            for (byte_idx, ch) in content[slots_pos..].char_indices() {
-                if ch == '{' {
-                    depth += 1;
-                    found_opening = true;
-                } else if ch == '}' {
-                    depth -= 1;
-                    if found_opening && depth == 0 {
-                        slots_end = slots_pos + byte_idx + ch.len_utf8();
-                        break;
-                    }
-                }
-            }
-            slots_end
-        } else {
-            0
-        };
-
-        content[search_start..].contains("WebPage {")
-    }
-
-    /// Extract HTML content from rhtmx template
-    /// This needs to extract ONLY the WebPage function content, not slots block
-    /// If no WebPage component exists, returns the entire content (for partials)
+    /// Extract HTML content from template
+    /// Returns the content as-is (trimmed)
     fn extract_html(&self, content: &str) -> String {
-        // First, skip past any slots block if it exists
-        let search_start = if let Some(slots_pos) = self.find_slots_block(content) {
-            // Find the end of slots block
-            let mut depth = 0;
-            let mut found_opening = false;
-            let mut slots_end = slots_pos;
-
-            for (byte_idx, ch) in content[slots_pos..].char_indices() {
-                if ch == '{' {
-                    depth += 1;
-                    found_opening = true;
-                } else if ch == '}' {
-                    depth -= 1;
-                    if found_opening && depth == 0 {
-                        slots_end = slots_pos + byte_idx + ch.len_utf8();
-                        break;
-                    }
-                }
-            }
-            slots_end
-        } else {
-            0
-        };
-
-        // Now find "WebPage {" keyword after the slots block
-        if let Some(webpage_pos) = content[search_start..].find("WebPage {") {
-            let abs_webpage_pos = search_start + webpage_pos;
-            // Find the opening brace after WebPage
-            if let Some(start) = content[abs_webpage_pos..].find('{') {
-                let abs_start = abs_webpage_pos + start;
-
-                // Find matching closing brace
-                let mut depth = 0;
-                let mut end_pos = None;
-
-                for (byte_idx, ch) in content[abs_start..].char_indices() {
-                    if ch == '{' {
-                        depth += 1;
-                    } else if ch == '}' {
-                        depth -= 1;
-                        if depth == 0 {
-                            end_pos = Some(abs_start + byte_idx);
-                            break;
-                        }
-                    }
-                }
-
-                if let Some(end) = end_pos {
-                    let html = &content[abs_start + 1..end];
-                    return html.trim().to_string();
-                }
-            }
-        }
-
-        // No WebPage component found - treat as partial (return entire content)
         content.trim().to_string()
     }
 
@@ -721,143 +621,35 @@ impl Renderer {
         .to_string()
     }
 
-    /// Render page with layout
     /// Render a partial (without layout)
     /// Use this for HTML fragments, HTMX responses, or pages without Page component
     pub fn render_partial(&mut self, content: &str) -> Result<String> {
-        // Strip @layout directive if present, then render without layout wrapping
-        let clean_content = self.strip_layout_directive(content);
-        self.render(&clean_content)
+        self.render(content)
     }
 
     /// Check if content should be rendered as a partial
-    /// Returns true if content has no WebPage component
+    /// Returns true if content doesn't look like a full HTML document
+    /// (no <!DOCTYPE> or <html> tags)
     pub fn is_partial(&self, content: &str) -> bool {
-        !self.has_component(content)
+        let content_lower = content.to_lowercase();
+        !content_lower.contains("<!doctype") && !content_lower.contains("<html")
     }
 
-    /// Check if content has named partials (partial Name(...) syntax)
-    pub fn has_named_partials(&self, content: &str) -> bool {
-        content.contains("partial ")
-    }
-
-    /// List all named partials in content
-    pub fn list_partials(&self, content: &str) -> Vec<String> {
-        let mut partials = Vec::new();
-        let re = Regex::new(r"partial\s+(\w+)\s*\(").unwrap();
-
-        for cap in re.captures_iter(content) {
-            if let Some(name) = cap.get(1) {
-                partials.push(name.as_str().to_string());
-            }
-        }
-
-        partials
-    }
-
-    /// Extract a named partial by name
-    /// Finds: partial Name(...) { ... }
-    fn extract_named_partial(&self, content: &str, name: &str) -> Result<String> {
-        // Find pattern: partial {name}(
-        let search_pattern = format!("partial {}", name);
-
-        if let Some(start_pos) = content.find(&search_pattern) {
-            // Find the opening brace after partial Name(...)
-            let after_partial = &content[start_pos..];
-
-            if let Some(brace_pos) = after_partial.find('{') {
-                let abs_brace_pos = start_pos + brace_pos;
-
-                // Find matching closing brace
-                let mut depth = 0;
-                let mut end_pos = None;
-
-                for (byte_idx, ch) in content[abs_brace_pos..].char_indices() {
-                    if ch == '{' {
-                        depth += 1;
-                    } else if ch == '}' {
-                        depth -= 1;
-                        if depth == 0 {
-                            end_pos = Some(abs_brace_pos + byte_idx);
-                            break;
-                        }
-                    }
-                }
-
-                if let Some(end) = end_pos {
-                    let html = &content[abs_brace_pos + 1..end];
-                    return Ok(html.trim().to_string());
-                }
-            }
-        }
-
-        anyhow::bail!("Partial '{}' not found", name)
-    }
-
-    /// Render a named partial with name
-    /// Example: render_named_partial(content, "Stats")
-    pub fn render_named_partial(&mut self, content: &str, name: &str) -> Result<String> {
-        // Extract the named partial HTML
-        let partial_html = self.extract_named_partial(content, name)?;
-
-        // TODO: In future, execute associated data function here
-        // For now, just render the HTML with current variables
-
-        let processed = self.process_directives(&partial_html);
-        let interpolated = self.process_interpolations(&processed);
-
-        Ok(interpolated)
-    }
-
-    /// Parse @layout directive from page content
-    /// Returns: Some(LayoutDirective) if found, None if not present
-    ///
-    /// Supported formats:
-    /// - @layout(false) -> No layout
-    /// - @layout("custom") -> Use specific layout
-    /// - No directive -> Default behavior (use _layout.rhtmx)
-    pub fn parse_layout_directive(&self, content: &str) -> Option<LayoutDirective> {
-        // Pattern: @layout(false) or @layout("name") at the START of the file
-        // Use ^ to match only at the beginning, with optional whitespace
-        let re = Regex::new(r#"^\s*@layout\((false|"([^"]+)")\)"#).unwrap();
-
-        if let Some(caps) = re.captures(content) {
-            if caps.get(1).map(|m| m.as_str()) == Some("false") {
-                // @layout(false)
-                return Some(LayoutDirective::None);
-            } else if let Some(name) = caps.get(2) {
-                // @layout("custom")
-                return Some(LayoutDirective::Custom(name.as_str().to_string()));
-            }
-        }
-
-        None
-    }
-
-    /// Strip @layout directive from content (for rendering)
-    pub fn strip_layout_directive(&self, content: &str) -> String {
-        // Strip @layout directive only at the start of the file
-        let re = Regex::new(r#"^\s*@layout\((false|"[^"]+")\)\s*\n?"#).unwrap();
-        re.replace(content, "").to_string()
-    }
 
     pub fn render_with_layout(
         &mut self,
         layout_content: &str,
         page_content: &str,
     ) -> Result<String> {
-        // Strip @layout directive if present (shouldn't normally be here, but just in case)
-        let clean_page_content = self.strip_layout_directive(page_content);
-
         // Extract slots from page (before rendering)
-        let slots = self.extract_slots(&clean_page_content);
+        let slots = self.extract_slots(page_content);
 
         // Extract and process layout HTML WITHOUT interpolations yet
         let layout_html_raw = self.extract_html(layout_content);
         let layout_processed = self.process_directives(&layout_html_raw);
 
         // Render page HTML fully (with interpolations)
-        let page_html = self.render(&clean_page_content)?;
+        let page_html = self.render(page_content)?;
 
         // Replace {slots.content} with page HTML
         let mut result = layout_processed.replace("{slots.content}", &page_html);
