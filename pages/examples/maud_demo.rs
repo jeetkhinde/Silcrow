@@ -3,7 +3,7 @@
 // This example demonstrates the maud! macro integrated with RHTMX's
 // response builders and layouts. It shows various patterns and features.
 
-use rhtmx::{get, post, Ok, OkResponse, FormContext, maud, layouts};
+use rhtmx::{get, post, Ok, OkResponse, FormContext, maud};
 
 // ============================================================================
 // Basic Maud! Example
@@ -336,11 +336,8 @@ fn dashboard() -> OkResponse {
         }
     };
 
-    Ok().html(layouts::root::layout(
-        content,
-        layouts::root::Slots::new("Dashboard")
-            .description("User dashboard and statistics")
-    ))
+    // In a real app, you'd wrap this with your custom layout function
+    Ok().html(content)
 }
 
 // ============================================================================
@@ -461,11 +458,8 @@ fn blog_posts() -> OkResponse {
         }
     };
 
-    Ok().html(layouts::root::layout(
-        content,
-        layouts::root::Slots::new("Blog")
-            .description("Read our latest blog posts")
-    ))
+    // In a real app, you'd wrap this with your custom layout function
+    Ok().html(content)
 }
 
 // ============================================================================

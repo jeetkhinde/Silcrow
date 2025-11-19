@@ -3,7 +3,6 @@
 
 pub mod html;
 pub mod validation;
-pub mod layouts;
 pub mod form_field;
 
 // Framework modules

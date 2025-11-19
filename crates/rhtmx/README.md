@@ -352,7 +352,6 @@ rhtmx::Html(__html)
 ## 🎓 Learn More
 
 - **HTTP Handlers**: [Complete Guide](./docs/http/HTTP_HANDLERS_GUIDE.md) · [Quick Ref](./docs/http/HTTP_HANDLERS_QUICK_REF.md) · [Summary](./docs/http/HTTP_HANDLERS_SUMMARY.md)
-- **Layouts**: [LAYOUTS.md](./docs/LAYOUTS.md) - Page layouts and template organization
 - **Features**: [FEATURES.md](./docs/FEATURES.md) - Complete feature reference
 - **Quick Start**: [QUICKSTART.md](./QUICKSTART.md) - Get started in 5 minutes
 - **Examples**: See `examples/` directory
