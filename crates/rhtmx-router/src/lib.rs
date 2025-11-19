@@ -13,6 +13,8 @@
 //! - **Zero-copy optimization** with `Cow<'_, str>` (no allocation for valid paths)
 //! - **Lazy evaluation** with custom `PathHierarchy` iterator
 //! - **Functional composition** with `find_map()`
+//! - **Immutable builder API** for route configuration
+//! - **Tail recursion** for route matching
 //!
 //! ## Path Normalization
 //!
@@ -41,7 +43,6 @@
 //! assert_eq!(route_match.params.get("id"), Some(&"123".to_string()));
 //! ```
 
-use std::borrow::Cow;
 use std::collections::HashMap;
 
 // ============================================================================
@@ -302,6 +303,12 @@ impl Route {
     ///
     /// * `path` - URL path to match
     /// * `case_insensitive` - Whether to perform case-insensitive matching
+    ///
+    /// # Implementation Note
+    ///
+    /// Uses tail-recursive helper function for functional programming style.
+    /// The matching algorithm walks through pattern and path segments simultaneously,
+    /// handling catch-all, optional, required parameters, and static segments.
     pub fn matches_with_options(
         &self,
         path: &str,
@@ -322,11 +329,25 @@ impl Route {
             self.pattern.split('/').filter(|s| !s.is_empty()).collect();
         let path_segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
 
-        let mut params = HashMap::new();
-        let mut pattern_idx = 0;
-        let mut path_idx = 0;
+        // Tail-recursive helper function for functional matching
+        fn match_segments(
+            pattern_segments: &[&str],
+            path_segments: &[&str],
+            pattern_idx: usize,
+            path_idx: usize,
+            params: HashMap<String, String>,
+            case_insensitive: bool,
+        ) -> Option<HashMap<String, String>> {
+            // Base case: consumed all pattern segments
+            if pattern_idx >= pattern_segments.len() {
+                // Success if we also consumed all path segments
+                return if path_idx == path_segments.len() {
+                    Some(params)
+                } else {
+                    None
+                };
+            }
 
-        while pattern_idx < pattern_segments.len() {
             let pattern_seg = pattern_segments[pattern_idx];
 
             match pattern_seg.chars().next() {
@@ -348,12 +369,14 @@ impl Route {
                     }
 
                     // For optional catch-all, allow zero segments
-                    params.insert(param_name.to_string(), remaining.join("/"));
-                    return Some(params);
+                    let mut new_params = params;
+                    new_params.insert(param_name.to_string(), remaining.join("/"));
+                    Some(new_params)
                 }
                 // Optional parameter: :id?
                 Some(':') if pattern_seg.ends_with('?') => {
                     let param_name = &pattern_seg[1..pattern_seg.len() - 1];
+                    let mut new_params = params;
 
                     if path_idx < path_segments.len() {
                         let should_consume = if pattern_idx + 1 < pattern_segments.len() {
@@ -373,14 +396,28 @@ impl Route {
                         };
 
                         if should_consume && path_idx < path_segments.len() {
-                            params.insert(
+                            new_params.insert(
                                 param_name.to_string(),
                                 path_segments[path_idx].to_string(),
                             );
-                            path_idx += 1;
+                            return match_segments(
+                                pattern_segments,
+                                path_segments,
+                                pattern_idx + 1,
+                                path_idx + 1,
+                                new_params,
+                                case_insensitive,
+                            );
                         }
                     }
-                    pattern_idx += 1;
+                    match_segments(
+                        pattern_segments,
+                        path_segments,
+                        pattern_idx + 1,
+                        path_idx,
+                        new_params,
+                        case_insensitive,
+                    )
                 }
                 // Required parameter: :id
                 Some(':') => {
@@ -388,9 +425,16 @@ impl Route {
                         return None;
                     }
                     let param_name = &pattern_seg[1..];
-                    params.insert(param_name.to_string(), path_segments[path_idx].to_string());
-                    path_idx += 1;
-                    pattern_idx += 1;
+                    let mut new_params = params;
+                    new_params.insert(param_name.to_string(), path_segments[path_idx].to_string());
+                    match_segments(
+                        pattern_segments,
+                        path_segments,
+                        pattern_idx + 1,
+                        path_idx + 1,
+                        new_params,
+                        case_insensitive,
+                    )
                 }
                 // Static segment
                 _ => {
@@ -408,28 +452,40 @@ impl Route {
                         return None;
                     }
 
-                    path_idx += 1;
-                    pattern_idx += 1;
+                    match_segments(
+                        pattern_segments,
+                        path_segments,
+                        pattern_idx + 1,
+                        path_idx + 1,
+                        params,
+                        case_insensitive,
+                    )
                 }
             }
         }
 
-        if path_idx == path_segments.len() {
-            // Validate all parameters against constraints (functional validation)
-            let all_valid = params.iter().all(|(param_name, param_value)| {
-                self.param_constraints
-                    .get(param_name)
-                    .map(|constraint| constraint.validate(param_value))
-                    .unwrap_or(true) // No constraint = always valid
-            });
+        // Start tail-recursive matching
+        let params = match_segments(
+            &pattern_segments,
+            &path_segments,
+            0,
+            0,
+            HashMap::new(),
+            case_insensitive,
+        )?;
 
-            if all_valid {
-                Some(params)
-            } else {
-                None // Constraint validation failed
-            }
+        // Validate all parameters against constraints (functional validation)
+        let all_valid = params.iter().all(|(param_name, param_value)| {
+            self.param_constraints
+                .get(param_name)
+                .map(|constraint| constraint.validate(param_value))
+                .unwrap_or(true) // No constraint = always valid
+        });
+
+        if all_valid {
+            Some(params)
         } else {
-            None
+            None // Constraint validation failed
         }
     }
 
@@ -863,25 +919,20 @@ impl Route {
         let has_params = from.contains('[') || from.contains(':');
 
         // For redirects, we support both :param and [param] syntax
-        // Convert :param to [param] for parsing
+        // Convert :param to [param] for parsing using functional approach
         let normalized_from = if from.contains(':') && !from.contains('[') {
-            // Convert :param to [param] syntax for parsing
-            let mut result = String::new();
-            let segments: Vec<&str> = from.split('/').collect();
-            for (i, segment) in segments.iter().enumerate() {
-                if i > 0 {
-                    result.push('/');
-                }
-                if segment.starts_with(':') {
-                    // Convert :param to [param]
-                    result.push('[');
-                    result.push_str(&segment[1..]);
-                    result.push(']');
-                } else {
-                    result.push_str(segment);
-                }
-            }
-            result
+            // Functional conversion: map segments and join
+            from.split('/')
+                .map(|segment| {
+                    if segment.starts_with(':') {
+                        // Convert :param to [param]
+                        format!("[{}]", &segment[1..])
+                    } else {
+                        segment.to_string()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("/")
         } else {
             from.clone()
         };
@@ -964,14 +1015,11 @@ impl Route {
             return Some(target.clone());
         }
 
-        // Functional parameter substitution
-        let mut result = target.clone();
-        for (param_name, param_value) in params {
+        // Functional parameter substitution using fold
+        Some(params.iter().fold(target.clone(), |acc, (param_name, param_value)| {
             let placeholder = format!(":{}", param_name);
-            result = result.replace(&placeholder, param_value);
-        }
-
-        Some(result)
+            acc.replace(&placeholder, param_value)
+        }))
     }
 }
 
@@ -1061,12 +1109,28 @@ impl Router {
         }
     }
 
-    /// Configures case sensitivity for route matching
-    pub fn set_case_insensitive(&mut self, case_insensitive: bool) {
+    // ========================================================================
+    // Functional Builder Methods for Router Configuration
+    // ========================================================================
+
+    /// Configures case sensitivity (functional builder)
+    ///
+    /// Consumes self and returns new Router with updated case sensitivity.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::Router;
+    ///
+    /// let router = Router::new()
+    ///     .with_case_sensitivity(false);
+    /// ```
+    pub fn with_case_sensitivity(mut self, case_insensitive: bool) -> Self {
         self.case_insensitive = case_insensitive;
+        self
     }
 
-    /// Adds a route to the router
+    /// Adds a route to the router (functional builder)
     ///
     /// Routes are automatically sorted by priority after addition.
     /// Layout and error page routes are stored in separate collections.
@@ -1078,16 +1142,143 @@ impl Router {
     /// - Automatic organization into appropriate collections
     /// - Named layouts stored in dual indexes for flexible lookup
     /// - Named routes indexed by name for URL generation
+    /// - Returns new Router instance (move semantics)
     ///
     /// # Examples
     ///
     /// ```
     /// use rhtmx_router::{Router, Route};
     ///
+    /// let router = Router::new()
+    ///     .with_route(Route::from_path("pages/about.rhtml", "pages"))
+    ///     .with_route(Route::from_path("pages/users/[id].rhtml", "pages"));
+    /// ```
+    pub fn with_route(mut self, route: Route) -> Self {
+        self.add_route_internal(&route);
+        self
+    }
+
+    /// Adds multiple routes at once (functional batch operation)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::{Router, Route};
+    ///
+    /// let routes = vec![
+    ///     Route::from_path("pages/about.rhtml", "pages"),
+    ///     Route::from_path("pages/users/[id].rhtml", "pages"),
+    /// ];
+    ///
+    /// let router = Router::new().with_routes(routes);
+    /// ```
+    pub fn with_routes<I>(mut self, routes: I) -> Self
+    where
+        I: IntoIterator<Item = Route>,
+    {
+        for route in routes {
+            self.add_route_internal(&route);
+        }
+        self
+    }
+
+    /// Removes a route by pattern (functional builder)
+    ///
+    /// Returns new Router instance without the specified route.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::{Router, Route};
+    ///
+    /// let router = Router::new()
+    ///     .with_route(Route::from_path("pages/about.rhtml", "pages"))
+    ///     .without_route("/about");
+    /// ```
+    pub fn without_route(mut self, pattern: &str) -> Self {
+        self.remove_route_internal(pattern);
+        self
+    }
+
+    /// Sorts routes by priority (functional builder)
+    ///
+    /// Note: Routes are automatically sorted when added via `with_route()`,
+    /// so this method is rarely needed unless routes are modified externally.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::Router;
+    ///
+    /// let router = Router::new().with_sorted_routes();
+    /// ```
+    pub fn with_sorted_routes(mut self) -> Self {
+        self.routes.sort_by_key(|r| r.priority);
+        self
+    }
+
+    // ========================================================================
+    // Deprecated Mutable Methods (for backward compatibility)
+    // ========================================================================
+
+    /// Configures case sensitivity for route matching
+    ///
+    /// # Deprecated
+    ///
+    /// Use `with_case_sensitivity()` for functional programming style.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::Router;
+    ///
+    /// // Old style (deprecated)
+    /// let mut router = Router::new();
+    /// router.set_case_insensitive(true);
+    ///
+    /// // New style (functional)
+    /// let router = Router::new()
+    ///     .with_case_sensitivity(true);
+    /// ```
+    #[deprecated(
+        since = "0.2.0",
+        note = "Use with_case_sensitivity() for functional programming style"
+    )]
+    pub fn set_case_insensitive(&mut self, case_insensitive: bool) {
+        self.case_insensitive = case_insensitive;
+    }
+
+    /// Adds a route to the router
+    ///
+    /// Routes are automatically sorted by priority after addition.
+    /// Layout and error page routes are stored in separate collections.
+    /// Named layouts are stored both by pattern and by name for O(1) lookup.
+    /// Named routes are stored for URL generation (Phase 3.2).
+    ///
+    /// # Deprecated
+    ///
+    /// Use `with_route()` for functional programming style.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::{Router, Route};
+    ///
+    /// // Old style (deprecated)
     /// let mut router = Router::new();
     /// router.add_route(Route::from_path("pages/about.rhtml", "pages"));
+    ///
+    /// // New style (functional)
+    /// let router = Router::new()
+    ///     .with_route(Route::from_path("pages/about.rhtml", "pages"));
     /// ```
+    #[deprecated(since = "0.2.0", note = "Use with_route() for functional programming style")]
     pub fn add_route(&mut self, route: Route) {
+        self.add_route_internal(&route);
+    }
+
+    /// Internal helper for adding routes (used by both functional and mutable APIs)
+    fn add_route_internal(&mut self, route: &Route) {
         // Handle nolayout markers first
         if route.is_nolayout_marker {
             self.nolayout_patterns.insert(route.pattern.clone());
@@ -1106,19 +1297,19 @@ impl Router {
 
             // Also store in named_layouts if it has a name
             if let Some(ref name) = route.layout_name {
-                self.named_layouts.insert(name.clone(), route);
+                self.named_layouts.insert(name.clone(), route.clone());
             }
         } else if route.is_error_page {
-            self.error_pages.insert(route.pattern.clone(), route);
+            self.error_pages.insert(route.pattern.clone(), route.clone());
         } else if route.is_loading {
             // Phase 4.3: Loading UI pages
-            self.loading_pages.insert(route.pattern.clone(), route);
+            self.loading_pages.insert(route.pattern.clone(), route.clone());
         } else if route.is_template {
             // Phase 4.4: Template pages
-            self.templates.insert(route.pattern.clone(), route);
+            self.templates.insert(route.pattern.clone(), route.clone());
         } else if route.is_not_found {
             // Phase 4.5: Not-found pages
-            self.not_found_pages.insert(route.pattern.clone(), route);
+            self.not_found_pages.insert(route.pattern.clone(), route.clone());
         } else if route.is_parallel_route {
             // Phase 5.1: Parallel routes
             // Store by pattern -> slot -> route
@@ -1126,15 +1317,15 @@ impl Router {
                 self.parallel_routes
                     .entry(route.pattern.clone())
                     .or_insert_with(HashMap::new)
-                    .insert(slot.clone(), route);
+                    .insert(slot.clone(), route.clone());
             }
         } else if route.is_intercepting {
             // Phase 5.2: Intercepting routes
             self.intercepting_routes
-                .insert(route.pattern.clone(), route);
+                .insert(route.pattern.clone(), route.clone());
         } else {
             // Regular route
-            self.routes.push(route);
+            self.routes.push(route.clone());
             self.routes.sort_by_key(|r| r.priority);
         }
     }
@@ -1143,7 +1334,33 @@ impl Router {
     ///
     /// Removes the route from all collections (routes, layouts, named_layouts, named_routes,
     /// error_pages, loading_pages, templates, not_found_pages, parallel_routes, intercepting_routes)
+    ///
+    /// # Deprecated
+    ///
+    /// Use `without_route()` for functional programming style.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::{Router, Route};
+    ///
+    /// // Old style (deprecated)
+    /// let mut router = Router::new();
+    /// router.add_route(Route::from_path("pages/about.rhtml", "pages"));
+    /// router.remove_route("/about");
+    ///
+    /// // New style (functional)
+    /// let router = Router::new()
+    ///     .with_route(Route::from_path("pages/about.rhtml", "pages"))
+    ///     .without_route("/about");
+    /// ```
+    #[deprecated(since = "0.2.0", note = "Use without_route() for functional programming style")]
     pub fn remove_route(&mut self, pattern: &str) {
+        self.remove_route_internal(pattern);
+    }
+
+    /// Internal helper for removing routes (used by both functional and mutable APIs)
+    fn remove_route_internal(&mut self, pattern: &str) {
         // Remove from routes and also from named_routes if it has a name
         if let Some(pos) = self.routes.iter().position(|r| r.pattern == pattern) {
             let route = &self.routes[pos];
@@ -1172,9 +1389,34 @@ impl Router {
     ///
     /// Note: Routes are automatically sorted when added via `add_route()`,
     /// so this method is rarely needed unless routes are modified externally.
+    ///
+    /// # Deprecated
+    ///
+    /// Use `with_sorted_routes()` for functional programming style.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rhtmx_router::Router;
+    ///
+    /// // Old style (deprecated)
+    /// let mut router = Router::new();
+    /// router.sort_routes();
+    ///
+    /// // New style (functional)
+    /// let router = Router::new().with_sorted_routes();
+    /// ```
+    #[deprecated(
+        since = "0.2.0",
+        note = "Use with_sorted_routes() for functional programming style"
+    )]
     pub fn sort_routes(&mut self) {
         self.routes.sort_by_key(|r| r.priority);
     }
+
+    // ========================================================================
+    // Route Matching and Lookup Methods
+    // ========================================================================
 
     /// Helper function to recursively search for layouts or error pages
     ///

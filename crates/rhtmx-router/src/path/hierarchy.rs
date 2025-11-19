@@ -57,6 +57,18 @@ impl<'a> Iterator for PathHierarchy<'a> {
     ///
     /// Pure function: given same state, produces same output.
     ///
+    /// # Mutable State Note
+    ///
+    /// **The mutation of `self.current` is acceptable and necessary:**
+    /// - Required by the `Iterator` trait signature (`fn next(&mut self)`)
+    /// - Mutation is **encapsulated** within the iterator (not exposed externally)
+    /// - Each call to `next()` is **deterministic** given the current state
+    /// - Follows the functional principle of **state transitions** (old state → new state)
+    /// - Enables **lazy evaluation** without heap allocations
+    ///
+    /// This is a standard functional programming pattern where an iterator
+    /// maintains internal state while appearing pure from the caller's perspective.
+    ///
     /// # Algorithm
     ///
     /// 1. If at root ("/"), stop iteration

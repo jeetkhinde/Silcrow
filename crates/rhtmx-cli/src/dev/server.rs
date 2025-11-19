@@ -153,7 +153,7 @@ async fn render_route(state: &AppState, route: &str) -> Response {
 
     // Render with layout
     match renderer.render_with_layout(&layout_template.content, &page_template.content) {
-        Ok(html) => Html(html).into_response(),
+        Ok(result) => Html(result.html).into_response(),
         Err(e) => error_response(500, "Render Error", &format!("{}", e)),
     }
 }

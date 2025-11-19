@@ -66,22 +66,23 @@ impl RequestContext {
         }
     }
 
-    /// Parse cookies from Cookie header
+    /// Parse cookies from Cookie header (functional style)
     fn parse_cookies(headers: &HeaderMap) -> HashMap<String, String> {
-        let mut cookies = HashMap::new();
-
-        if let Some(cookie_header) = headers.get("cookie") {
-            if let Ok(cookie_str) = cookie_header.to_str() {
-                for cookie in cookie_str.split(';') {
-                    let cookie = cookie.trim();
-                    if let Some((key, value)) = cookie.split_once('=') {
-                        cookies.insert(key.to_string(), value.to_string());
-                    }
-                }
-            }
-        }
-
-        cookies
+        headers
+            .get("cookie")
+            .and_then(|cookie_header| cookie_header.to_str().ok())
+            .map(|cookie_str| {
+                cookie_str
+                    .split(';')
+                    .filter_map(|cookie| {
+                        cookie
+                            .trim()
+                            .split_once('=')
+                            .map(|(key, value)| (key.to_string(), value.to_string()))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Get a cookie value
@@ -96,11 +97,9 @@ impl RequestContext {
 
     /// Check if request accepts JSON
     pub fn accepts_json(&self) -> bool {
-        if let Some(accept) = self.get_header("accept") {
-            accept.contains("application/json") || accept.contains("json")
-        } else {
-            false
-        }
+        self.get_header("accept")
+            .map(|accept| accept.contains("application/json") || accept.contains("json"))
+            .unwrap_or(false)
     }
 
     /// Check if request wants a partial/fragment response (without layout)
@@ -109,22 +108,9 @@ impl RequestContext {
     /// - HX-Request header is present (HTMX request)
     /// - X-Partial header is present
     pub fn wants_partial(&self) -> bool {
-        // Check query parameter
-        if self.query.get("partial") == Some(&"true".to_string()) {
-            return true;
-        }
-
-        // Check HTMX header
-        if self.get_header("hx-request").is_some() {
-            return true;
-        }
-
-        // Check X-Partial header
-        if self.get_header("x-partial").is_some() {
-            return true;
-        }
-
-        false
+        self.query.get("partial") == Some(&"true".to_string())
+            || self.get_header("hx-request").is_some()
+            || self.get_header("x-partial").is_some()
     }
 
     /// Check if this is an HTMX request
@@ -201,9 +187,9 @@ impl QueryParams {
 /// Form data from POST/PUT requests
 #[derive(Debug, Clone, Default)]
 pub struct FormData {
-    fields: HashMap<String, String>,
-    raw_json: Option<JsonValue>,
-    validation_errors: HashMap<String, String>,
+    pub fields: HashMap<String, String>,
+    pub raw_json: Option<JsonValue>,
+    validation_errors: HashMap<String, Vec<String>>,
 }
 
 impl FormData {
@@ -216,42 +202,51 @@ impl FormData {
         }
     }
 
-    /// Create from form fields with automatic trimming
+    /// Create from form fields with automatic trimming (functional style)
     pub fn from_fields(fields: HashMap<String, String>) -> Self {
-        // Trim all string values by default
-        let trimmed_fields = fields
-            .into_iter()
-            .map(|(k, v)| (k, v.trim().to_string()))
-            .collect();
-
         Self {
-            fields: trimmed_fields,
+            fields: fields
+                .into_iter()
+                .map(|(k, v)| (k, v.trim().to_string()))
+                .collect(),
             raw_json: None,
             validation_errors: HashMap::new(),
         }
     }
 
-    /// Create from JSON
+    /// Create from JSON (functional style)
     pub fn from_json(json: JsonValue) -> Self {
-        let mut fields = HashMap::new();
-
-        // If JSON is an object, extract fields
-        if let JsonValue::Object(map) = &json {
-            for (key, value) in map {
-                if let Some(s) = value.as_str() {
-                    // Trim string values
-                    fields.insert(key.clone(), s.trim().to_string());
-                } else {
-                    fields.insert(key.clone(), value.to_string());
-                }
-            }
-        }
+        let fields = if let JsonValue::Object(map) = &json {
+            map.iter()
+                .map(|(key, value)| {
+                    let field_value = value
+                        .as_str()
+                        .map(|s| s.trim().to_string())
+                        .unwrap_or_else(|| value.to_string());
+                    (key.clone(), field_value)
+                })
+                .collect()
+        } else {
+            HashMap::new()
+        };
 
         Self {
             fields,
             raw_json: Some(json),
             validation_errors: HashMap::new(),
         }
+    }
+
+    /// Builder pattern: Set validation errors (functional style)
+    pub fn with_validation_errors(mut self, errors: HashMap<String, Vec<String>>) -> Self {
+        self.validation_errors = errors;
+        self
+    }
+
+    /// Set validation errors (deprecated - use with_validation_errors for FP style)
+    #[deprecated(note = "Use with_validation_errors() for functional programming style")]
+    pub fn set_validation_errors(&mut self, errors: HashMap<String, Vec<String>>) {
+        self.validation_errors = errors;
     }
 
     /// Get a form field value
@@ -289,18 +284,20 @@ impl FormData {
         self.fields.is_empty() && self.raw_json.is_none()
     }
 
-    /// Set validation errors
-    pub fn set_validation_errors(&mut self, errors: HashMap<String, String>) {
-        self.validation_errors = errors;
-    }
-
     /// Get validation errors
-    pub fn validation_errors(&self) -> &HashMap<String, String> {
+    pub fn validation_errors(&self) -> &HashMap<String, Vec<String>> {
         &self.validation_errors
     }
 
-    /// Get error for a specific field
+    /// Get error for a specific field (returns first error if multiple)
     pub fn get_error(&self, field: &str) -> Option<&String> {
+        self.validation_errors
+            .get(field)
+            .and_then(|errors| errors.first())
+    }
+
+    /// Get all errors for a specific field
+    pub fn get_errors(&self, field: &str) -> Option<&Vec<String>> {
         self.validation_errors.get(field)
     }
 
@@ -315,30 +312,24 @@ impl FormData {
     }
 
     /// Parse into a validated struct
-    pub fn parse<T>(&self) -> Result<T, HashMap<String, String>>
+    pub fn parse<T>(&self) -> Result<T, HashMap<String, Vec<String>>>
     where
         T: serde::de::DeserializeOwned + crate::validation::Validate,
     {
         // First parse the data
         let parsed: T = if let Some(json) = &self.raw_json {
-            serde_json::from_value(json.clone())
-                .map_err(|e| {
-                    let mut errors = HashMap::new();
-                    errors.insert("_general".to_string(), e.to_string());
-                    errors
-                })?
+            serde_json::from_value(json.clone()).map_err(|e| {
+                let mut errors = HashMap::new();
+                errors.insert("_general".to_string(), vec![e.to_string()]);
+                errors
+            })?
         } else {
             // Convert fields to JSON and parse
-            let json = serde_json::to_value(&self.fields)
+            serde_json::to_value(&self.fields)
+                .and_then(serde_json::from_value)
                 .map_err(|e| {
                     let mut errors = HashMap::new();
-                    errors.insert("_general".to_string(), e.to_string());
-                    errors
-                })?;
-            serde_json::from_value(json)
-                .map_err(|e| {
-                    let mut errors = HashMap::new();
-                    errors.insert("_general".to_string(), e.to_string());
+                    errors.insert("_general".to_string(), vec![e.to_string()]);
                     errors
                 })?
         };
@@ -434,14 +425,44 @@ mod tests {
     }
 
     #[test]
-    fn test_form_data_validation_errors() {
+    fn test_form_data_validation_errors_builder_pattern() {
         let form = FormData::new();
         assert!(!form.has_errors());
         assert!(form.get_error("name").is_none());
 
         let mut errors = HashMap::new();
-        errors.insert("name".to_string(), "Name is required".to_string());
-        errors.insert("email".to_string(), "Invalid email".to_string());
+        errors.insert("name".to_string(), vec!["Name is required".to_string()]);
+        errors.insert(
+            "email".to_string(),
+            vec!["Invalid email".to_string(), "Email too long".to_string()],
+        );
+
+        // Use builder pattern (functional style)
+        let form = FormData::new().with_validation_errors(errors);
+
+        assert!(form.has_errors());
+        assert!(form.has_error("name"));
+        assert!(form.has_error("email"));
+        assert!(!form.has_error("age"));
+        assert_eq!(
+            form.get_error("name"),
+            Some(&"Name is required".to_string())
+        );
+        assert_eq!(
+            form.get_errors("email"),
+            Some(&vec![
+                "Invalid email".to_string(),
+                "Email too long".to_string()
+            ])
+        );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_form_data_validation_errors_deprecated() {
+        let mut errors = HashMap::new();
+        errors.insert("name".to_string(), vec!["Name is required".to_string()]);
+        errors.insert("email".to_string(), vec!["Invalid email".to_string()]);
 
         let mut form = FormData::new();
         form.set_validation_errors(errors);
@@ -450,7 +471,10 @@ mod tests {
         assert!(form.has_error("name"));
         assert!(form.has_error("email"));
         assert!(!form.has_error("age"));
-        assert_eq!(form.get_error("name"), Some(&"Name is required".to_string()));
+        assert_eq!(
+            form.get_error("name"),
+            Some(&"Name is required".to_string())
+        );
     }
 
     #[test]
@@ -500,5 +524,109 @@ mod tests {
         // We can't create a full context without a database, but we can test the parse method
         let cookies = RequestContext::parse_cookies(&headers);
         assert!(cookies.is_empty()); // No cookies in this test
+    }
+
+    #[test]
+    fn test_parse_cookies_functional_edge_cases() {
+        // Test empty cookie header
+        let headers = HeaderMap::new();
+        let cookies = RequestContext::parse_cookies(&headers);
+        assert!(cookies.is_empty());
+
+        // Test cookie with spaces
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "cookie",
+            "  token=xyz789  ;  lang=en  ".parse().unwrap(),
+        );
+        let cookies = RequestContext::parse_cookies(&headers);
+        assert_eq!(cookies.get("token"), Some(&"xyz789".to_string()));
+        assert_eq!(cookies.get("lang"), Some(&"en".to_string()));
+
+        // Test malformed cookie (no equals sign)
+        let mut headers = HeaderMap::new();
+        headers.insert("cookie", "valid=value; invalid; other=ok".parse().unwrap());
+        let cookies = RequestContext::parse_cookies(&headers);
+        assert_eq!(cookies.get("valid"), Some(&"value".to_string()));
+        assert_eq!(cookies.get("other"), Some(&"ok".to_string()));
+        assert_eq!(cookies.get("invalid"), None);
+    }
+
+    #[test]
+    fn test_accepts_json_functional() {
+        let query = QueryParams::new(HashMap::new());
+        let form = FormData::new();
+
+        // Test with JSON accept header
+        let mut headers = HeaderMap::new();
+        headers.insert("accept", "application/json".parse().unwrap());
+        let ctx = RequestContext::new(
+            Method::GET,
+            "/test".to_string(),
+            query.clone(),
+            form.clone(),
+            headers,
+            None,
+        );
+        assert!(ctx.accepts_json());
+
+        // Test without accept header
+        let headers = HeaderMap::new();
+        let ctx = RequestContext::new(
+            Method::GET,
+            "/test".to_string(),
+            query.clone(),
+            form.clone(),
+            headers,
+            None,
+        );
+        assert!(!ctx.accepts_json());
+    }
+
+    #[test]
+    fn test_wants_partial_functional() {
+        let form = FormData::new();
+
+        // Test with partial query param
+        let mut params = HashMap::new();
+        params.insert("partial".to_string(), "true".to_string());
+        let query = QueryParams::new(params);
+        let headers = HeaderMap::new();
+        let ctx = RequestContext::new(
+            Method::GET,
+            "/test".to_string(),
+            query,
+            form.clone(),
+            headers,
+            None,
+        );
+        assert!(ctx.wants_partial());
+
+        // Test with HTMX header
+        let query = QueryParams::new(HashMap::new());
+        let mut headers = HeaderMap::new();
+        headers.insert("hx-request", "true".parse().unwrap());
+        let ctx = RequestContext::new(
+            Method::GET,
+            "/test".to_string(),
+            query,
+            form.clone(),
+            headers,
+            None,
+        );
+        assert!(ctx.wants_partial());
+
+        // Test without any partial indicators
+        let query = QueryParams::new(HashMap::new());
+        let headers = HeaderMap::new();
+        let ctx = RequestContext::new(
+            Method::GET,
+            "/test".to_string(),
+            query,
+            form,
+            headers,
+            None,
+        );
+        assert!(!ctx.wants_partial());
     }
 }

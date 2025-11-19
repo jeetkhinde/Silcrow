@@ -405,7 +405,7 @@ async fn render_route(state: &AppState, route: &str, request_context: RequestCon
         if partial_name != "true" {
             // Named partial requested
             match renderer.render_named_partial(&page_template.content, partial_name) {
-                Ok(html) => return Html(html).into_response(),
+                Ok(result) => return Html(result.html).into_response(),
                 Err(_e) => {
                     // List available partials for helpful error message
                     let available = renderer.list_partials(&page_template.content);
@@ -435,7 +435,7 @@ async fn render_route(state: &AppState, route: &str, request_context: RequestCon
         Some(LayoutDirective::None) => {
             // @layout(false) - explicitly no layout
             match renderer.render_partial(&page_template.content) {
-                Ok(html) => Html(html).into_response(),
+                Ok(result) => Html(result.html).into_response(),
                 Err(e) => error_response(500, "Render Error", &format!("{}", e)),
             }
         }
@@ -453,7 +453,7 @@ async fn render_route(state: &AppState, route: &str, request_context: RequestCon
                 }
             };
             match renderer.render_with_layout(&custom_layout.content, &page_template.content) {
-                Ok(html) => Html(html).into_response(),
+                Ok(result) => Html(result.html).into_response(),
                 Err(e) => error_response(500, "Render Error", &format!("{}", e)),
             }
         }
@@ -465,14 +465,14 @@ async fn render_route(state: &AppState, route: &str, request_context: RequestCon
             if is_partial_file || wants_partial {
                 // Render as partial (without layout)
                 match renderer.render_partial(&page_template.content) {
-                    Ok(html) => Html(html).into_response(),
+                    Ok(result) => Html(result.html).into_response(),
                     Err(e) => error_response(500, "Render Error", &format!("{}", e)),
                 }
             } else {
                 // Render the page with default layout (HTML response)
                 match renderer.render_with_layout(&layout_template.content, &page_template.content)
                 {
-                    Ok(html) => Html(html).into_response(),
+                    Ok(result) => Html(result.html).into_response(),
                     Err(e) => error_response(500, "Render Error", &format!("{}", e)),
                 }
             }
@@ -539,7 +539,7 @@ async fn render_route_direct(
     if let Some(partial_name) = request_context.query.get("partial") {
         if partial_name != "true" {
             match renderer.render_named_partial(&page_template.content, partial_name) {
-                Ok(html) => return Html(html).into_response(),
+                Ok(result) => return Html(result.html).into_response(),
                 Err(_) => {
                     let available = renderer.list_partials(&page_template.content);
                     let available_str = if available.is_empty() {
@@ -568,7 +568,7 @@ async fn render_route_direct(
         Some(LayoutDirective::None) => {
             // @layout(false) - explicitly no layout
             match renderer.render_partial(&page_template.content) {
-                Ok(html) => Html(html).into_response(),
+                Ok(result) => Html(result.html).into_response(),
                 Err(e) => error_response(500, "Render Error", &format!("{}", e)),
             }
         }
@@ -586,7 +586,7 @@ async fn render_route_direct(
                 }
             };
             match renderer.render_with_layout(&custom_layout.content, &page_template.content) {
-                Ok(html) => Html(html).into_response(),
+                Ok(result) => Html(result.html).into_response(),
                 Err(e) => error_response(500, "Render Error", &format!("{}", e)),
             }
         }
@@ -598,13 +598,13 @@ async fn render_route_direct(
             if is_partial_file || wants_partial {
                 // Render as partial (without layout)
                 match renderer.render_partial(&page_template.content) {
-                    Ok(html) => Html(html).into_response(),
+                    Ok(result) => Html(result.html).into_response(),
                     Err(e) => error_response(500, "Render Error", &format!("{}", e)),
                 }
             } else {
                 match renderer.render_with_layout(&layout_template.content, &page_template.content)
                 {
-                    Ok(html) => Html(html).into_response(),
+                    Ok(result) => Html(result.html).into_response(),
                     Err(e) => error_response(500, "Render Error", &format!("{}", e)),
                 }
             }
@@ -775,10 +775,10 @@ async fn custom_error_response(
 
         // Render error page (without layout, as error pages should be standalone)
         match renderer.render_partial(&error_page_clone.content) {
-            Ok(html) => {
+            Ok(result) => {
                 return (
                     axum::http::StatusCode::from_u16(status).unwrap(),
-                    Html(html),
+                    Html(result.html),
                 )
                     .into_response();
             }

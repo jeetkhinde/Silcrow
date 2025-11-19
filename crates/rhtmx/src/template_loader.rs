@@ -1,5 +1,6 @@
 // File: src/template_loader.rs
 // Purpose: Loads rhtmx templates from the pages/ directory
+// Refactored to follow functional programming principles
 
 use anyhow::{Context, Result};
 // use rhtmx_parser::{CssParser, ScopedCss};
@@ -14,7 +15,7 @@ pub struct Template {
     pub path: PathBuf,
     pub content: String,
     pub scoped_css: Option<()>, // TODO: Implement CSS parsing
-    pub partials: Vec<String>, // Names of partials defined in this template
+    pub partials: Vec<String>,  // Names of partials defined in this template
 }
 
 /// Template loader that reads and caches rhtmx files
@@ -25,7 +26,12 @@ pub struct TemplateLoader {
     templates: HashMap<String, Template>,
     components: HashMap<String, Template>,
     router: Router,
+    case_insensitive: bool,
 }
+
+// ============================================================================
+// Constructor Methods
+// ============================================================================
 
 impl TemplateLoader {
     /// Create a new template loader with default directories and case-sensitive routing
@@ -36,6 +42,7 @@ impl TemplateLoader {
             templates: HashMap::new(),
             components: HashMap::new(),
             router: Router::new(),
+            case_insensitive: false,
         }
     }
 
@@ -51,258 +58,168 @@ impl TemplateLoader {
             templates: HashMap::new(),
             components: HashMap::new(),
             router: Router::with_case_insensitive(case_insensitive),
+            case_insensitive,
         }
     }
 
-    /// Create a new template loader with case-insensitive routing (legacy)
-    pub fn with_case_insensitive(pages_dir: impl Into<PathBuf>, case_insensitive: bool) -> Self {
+    /// Create a new template loader with case-insensitive routing
+    /// Use with_config() for more control, or chain .with_case_insensitive() on new()
+    pub fn with_case_insensitive_routing(
+        pages_dir: impl Into<PathBuf>,
+        case_insensitive: bool,
+    ) -> Self {
         Self {
             pages_dir: pages_dir.into(),
             components_dir: "components".into(),
             templates: HashMap::new(),
             components: HashMap::new(),
             router: Router::with_case_insensitive(case_insensitive),
+            case_insensitive,
         }
     }
+}
 
-    /// Set case-insensitive mode
-    pub fn set_case_insensitive(&mut self, case_insensitive: bool) {
-        self.router.set_case_insensitive(case_insensitive);
-    }
+// ============================================================================
+// Functional Builder Methods (Immutable API)
+// ============================================================================
 
-    /// Load all templates from the pages directory
-    pub fn load_all(&mut self) -> Result<()> {
-        self.load_directory(&self.pages_dir.clone())?;
-        self.load_components()?;
-
-        // Sort routes by priority after loading all templates
-        self.router.sort_routes();
-
-        Ok(())
-    }
-
-    /// Load all components from the components directory
-    fn load_components(&mut self) -> Result<()> {
+impl TemplateLoader {
+    /// Load all templates from the pages directory (functional style)
+    /// Returns a new TemplateLoader instance with loaded templates
+    pub fn with_templates_from_pages(self) -> Result<Self> {
+        let pages_dir = self.pages_dir.clone();
         let components_dir = self.components_dir.clone();
-        if !components_dir.exists() {
-            return Ok(());
+
+        // Load templates from pages directory
+        let template_data = load_templates_from_dir_pure(&pages_dir, &pages_dir)?;
+
+        // Load components
+        let component_data = load_components_from_dir_pure(&components_dir)?;
+
+        // Build new instance with loaded data
+        let mut new_self = self;
+        for (key, template, route) in template_data {
+            new_self = new_self.with_template(key, template).with_route(route);
         }
 
-        for entry in fs::read_dir(&components_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.extension().and_then(|s| s.to_str()) == Some("rhtmx") {
-                // Load component file
-                self.load_component(&path)?;
-            }
+        for (name, template) in component_data {
+            new_self = new_self.with_component(name, template);
         }
 
-        Ok(())
+        // Sort routes by priority
+        new_self.router.sort_routes();
+
+        Ok(new_self)
     }
 
-    /// Load a single component file
-    fn load_component(&mut self, path: &Path) -> Result<()> {
-        let content = fs::read_to_string(path)
-            .with_context(|| format!("Failed to read component: {:?}", path))?;
+    /// Add a single template with its route pattern (builder pattern)
+    pub fn with_template(mut self, key: String, template: Template) -> Self {
+        self.templates.insert(key, template);
+        self
+    }
 
-        // Component name is the file name without extension
-        let name = path
-            .file_stem()
-            .and_then(|s| s.to_str())
+    /// Add multiple templates at once (builder pattern)
+    pub fn with_templates(mut self, templates: HashMap<String, Template>) -> Self {
+        self.templates.extend(templates);
+        self
+    }
+
+    /// Add a single component (builder pattern)
+    pub fn with_component(mut self, name: String, template: Template) -> Self {
+        self.components.insert(name, template);
+        self
+    }
+
+    /// Add multiple components at once (builder pattern)
+    pub fn with_components(mut self, components: HashMap<String, Template>) -> Self {
+        self.components.extend(components);
+        self
+    }
+
+    /// Add a route to the router (builder pattern)
+    pub fn with_route(mut self, route: Route) -> Self {
+        self.router.add_route(route);
+        self
+    }
+
+    /// Set case-insensitive mode (builder pattern)
+    pub fn with_case_insensitive(mut self, case_insensitive: bool) -> Self {
+        self.router.set_case_insensitive(case_insensitive);
+        self.case_insensitive = case_insensitive;
+        self
+    }
+
+    /// Reload a specific template, returning a new instance
+    pub fn with_reloaded_template(self, path: &Path) -> Result<Self> {
+        let is_component = path
+            .to_str()
             .unwrap_or("")
-            .to_string();
+            .contains(&format!("/{}/", &self.components_dir.to_string_lossy()))
+            || path
+                .to_str()
+                .unwrap_or("")
+                .contains(&format!("\\{}\\", &self.components_dir.to_string_lossy()));
 
-        // Process CSS and extract partials info
-        // TODO: Implement CSS parsing with CssParser
-        let partials = vec![]; // Placeholder for extracting partials
-        let content_without_css = content.clone();
-        let scoped_css = None;
+        if is_component {
+            self.with_reloaded_component(path)
+        } else {
+            let relative_path = normalize_path(path);
 
-        let template = Template {
-            path: path.to_path_buf(),
-            content: content_without_css.clone(),
-            scoped_css,
-            partials: partials.clone(),
+            // Load the new template
+            let pages_dir = self.pages_dir.clone();
+            let (key, template, route) = load_template_pure(&relative_path, &pages_dir)?;
+
+            // Remove old template and route
+            let mut new_self = self;
+            new_self.templates.remove(&route.pattern);
+            new_self.router.remove_route(&route.pattern);
+
+            // Add new template and route
+            new_self = new_self.with_template(key, template).with_route(route);
+
+            // Re-sort routes
+            new_self.router.sort_routes();
+
+            Ok(new_self)
+        }
+    }
+
+    /// Reload a specific component, returning a new instance
+    pub fn with_reloaded_component(self, path: &Path) -> Result<Self> {
+        let relative_path = normalize_path(path);
+
+        let (name, template) = load_component_pure(&relative_path)?;
+
+        // Remove old component and add new one
+        let mut new_self = self;
+        new_self.components.remove(&name);
+        new_self = new_self.with_component(name, template);
+
+        Ok(new_self)
+    }
+
+    /// Reload all templates and components, returning a new instance
+    pub fn with_reloaded_all(self) -> Result<Self> {
+        // Create a fresh instance with the same config
+        let new_loader = Self {
+            pages_dir: self.pages_dir.clone(),
+            components_dir: self.components_dir.clone(),
+            templates: HashMap::new(),
+            components: HashMap::new(),
+            router: Router::with_case_insensitive(self.case_insensitive),
+            case_insensitive: self.case_insensitive,
         };
 
-        self.components.insert(name.clone(), template.clone());
-
-        // If any components in this file are marked as @partial, also register them as routes
-        for partial_name in &partials {
-            let partial_route = format!("/partials/{}", partial_name.to_lowercase());
-
-            // Create a partial template that can be accessed as a route
-            let partial_template = Template {
-                path: path.to_path_buf(),
-                content: content_without_css.clone(),
-                scoped_css,
-                partials: vec![partial_name.clone()],
-            };
-
-            self.templates
-                .insert(partial_route.clone(), partial_template);
-
-            println!(
-                "📄 Registered partial route: {} -> {} (from component file)",
-                partial_route, partial_name
-            );
-        }
-
-        println!(
-            "🧩 Loaded component: {} -> {:?}{}",
-            name,
-            path.file_name().unwrap(),
-            if !partials.is_empty() {
-                format!(" (with partials: {})", partials.join(", "))
-            } else {
-                String::new()
-            }
-        );
-
-        Ok(())
+        // Load all templates and components
+        new_loader.with_templates_from_pages()
     }
+}
 
-    /// Recursively load templates from a directory
-    fn load_directory(&mut self, dir: &Path) -> Result<()> {
-        if !dir.exists() {
-            return Ok(());
-        }
+// ============================================================================
+// Pure Query Methods (Read-only)
+// ============================================================================
 
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.is_dir() {
-                // Recursively load subdirectories
-                self.load_directory(&path)?;
-            } else if path.extension().and_then(|s| s.to_str()) == Some("rhtmx") {
-                // Load .rhtmx files
-                self.load_template(&path)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Load a single template file
-    fn load_template(&mut self, path: &Path) -> Result<()> {
-        let content = fs::read_to_string(path)
-            .with_context(|| format!("Failed to read template: {:?}", path))?;
-
-        // Create a Route for the router
-        let route_obj = Route::from_path(
-            path.to_str().unwrap_or(""),
-            self.pages_dir.to_str().unwrap_or("pages"),
-        );
-
-        // Process CSS and extract partials info
-        // TODO: Implement CSS parsing with CssParser
-        let partials = vec![]; // Placeholder for extracting partials
-        let content_without_css = content.clone();
-        let scoped_css = None;
-
-        let template = Template {
-            path: path.to_path_buf(),
-            content: content_without_css,
-            scoped_css,
-            partials,
-        };
-
-        // For layouts, only store with the old-style key (e.g., "/_layout", "/users/_layout")
-        // For error pages, only store with the old-style key (e.g., "/_error", "/users/_error")
-        // For pages, store with both pattern key and old-style key
-        if route_obj.is_layout {
-            // Layouts: only use old-style key to avoid collision with pages
-            let old_route = self.path_to_route(path);
-            self.templates.insert(old_route, template);
-        } else if route_obj.is_error_page {
-            // Error pages: only use old-style key to avoid collision with pages
-            let old_route = self.path_to_route(path);
-            self.templates.insert(old_route, template);
-        } else {
-            // Pages: store with pattern key
-            self.templates
-                .insert(route_obj.pattern.clone(), template.clone());
-
-            // Also store using old key format for backward compatibility
-            let old_route = self.path_to_route(path);
-            if old_route != route_obj.pattern {
-                self.templates.insert(old_route, template);
-            }
-        }
-
-        // Determine what key this will be stored with for clarity
-        let storage_key = if route_obj.is_layout || route_obj.is_error_page {
-            self.path_to_route(path)
-        } else {
-            route_obj.pattern.clone()
-        };
-
-        println!(
-            "📄 Loaded template: {} (stored as: {}) -> {:?} (priority: {})",
-            route_obj.pattern,
-            storage_key,
-            path.file_name().unwrap(),
-            route_obj.priority
-        );
-
-        // Add to router
-        self.router.add_route(route_obj);
-
-        Ok(())
-    }
-
-    /// Convert file path to route (e.g., pages/index.rhtmx -> "/")
-    fn path_to_route(&self, path: &Path) -> String {
-        let relative = path.strip_prefix(&self.pages_dir).unwrap_or(path);
-
-        let route = relative
-            .with_extension("")
-            .to_string_lossy()
-            .replace('\\', "/");
-
-        // Handle "_error" files specially - keep the _error suffix
-        if route == "_error" {
-            "/_error".to_string()
-        } else if route.ends_with("/_error") {
-            // Ensure leading slash
-            if route.starts_with('/') {
-                route
-            } else {
-                format!("/{}", route)
-            }
-        }
-        // Handle "_layout" files specially - keep the _layout suffix
-        else if route == "_layout" {
-            "/_layout".to_string()
-        } else if route.ends_with("/_layout") {
-            // Ensure leading slash
-            if route.starts_with('/') {
-                route
-            } else {
-                format!("/{}", route)
-            }
-        }
-        // Convert "index" to "/" and "users/index" to "/users"
-        else if route == "index" || route.is_empty() {
-            "/".to_string()
-        } else if route.ends_with("/index") {
-            let without_index = route[..route.len() - 6].to_string(); // Remove "/index"
-            if without_index.is_empty() {
-                "/".to_string()
-            } else if without_index.starts_with('/') {
-                without_index
-            } else {
-                format!("/{}", without_index)
-            }
-        } else if route.starts_with('/') {
-            route
-        } else {
-            format!("/{}", route)
-        }
-    }
-
+impl TemplateLoader {
     /// Get a template by route
     pub fn get(&self, route: &str) -> Option<&Template> {
         self.templates.get(route)
@@ -372,77 +289,271 @@ impl TemplateLoader {
         self.templates.len()
     }
 
+    /// Convert file path to route (e.g., pages/index.rhtmx -> "/")
+    /// This is a pure function that doesn't modify state
+    fn path_to_route(&self, path: &Path) -> String {
+        path_to_route_pure(path, &self.pages_dir)
+    }
+}
+
+// ============================================================================
+// Deprecated Mutable Methods (for backward compatibility)
+// ============================================================================
+
+impl TemplateLoader {
+    /// Load all templates from the pages directory
+    #[deprecated(
+        note = "Use with_templates_from_pages() for functional programming style. This method will be removed in a future version."
+    )]
+    pub fn load_all(&mut self) -> Result<()> {
+        let pages_dir = self.pages_dir.clone();
+        let case_insensitive = self.case_insensitive;
+        let new_self = std::mem::replace(
+            self,
+            Self::with_case_insensitive_routing(&pages_dir, case_insensitive),
+        )
+        .with_templates_from_pages()?;
+        *self = new_self;
+        Ok(())
+    }
+
+    /// Set case-insensitive mode
+    #[deprecated(
+        note = "Use with_case_insensitive() for functional programming style. This method will be removed in a future version."
+    )]
+    pub fn set_case_insensitive(&mut self, case_insensitive: bool) {
+        self.router.set_case_insensitive(case_insensitive);
+        self.case_insensitive = case_insensitive;
+    }
+
     /// Reload a specific template file
+    #[deprecated(
+        note = "Use with_reloaded_template() for functional programming style. This method will be removed in a future version."
+    )]
     pub fn reload_template(&mut self, path: &Path) -> Result<()> {
-        if path.to_str().unwrap_or("").contains("/components/")
-            || path.to_str().unwrap_or("").contains("\\components\\")
-        {
-            self.reload_component(path)?;
-        } else {
-            // Convert absolute path to relative if needed
-            let relative_path = if path.is_absolute() {
-                // Try to strip current directory
-                let current_dir = std::env::current_dir().unwrap_or_default();
-                path.strip_prefix(&current_dir).unwrap_or(path)
-            } else {
-                path
-            };
-
-            // Remove old template
-            let route_obj = Route::from_path(
-                relative_path.to_str().unwrap_or(""),
-                self.pages_dir.to_str().unwrap_or("pages"),
-            );
-            self.templates.remove(&route_obj.pattern);
-
-            // Remove from router
-            self.router.remove_route(&route_obj.pattern);
-
-            // Reload template using relative path
-            self.load_template(relative_path)?;
-
-            // Re-sort routes
-            self.router.sort_routes();
-        }
+        let pages_dir = self.pages_dir.clone();
+        let case_insensitive = self.case_insensitive;
+        let new_self = std::mem::replace(
+            self,
+            Self::with_case_insensitive_routing(&pages_dir, case_insensitive),
+        )
+        .with_reloaded_template(path)?;
+        *self = new_self;
         Ok(())
     }
 
     /// Reload a specific component file
+    #[deprecated(
+        note = "Use with_reloaded_component() for functional programming style. This method will be removed in a future version."
+    )]
     pub fn reload_component(&mut self, path: &Path) -> Result<()> {
-        // Convert absolute path to relative if needed
-        let relative_path = if path.is_absolute() {
-            let current_dir = std::env::current_dir().unwrap_or_default();
-            path.strip_prefix(&current_dir).unwrap_or(path)
-        } else {
-            path
-        };
-
-        let name = relative_path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_string();
-
-        // Remove old component
-        self.components.remove(&name);
-
-        // Reload component using relative path
-        self.load_component(relative_path)?;
-
+        let pages_dir = self.pages_dir.clone();
+        let case_insensitive = self.case_insensitive;
+        let new_self = std::mem::replace(
+            self,
+            Self::with_case_insensitive_routing(&pages_dir, case_insensitive),
+        )
+        .with_reloaded_component(path)?;
+        *self = new_self;
         Ok(())
     }
 
     /// Reload all templates and components
+    #[deprecated(
+        note = "Use with_reloaded_all() for functional programming style. This method will be removed in a future version."
+    )]
     pub fn reload_all(&mut self) -> Result<()> {
-        // Clear all templates and components
-        self.templates.clear();
-        self.components.clear();
-        self.router = Router::new();
-
-        // Reload everything
-        self.load_all()?;
-
+        let pages_dir = self.pages_dir.clone();
+        let case_insensitive = self.case_insensitive;
+        let new_self = std::mem::replace(
+            self,
+            Self::with_case_insensitive_routing(&pages_dir, case_insensitive),
+        )
+        .with_reloaded_all()?;
+        *self = new_self;
         Ok(())
+    }
+}
+
+// ============================================================================
+// Pure Helper Functions (No I/O side effects on state)
+// ============================================================================
+
+/// Pure function to load all templates from a directory recursively
+/// Returns a vector of (key, template, route) tuples
+fn load_templates_from_dir_pure(
+    dir: &Path,
+    pages_dir: &Path,
+) -> Result<Vec<(String, Template, Route)>> {
+    let mut results = Vec::new();
+
+    if !dir.exists() {
+        return Ok(results);
+    }
+
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            // Recursively load subdirectories
+            let sub_results = load_templates_from_dir_pure(&path, pages_dir)?;
+            results.extend(sub_results);
+        } else if path.extension().and_then(|s| s.to_str()) == Some("rhtmx") {
+            // Load .rhtmx files
+            let template_data = load_template_pure(&path, pages_dir)?;
+            results.push(template_data);
+        }
+    }
+
+    Ok(results)
+}
+
+/// Pure function to load all components from the components directory
+/// Returns a HashMap of component name -> Template
+fn load_components_from_dir_pure(components_dir: &Path) -> Result<HashMap<String, Template>> {
+    let mut components = HashMap::new();
+
+    if !components_dir.exists() {
+        return Ok(components);
+    }
+
+    for entry in fs::read_dir(components_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.extension().and_then(|s| s.to_str()) == Some("rhtmx") {
+            let (name, template) = load_component_pure(&path)?;
+            components.insert(name, template);
+        }
+    }
+
+    Ok(components)
+}
+
+/// Pure function to load a single template file
+/// Returns (storage_key, template, route) tuple
+fn load_template_pure(path: &Path, pages_dir: &Path) -> Result<(String, Template, Route)> {
+    let content = fs::read_to_string(path)
+        .with_context(|| format!("Failed to read template: {:?}", path))?;
+
+    // Create a Route for the router
+    let route_obj = Route::from_path(
+        path.to_str().unwrap_or(""),
+        pages_dir.to_str().unwrap_or("pages"),
+    );
+
+    // Process CSS and extract partials info
+    // TODO: Implement CSS parsing with CssParser
+    let partials = vec![]; // Placeholder for extracting partials
+    let content_without_css = content;
+    let scoped_css = None;
+
+    let template = Template {
+        path: path.to_path_buf(),
+        content: content_without_css,
+        scoped_css,
+        partials,
+    };
+
+    // Determine storage key
+    let storage_key = if route_obj.is_layout || route_obj.is_error_page {
+        path_to_route_pure(path, pages_dir)
+    } else {
+        route_obj.pattern.clone()
+    };
+
+    Ok((storage_key, template, route_obj))
+}
+
+/// Pure function to load a single component file
+/// Returns (component_name, template) tuple
+fn load_component_pure(path: &Path) -> Result<(String, Template)> {
+    let content = fs::read_to_string(path)
+        .with_context(|| format!("Failed to read component: {:?}", path))?;
+
+    // Component name is the file name without extension
+    let name = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+
+    // Process CSS and extract partials info
+    // TODO: Implement CSS parsing with CssParser
+    let partials = vec![]; // Placeholder for extracting partials
+    let content_without_css = content;
+    let scoped_css = None;
+
+    let template = Template {
+        path: path.to_path_buf(),
+        content: content_without_css,
+        scoped_css,
+        partials,
+    };
+
+    Ok((name, template))
+}
+
+/// Pure function to convert file path to route (e.g., pages/index.rhtmx -> "/")
+fn path_to_route_pure(path: &Path, pages_dir: &Path) -> String {
+    let relative = path.strip_prefix(pages_dir).unwrap_or(path);
+
+    let route = relative
+        .with_extension("")
+        .to_string_lossy()
+        .replace('\\', "/");
+
+    // Handle "_error" files specially - keep the _error suffix
+    if route == "_error" {
+        "/_error".to_string()
+    } else if route.ends_with("/_error") {
+        // Ensure leading slash
+        if route.starts_with('/') {
+            route
+        } else {
+            format!("/{}", route)
+        }
+    }
+    // Handle "_layout" files specially - keep the _layout suffix
+    else if route == "_layout" {
+        "/_layout".to_string()
+    } else if route.ends_with("/_layout") {
+        // Ensure leading slash
+        if route.starts_with('/') {
+            route
+        } else {
+            format!("/{}", route)
+        }
+    }
+    // Convert "index" to "/" and "users/index" to "/users"
+    else if route == "index" || route.is_empty() {
+        "/".to_string()
+    } else if route.ends_with("/index") {
+        let without_index = route[..route.len() - 6].to_string(); // Remove "/index"
+        if without_index.is_empty() {
+            "/".to_string()
+        } else if without_index.starts_with('/') {
+            without_index
+        } else {
+            format!("/{}", without_index)
+        }
+    } else if route.starts_with('/') {
+        route
+    } else {
+        format!("/{}", route)
+    }
+}
+
+/// Helper function to normalize path (convert absolute to relative if needed)
+fn normalize_path(path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        let current_dir = std::env::current_dir().unwrap_or_default();
+        path.strip_prefix(&current_dir)
+            .unwrap_or(path)
+            .to_path_buf()
+    } else {
+        path.to_path_buf()
     }
 }
 
@@ -464,5 +575,61 @@ mod tests {
             loader.path_to_route(Path::new("pages/users/profile.rhtmx")),
             "/users/profile"
         );
+    }
+
+    #[test]
+    fn test_path_to_route_pure() {
+        let pages_dir = PathBuf::from("pages");
+
+        // Test cases
+        assert_eq!(
+            path_to_route_pure(Path::new("pages/index.rhtmx"), &pages_dir),
+            "/"
+        );
+        assert_eq!(
+            path_to_route_pure(Path::new("pages/about.rhtmx"), &pages_dir),
+            "/about"
+        );
+        assert_eq!(
+            path_to_route_pure(Path::new("pages/users/profile.rhtmx"), &pages_dir),
+            "/users/profile"
+        );
+    }
+
+    #[test]
+    fn test_builder_pattern() {
+        let loader = TemplateLoader::new("pages")
+            .with_case_insensitive(true)
+            .with_template(
+                "/test".to_string(),
+                Template {
+                    path: PathBuf::from("test.rhtmx"),
+                    content: "test content".to_string(),
+                    scoped_css: None,
+                    partials: vec![],
+                },
+            );
+
+        assert!(loader.get("/test").is_some());
+        assert_eq!(loader.get("/test").unwrap().content, "test content");
+    }
+
+    #[test]
+    fn test_immutable_api() {
+        let loader1 = TemplateLoader::new("pages");
+        let loader2 = loader1.clone().with_template(
+            "/new".to_string(),
+            Template {
+                path: PathBuf::from("new.rhtmx"),
+                content: "new content".to_string(),
+                scoped_css: None,
+                partials: vec![],
+            },
+        );
+
+        // Original loader should not have the new template
+        assert!(loader1.get("/new").is_none());
+        // New loader should have the template
+        assert!(loader2.get("/new").is_some());
     }
 }

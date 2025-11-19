@@ -4,6 +4,30 @@ use crate::types::*;
 use quote::{quote, TokenStream};
 use syn::{parse_str, Expr};
 
+/// Extracts a quoted value from HTML attributes using functional patterns.
+///
+/// # Functional Approach
+/// - Uses method chaining with `and_then` and `map` for composable transformations
+/// - Avoids manual index arithmetic and mutation
+/// - Returns `Option<String>` for explicit error handling
+///
+/// # Examples
+/// ```
+/// let attrs = r#"class="btn" r-show="isVisible" id="main""#;
+/// let value = extract_quoted_value(attrs, "r-show");
+/// assert_eq!(value, Some("isVisible".to_string()));
+/// ```
+fn extract_quoted_value(attributes: &str, directive: &str) -> Option<String> {
+    attributes
+        .find(&format!("{}=\"", directive))
+        .and_then(|start| {
+            let value_start = start + directive.len() + 2; // Skip directive="
+            attributes[value_start..]
+                .find('"')
+                .map(|end| attributes[value_start..value_start + end].to_string())
+        })
+}
+
 pub fn process_show_directive(
     condition: &str,
     element: &HtmlNode,
@@ -32,12 +56,15 @@ pub fn process_show_directive(
     }
 }
 
+/// Extracts the r-show directive value from HTML attributes.
+///
+/// Uses functional pattern matching instead of manual string manipulation.
+///
+/// # Examples
+/// ```
+/// let attrs = r#"<div r-show="user.active" class="panel">"#;
+/// assert_eq!(extract_show_directive(attrs), Some("user.active".to_string()));
+/// ```
 pub fn extract_show_directive(attributes: &str) -> Option<String> {
-    if let Some(start) = attributes.find(r#"r-show=""#) {
-        let start = start + 8; // length of 'r-show="'
-        if let Some(end) = attributes[start..].find('"') {
-            return Some(attributes[start..start + end].to_string());
-        }
-    }
-    None
+    extract_quoted_value(attributes, "r-show")
 }

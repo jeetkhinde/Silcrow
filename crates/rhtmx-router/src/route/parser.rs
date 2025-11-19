@@ -8,15 +8,172 @@ use std::collections::HashMap;
 use crate::{ParameterConstraint, PatternSegmentType};
 use super::pattern::classify_segment;
 
+/// Internal state accumulator for functional fold-based parsing
+///
+/// Pure functional design: all mutations are local to the fold accumulator.
+/// Each builder method returns a new/modified Self, enabling functional chaining.
+#[derive(Default)]
+struct ParseState {
+    pattern: String,
+    params: Vec<String>,
+    optional_params: Vec<String>,
+    dynamic_count: usize,
+    has_catch_all: bool,
+    param_constraints: HashMap<String, ParameterConstraint>,
+}
+
+impl ParseState {
+    /// Adds a static segment to the pattern
+    fn with_static_segment(mut self, segment: String) -> Self {
+        self.pattern.push('/');
+        self.pattern.push_str(&segment);
+        self
+    }
+
+    /// Adds a required parameter segment
+    fn with_required_param(mut self, param_name: String, constraint: Option<ParameterConstraint>) -> Self {
+        self.pattern.push_str("/:");
+        self.pattern.push_str(&param_name);
+        self.params.push(param_name.clone());
+
+        if let Some(c) = constraint {
+            self.param_constraints.insert(param_name, c);
+        }
+
+        self.dynamic_count += 1;
+        self
+    }
+
+    /// Adds an optional parameter segment
+    fn with_optional_param(mut self, param_name: String, constraint: Option<ParameterConstraint>) -> Self {
+        self.pattern.push_str("/:");
+        self.pattern.push_str(&param_name);
+        self.pattern.push('?');
+        self.params.push(param_name.clone());
+        self.optional_params.push(param_name.clone());
+
+        if let Some(c) = constraint {
+            self.param_constraints.insert(param_name, c);
+        }
+
+        self.dynamic_count += 1;
+        self
+    }
+
+    /// Adds a catch-all parameter segment
+    fn with_catch_all(mut self, param_name: String, constraint: Option<ParameterConstraint>) -> Self {
+        self.pattern.push_str("/*");
+        self.pattern.push_str(&param_name);
+        self.params.push(param_name.clone());
+
+        if let Some(c) = constraint {
+            self.param_constraints.insert(param_name, c);
+        }
+
+        self.has_catch_all = true;
+        self.dynamic_count += 100;
+        self
+    }
+
+    /// Adds an optional catch-all parameter segment
+    fn with_optional_catch_all(mut self, param_name: String, constraint: Option<ParameterConstraint>) -> Self {
+        self.pattern.push_str("/*");
+        self.pattern.push_str(&param_name);
+        self.pattern.push('?');
+        self.params.push(param_name.clone());
+        self.optional_params.push(param_name.clone());
+
+        if let Some(c) = constraint {
+            self.param_constraints.insert(param_name, c);
+        }
+
+        self.has_catch_all = true;
+        self.dynamic_count += 99;
+        self
+    }
+
+    /// Finalizes the pattern, handling empty pattern case
+    fn finalize(mut self) -> Self {
+        if self.pattern.is_empty() {
+            self.pattern = "/".to_string();
+        }
+        self
+    }
+
+    /// Deconstructs state into return tuple
+    fn into_tuple(self) -> (
+        String,
+        Vec<String>,
+        Vec<String>,
+        usize,
+        bool,
+        HashMap<String, ParameterConstraint>,
+    ) {
+        (
+            self.pattern,
+            self.params,
+            self.optional_params,
+            self.dynamic_count,
+            self.has_catch_all,
+            self.param_constraints,
+        )
+    }
+}
+
+/// Checks if a segment should be skipped during parsing
+///
+/// Pure predicate function: segment -> bool
+fn should_skip_segment(segment: &str) -> bool {
+    segment.is_empty()
+        || segment == "_layout"
+        || segment.starts_with("_layout.") // Skip named layouts like _layout.admin
+        || segment == "_error"
+        || segment == "_nolayout" // Skip nolayout markers
+        || segment == "loading" // Phase 4.3
+        || segment == "_template" // Phase 4.4
+        || segment == "not-found" // Phase 4.5
+        || segment == "index"
+        || matches!(segment, "(.)" | "(..)" | "(...)" | "(....)") // Intercepting route markers
+        || (segment.starts_with('(') && segment.ends_with(')')) // Route groups
+        || segment.starts_with('@') // Parallel route slots
+}
+
+/// Processes a single segment and updates the parse state
+///
+/// Pure function: (state, segment) -> new state
+fn process_segment(state: ParseState, segment: &str) -> ParseState {
+    if should_skip_segment(segment) {
+        return state;
+    }
+
+    match classify_segment(segment) {
+        PatternSegmentType::CatchAll(param_name, constraint) => {
+            state.with_catch_all(param_name, constraint)
+        }
+        PatternSegmentType::OptionalCatchAll(param_name, constraint) => {
+            state.with_optional_catch_all(param_name, constraint)
+        }
+        PatternSegmentType::Optional(param_name, constraint) => {
+            state.with_optional_param(param_name, constraint)
+        }
+        PatternSegmentType::Required(param_name, constraint) => {
+            state.with_required_param(param_name, constraint)
+        }
+        PatternSegmentType::Static(seg) => {
+            state.with_static_segment(seg)
+        }
+    }
+}
+
 /// Parses a file path pattern into route components (pure function)
 ///
 /// **Pure functional parser**: Maps file path → (pattern, params, constraints, ...)
 ///
 /// Uses functional composition:
 /// - `split('/') → iter` - break path into segments
-/// - `filter` - skip special files and markers
-/// - `match classify_segment` - pattern match each segment
-/// - `fold/accumulate` - build up result components
+/// - `fold` - accumulate state through ParseState accumulator
+/// - `process_segment` - pure transformation for each segment
+/// - `finalize` - handle edge cases (empty pattern)
 ///
 /// # Returns
 ///
@@ -65,8 +222,8 @@ use super::pattern::classify_segment;
 /// # Performance
 ///
 /// - O(n) where n is number of segments
-/// - Functional pipeline with iterator combinators
-/// - No unnecessary allocations
+/// - Functional pipeline with fold combinator
+/// - Single pass, no backtracking
 pub fn parse_pattern(
     path: &str,
 ) -> (
@@ -77,125 +234,10 @@ pub fn parse_pattern(
     bool,
     HashMap<String, ParameterConstraint>,
 ) {
-    let mut pattern = String::new();
-    let mut params = Vec::new();
-    let mut optional_params = Vec::new();
-    let mut dynamic_count = 0;
-    let mut has_catch_all = false;
-    let mut param_constraints = HashMap::new();
-
-    for segment in path.split('/') {
-        // Skip empty segments and special directory names
-        if segment.is_empty()
-            || segment == "_layout"
-            || segment.starts_with("_layout.") // Skip named layouts like _layout.admin
-            || segment == "_error"
-            || segment == "_nolayout" // Skip nolayout markers
-            || segment == "loading" // Phase 4.3
-            || segment == "_template" // Phase 4.4
-            || segment == "not-found" // Phase 4.5
-            || segment == "index"
-        {
-            continue;
-        }
-
-        // Phase 5.2: Skip intercepting route markers ((.), (..), (...), (....))
-        // These modify matching behavior but aren't part of the pattern
-        // Check this BEFORE route groups because they also use parentheses
-        if matches!(segment, "(.)" | "(..)" | "(...)" | "(....)") {
-            continue;
-        }
-
-        // Skip route groups: (folder) - Phase 4.2
-        // These organize code but don't affect URL structure
-        // Must check AFTER intercepting routes to avoid false positives
-        if segment.starts_with('(') && segment.ends_with(')') {
-            continue;
-        }
-
-        // Phase 5.1: Skip parallel route slots (@slot_name)
-        // These are rendered in parallel, not part of URL
-        if segment.starts_with('@') {
-            continue;
-        }
-
-        // Classify the segment and handle accordingly (functional pattern matching)
-        match classify_segment(segment) {
-            PatternSegmentType::CatchAll(param_name, constraint) => {
-                pattern.push_str("/*");
-                pattern.push_str(&param_name);
-                params.push(param_name.clone());
-
-                // Store constraint if present
-                if let Some(c) = constraint {
-                    param_constraints.insert(param_name, c);
-                }
-
-                has_catch_all = true;
-                dynamic_count += 100;
-            }
-            PatternSegmentType::OptionalCatchAll(param_name, constraint) => {
-                // Optional catch-all: [[...slug]] - matches zero or more segments
-                pattern.push_str("/*");
-                pattern.push_str(&param_name);
-                pattern.push('?');
-                params.push(param_name.clone());
-                optional_params.push(param_name.clone());
-
-                // Store constraint if present
-                if let Some(c) = constraint {
-                    param_constraints.insert(param_name, c);
-                }
-
-                has_catch_all = true;
-                // Lower priority than required catch-all but still high
-                dynamic_count += 99;
-            }
-            PatternSegmentType::Optional(param_name, constraint) => {
-                pattern.push_str("/:");
-                pattern.push_str(&param_name);
-                pattern.push('?');
-                params.push(param_name.clone());
-                optional_params.push(param_name.clone());
-
-                // Store constraint if present
-                if let Some(c) = constraint {
-                    param_constraints.insert(param_name, c);
-                }
-
-                dynamic_count += 1;
-            }
-            PatternSegmentType::Required(param_name, constraint) => {
-                pattern.push_str("/:");
-                pattern.push_str(&param_name);
-                params.push(param_name.clone());
-
-                // Store constraint if present
-                if let Some(c) = constraint {
-                    param_constraints.insert(param_name, c);
-                }
-
-                dynamic_count += 1;
-            }
-            PatternSegmentType::Static(seg) => {
-                pattern.push('/');
-                pattern.push_str(&seg);
-            }
-        }
-    }
-
-    if pattern.is_empty() {
-        pattern = "/".to_string();
-    }
-
-    (
-        pattern,
-        params,
-        optional_params,
-        dynamic_count,
-        has_catch_all,
-        param_constraints,
-    )
+    path.split('/')
+        .fold(ParseState::default(), process_segment)
+        .finalize()
+        .into_tuple()
 }
 
 /// Calculates route priority for matching order (pure function)

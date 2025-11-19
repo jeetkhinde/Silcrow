@@ -129,24 +129,21 @@ impl DirectiveParser {
 
     /// Extract all HTML attributes as props (excluding directives)
     fn extract_props(tag: &str) -> Vec<(String, String)> {
-        let mut props = Vec::new();
-
-        // Match all attribute="value" pairs
         let re = Regex::new(r#"(\w+)=["']([^"']*)["']"#).unwrap();
 
-        for cap in re.captures_iter(tag) {
-            let key = cap.get(1).map(|m| m.as_str()).unwrap_or("");
-            let value = cap.get(2).map(|m| m.as_str()).unwrap_or("");
+        re.captures_iter(tag)
+            .filter_map(|cap| {
+                let key = cap.get(1)?.as_str();
+                let value = cap.get(2)?.as_str();
 
-            // Skip directive attributes
-            if key.starts_with("r-") {
-                continue;
-            }
-
-            props.push((key.to_string(), value.to_string()));
-        }
-
-        props
+                // Skip directive attributes
+                if key.starts_with("r-") {
+                    None
+                } else {
+                    Some((key.to_string(), value.to_string()))
+                }
+            })
+            .collect()
     }
 
     /// Extract directive value using regex
@@ -162,9 +159,6 @@ impl DirectiveParser {
 
     /// Remove directive attributes from a tag
     pub fn remove_directives(tag: &str) -> String {
-        let mut cleaned = tag.to_string();
-
-        // Remove all directive attributes
         let patterns = [
             r#"r-if=["'][^"']*["']"#,
             r#"r-else-if=["'][^"']*["']"#,
@@ -178,72 +172,70 @@ impl DirectiveParser {
             r#"r-default="#,
         ];
 
-        for pattern in patterns {
-            if let Ok(re) = Regex::new(pattern) {
-                cleaned = re.replace_all(&cleaned, "").to_string();
-            }
-        }
-
-        // Clean up extra spaces
-        cleaned = cleaned.trim().to_string();
-        cleaned = cleaned.replace("  ", " ");
-
-        cleaned
+        patterns
+            .iter()
+            .fold(tag.to_string(), |acc, pattern| {
+                Regex::new(pattern)
+                    .ok()
+                    .map(|re| re.replace_all(&acc, "").to_string())
+                    .unwrap_or(acc)
+            })
+            .trim()
+            .replace("  ", " ")
     }
 
     /// Parse all directives from a tag
     pub fn parse_directives(tag: &str) -> Vec<Directive> {
-        let mut directives = Vec::new();
+        [
+            // r-if directive
+            Self::has_if_directive(tag)
+                .then(|| Self::extract_if_condition(tag))
+                .flatten()
+                .map(Directive::If),
 
-        if Self::has_if_directive(tag) {
-            if let Some(condition) = Self::extract_if_condition(tag) {
-                directives.push(Directive::If(condition));
-            }
-        }
+            // r-else-if directive
+            Self::has_else_if_directive(tag)
+                .then(|| Self::extract_else_if_condition(tag))
+                .flatten()
+                .map(Directive::ElseIf),
 
-        if Self::has_else_if_directive(tag) {
-            if let Some(condition) = Self::extract_else_if_condition(tag) {
-                directives.push(Directive::ElseIf(condition));
-            }
-        }
+            // r-else directive
+            Self::has_else_directive(tag).then_some(Directive::Else),
 
-        if Self::has_else_directive(tag) {
-            directives.push(Directive::Else);
-        }
-
-        if Self::has_for_directive(tag) {
-            if let Some((item_var, index_var, collection)) = Self::extract_for_loop(tag) {
-                directives.push(Directive::For {
+            // r-for directive
+            Self::has_for_directive(tag)
+                .then(|| Self::extract_for_loop(tag))
+                .flatten()
+                .map(|(item_var, index_var, collection)| Directive::For {
                     item_var,
                     index_var,
                     collection,
-                });
-            }
-        }
+                }),
 
-        if Self::has_match_directive(tag) {
-            if let Some(variable) = Self::extract_match_variable(tag) {
-                directives.push(Directive::Match(variable));
-            }
-        }
+            // r-match directive
+            Self::has_match_directive(tag)
+                .then(|| Self::extract_match_variable(tag))
+                .flatten()
+                .map(Directive::Match),
 
-        if Self::has_when_directive(tag) {
-            if let Some(pattern) = Self::extract_when_pattern(tag) {
-                directives.push(Directive::When(pattern));
-            }
-        }
+            // r-when directive
+            Self::has_when_directive(tag)
+                .then(|| Self::extract_when_pattern(tag))
+                .flatten()
+                .map(Directive::When),
 
-        if Self::has_default_directive(tag) {
-            directives.push(Directive::Default);
-        }
+            // r-default directive
+            Self::has_default_directive(tag).then_some(Directive::Default),
 
-        if Self::has_component_directive(tag) {
-            if let Some((name, props)) = Self::extract_component(tag) {
-                directives.push(Directive::Component { name, props });
-            }
-        }
-
-        directives
+            // r-component directive
+            Self::has_component_directive(tag)
+                .then(|| Self::extract_component(tag))
+                .flatten()
+                .map(|(name, props)| Directive::Component { name, props }),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
     }
 }
 

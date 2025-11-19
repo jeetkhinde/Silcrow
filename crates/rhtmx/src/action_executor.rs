@@ -70,20 +70,30 @@ impl IntoResponse for ActionResult {
     }
 }
 
+/// Pure function to parse a string value into appropriate JSON type
+fn parse_value_to_json(value: &str) -> JsonValue {
+    // Try parsing as i32 first (most common integer type)
+    value.parse::<i32>()
+        .map(|num| json!(num))
+        .or_else(|_| {
+            // If i32 fails, try f64
+            value.parse::<f64>().map(|num| json!(num))
+        })
+        .unwrap_or_else(|_| {
+            // If both numeric types fail, keep as string
+            json!(value)
+        })
+}
+
 /// Helper to convert form data to JSON for deserialization
+/// Uses functional programming approach with iterator methods
 pub fn form_to_json(form_data: &FormData) -> JsonValue {
-    let mut map = serde_json::Map::new();
-    for (key, value) in form_data.as_map() {
-        // Try to parse as number first
-        if let Ok(num) = value.parse::<i32>() {
-            map.insert(key.clone(), json!(num));
-        } else if let Ok(num) = value.parse::<f64>() {
-            map.insert(key.clone(), json!(num));
-        } else {
-            // Keep strings as-is (including empty strings)
-            map.insert(key.clone(), json!(value));
-        }
-    }
+    let map: serde_json::Map<String, JsonValue> = form_data
+        .as_map()
+        .iter()
+        .map(|(key, value)| (key.clone(), parse_value_to_json(value)))
+        .collect();
+
     JsonValue::Object(map)
 }
 
@@ -92,19 +102,20 @@ pub fn deserialize_form<T: serde::de::DeserializeOwned>(
     form_data: &FormData,
 ) -> Result<T, serde_json::Error> {
     // If we have raw JSON, use that directly
-    if let Some(raw_json) = form_data.json() {
-        return serde_json::from_value(raw_json.clone());
-    }
-
-    // Otherwise, reconstruct from fields
-    let json = form_to_json(form_data);
-    serde_json::from_value(json)
+    form_data
+        .json()
+        .map(|raw_json| serde_json::from_value(raw_json.clone()))
+        .unwrap_or_else(|| {
+            // Otherwise, reconstruct from fields
+            let json = form_to_json(form_data);
+            serde_json::from_value(json)
+        })
 }
 
 /// Helper to validate a struct using the Validate trait
 pub fn validate_request<T: crate::validation::Validate>(
     request: &T,
-) -> Result<(), HashMap<String, String>> {
+) -> Result<(), HashMap<String, Vec<String>>> {
     request.validate()
 }
 
@@ -155,5 +166,24 @@ mod tests {
         let user: TestUser = deserialize_form(&form).expect("Failed to deserialize");
         assert_eq!(user.name, "Jane");
         assert_eq!(user.age, 25);
+    }
+
+    #[test]
+    fn test_parse_value_to_json_integer() {
+        assert_eq!(parse_value_to_json("42"), json!(42));
+        assert_eq!(parse_value_to_json("-100"), json!(-100));
+    }
+
+    #[test]
+    fn test_parse_value_to_json_float() {
+        assert_eq!(parse_value_to_json("3.14"), json!(3.14));
+        assert_eq!(parse_value_to_json("99.99"), json!(99.99));
+    }
+
+    #[test]
+    fn test_parse_value_to_json_string() {
+        assert_eq!(parse_value_to_json("hello"), json!("hello"));
+        assert_eq!(parse_value_to_json(""), json!(""));
+        assert_eq!(parse_value_to_json("not_a_number"), json!("not_a_number"));
     }
 }

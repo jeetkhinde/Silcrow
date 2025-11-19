@@ -35,28 +35,37 @@ impl Empty {
 
     /// Build the response
     pub fn build(self) -> (HeaderMap, String) {
-        let mut headers = self.headers;
+        // Build headers functionally by combining base headers with optional toast trigger
+        let headers = self.toast_message
+            .as_ref()
+            .and_then(|message| {
+                serde_json::json!({
+                    "showToast": {
+                        "message": message
+                    }
+                })
+                .to_string()
+                .parse::<HeaderValue>()
+                .ok()
+            })
+            .map(|trigger_value| {
+                let mut headers = self.headers.clone();
+                headers.insert("HX-Trigger", trigger_value);
+                headers
+            })
+            .unwrap_or(self.headers);
 
-        // Add HX-Trigger header for toast
-        if let Some(message) = self.toast_message {
-            let trigger = serde_json::json!({
-                "showToast": {
-                    "message": message
-                }
-            });
-            if let Ok(value) = HeaderValue::from_str(&trigger.to_string()) {
-                headers.insert("HX-Trigger", value);
-            }
-        }
-
-        // Build OOB content
-        let mut content = String::new();
-        for (target, update) in self.oob_updates {
-            content.push_str(&format!(
-                r#"<div id="{}" hx-swap-oob="true">{}</div>"#,
-                target, update
-            ));
-        }
+        // Build OOB content functionally using iterator chain
+        let content = self.oob_updates
+            .iter()
+            .map(|(target, update)| {
+                format!(
+                    r#"<div id="{}" hx-swap-oob="true">{}</div>"#,
+                    target, update
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("");
 
         (headers, content)
     }
@@ -199,6 +208,7 @@ impl ActionInfo {
 }
 
 /// Action registry for managing actions in templates
+#[derive(Clone)]
 pub struct ActionRegistry {
     actions: HashMap<String, Vec<ActionInfo>>,
 }
@@ -211,22 +221,51 @@ impl ActionRegistry {
         }
     }
 
-    /// Register an action
-    pub fn register(&mut self, template_path: &str, action: ActionInfo) {
+    /// Register an action (functional builder pattern)
+    pub fn with_action(mut self, template_path: impl Into<String>, action: ActionInfo) -> Self {
         self.actions
-            .entry(template_path.to_string())
+            .entry(template_path.into())
             .or_default()
             .push(action);
+        self
+    }
+
+    /// Register multiple actions (functional builder pattern)
+    pub fn with_actions(mut self, template_path: impl Into<String>, actions: Vec<ActionInfo>) -> Self {
+        self.actions
+            .entry(template_path.into())
+            .or_default()
+            .extend(actions);
+        self
+    }
+
+    /// Register an action (deprecated - use with_action for FP style)
+    #[deprecated(since = "0.1.0", note = "Use with_action() for functional programming style")]
+    pub fn register(&mut self, template_path: &str, action: ActionInfo) {
+        *self = std::mem::replace(self, Self::new())
+            .with_action(template_path.to_string(), action);
     }
 
     /// Find action for a template and HTTP method
     pub fn find_action(&self, template_path: &str, http_method: &str) -> Option<&ActionInfo> {
-        self.actions.get(template_path)?.iter().find(|action| action.matches_method(http_method))
+        self.actions
+            .get(template_path)
+            .and_then(|actions| actions.iter().find(|action| action.matches_method(http_method)))
     }
 
     /// Get all actions for a template
     pub fn get_actions(&self, template_path: &str) -> Option<&[ActionInfo]> {
         self.actions.get(template_path).map(|v| v.as_slice())
+    }
+
+    /// Get all template paths
+    pub fn template_paths(&self) -> impl Iterator<Item = &String> {
+        self.actions.keys()
+    }
+
+    /// Get all actions across all templates
+    pub fn all_actions(&self) -> impl Iterator<Item = (&String, &Vec<ActionInfo>)> {
+        self.actions.iter()
     }
 }
 
@@ -283,5 +322,37 @@ mod tests {
         // Check OOB content
         assert!(content.contains(r#"id="user-count""#));
         assert!(content.contains("42"));
+    }
+
+    #[test]
+    fn test_action_registry_functional_builder() {
+        let registry = ActionRegistry::new()
+            .with_action(
+                "users/index",
+                ActionInfo::from_function_name("get_users").unwrap(),
+            )
+            .with_action(
+                "users/create",
+                ActionInfo::from_function_name("post_user").unwrap(),
+            );
+
+        assert!(registry.find_action("users/index", "GET").is_some());
+        assert!(registry.find_action("users/create", "POST").is_some());
+        assert!(registry.find_action("users/index", "POST").is_none());
+    }
+
+    #[test]
+    fn test_action_registry_with_actions() {
+        let actions = vec![
+            ActionInfo::from_function_name("get_users").unwrap(),
+            ActionInfo::from_function_name("post_user").unwrap(),
+        ];
+
+        let registry = ActionRegistry::new()
+            .with_actions("users", actions);
+
+        assert!(registry.find_action("users", "GET").is_some());
+        assert!(registry.find_action("users", "POST").is_some());
+        assert_eq!(registry.get_actions("users").unwrap().len(), 2);
     }
 }

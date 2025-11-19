@@ -83,13 +83,9 @@ impl RenderContext {
         self
     }
 
-    /// Create an evaluator from the context's variables
+    /// Pure function: Create an evaluator from the context's variables
     fn create_evaluator(&self) -> ExpressionEvaluator {
-        let mut evaluator = ExpressionEvaluator::new();
-        for (name, value) in &self.variables {
-            evaluator.set(name, value.clone());
-        }
-        evaluator
+        ExpressionEvaluator::from_variables(self.variables.clone())
     }
 
     fn get_template_loader(&self) -> Option<&Arc<TemplateLoader>> {

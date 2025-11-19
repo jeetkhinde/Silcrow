@@ -51,24 +51,24 @@ pub struct SearchUsersRequest {
 // Implement Validate for CreateUserRequest
 // TODO: Use the Validate derive macro from rhtmx instead of manual implementation
 impl rhtmx::ValidateTrait for CreateUserRequest {
-    fn validate(&self) -> Result<(), HashMap<String, String>> {
-        let mut errors = HashMap::new();
+    fn validate(&self) -> Result<(), HashMap<String, Vec<String>>> {
+        let mut errors: HashMap<String, Vec<String>> = HashMap::new();
 
         // Validate name
         if self.name.trim().is_empty() {
-            errors.insert("name".to_string(), "Name is required".to_string());
+            errors.insert("name".to_string(), vec!["Name is required".to_string()]);
         }
 
         // Validate email
         if !self.email.contains('@') {
-            errors.insert("email".to_string(), "Invalid email format".to_string());
+            errors.insert("email".to_string(), vec!["Invalid email format".to_string()]);
         }
 
         // Validate password (at least 8 characters)
         if self.password.len() < 8 {
             errors.insert(
                 "password".to_string(),
-                "Password must be at least 8 characters".to_string(),
+                vec!["Password must be at least 8 characters".to_string()],
             );
         }
 
@@ -76,22 +76,22 @@ impl rhtmx::ValidateTrait for CreateUserRequest {
         if self.age < 18 {
             errors.insert(
                 "age".to_string(),
-                "Must be at least 18 years old".to_string(),
+                vec!["Must be at least 18 years old".to_string()],
             );
         } else if self.age > 120 {
-            errors.insert("age".to_string(), "Please enter a valid age".to_string());
+            errors.insert("age".to_string(), vec!["Please enter a valid age".to_string()]);
         }
 
         // Validate username
         if self.username.len() < 3 {
             errors.insert(
                 "username".to_string(),
-                "Username must be at least 3 characters".to_string(),
+                vec!["Username must be at least 3 characters".to_string()],
             );
         } else if self.username.len() > 50 {
             errors.insert(
                 "username".to_string(),
-                "Username must be at most 50 characters".to_string(),
+                vec!["Username must be at most 50 characters".to_string()],
             );
         }
 
@@ -105,18 +105,18 @@ impl rhtmx::ValidateTrait for CreateUserRequest {
 
 // Implement Validate for UpdateUserRequest
 impl rhtmx::ValidateTrait for UpdateUserRequest {
-    fn validate(&self) -> Result<(), HashMap<String, String>> {
+    fn validate(&self) -> Result<(), HashMap<String, Vec<String>>> {
         let mut errors = HashMap::new();
 
         if let Some(name) = &self.name {
             if name.trim().is_empty() {
-                errors.insert("name".to_string(), "Name cannot be empty".to_string());
+                errors.insert("name".to_string(), vec!["Name cannot be empty".to_string()]);
             }
         }
 
         if let Some(email) = &self.email {
             if !email.contains('@') {
-                errors.insert("email".to_string(), "Invalid email format".to_string());
+                errors.insert("email".to_string(), vec!["Invalid email format".to_string()]);
             }
         }
 
@@ -124,10 +124,10 @@ impl rhtmx::ValidateTrait for UpdateUserRequest {
             if *age < 18 {
                 errors.insert(
                     "age".to_string(),
-                    "Must be at least 18 years old".to_string(),
+                    vec!["Must be at least 18 years old".to_string()],
                 );
             } else if *age > 120 {
-                errors.insert("age".to_string(), "Please enter a valid age".to_string());
+                errors.insert("age".to_string(), vec!["Please enter a valid age".to_string()]);
             }
         }
 
@@ -141,7 +141,7 @@ impl rhtmx::ValidateTrait for UpdateUserRequest {
 
 // Implement Validate for SearchUsersRequest (no validation needed)
 impl rhtmx::ValidateTrait for SearchUsersRequest {
-    fn validate(&self) -> Result<(), HashMap<String, String>> {
+    fn validate(&self) -> Result<(), HashMap<String, Vec<String>>> {
         Ok(())
     }
 }

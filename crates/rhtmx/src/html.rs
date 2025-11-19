@@ -1,5 +1,6 @@
 // File: src/html.rs
 // Purpose: Html type and response builders for the html! macro
+// Refactored to follow functional programming principles
 
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -139,11 +140,7 @@ impl OkResponse {
 
     /// Add a custom header
     pub fn header(mut self, key: impl AsRef<str>, value: impl AsRef<str>) -> Self {
-        if let std::result::Result::Ok(header_name) = axum::http::HeaderName::from_bytes(key.as_ref().as_bytes()) {
-            if let std::result::Result::Ok(header_value) = HeaderValue::from_str(value.as_ref()) {
-                self.headers.insert(header_name, header_value);
-            }
-        }
+        self.headers = Self::add_header_to_map(self.headers, key.as_ref(), value.as_ref());
         self
     }
 
@@ -155,37 +152,55 @@ impl OkResponse {
 
     /// Build the final response
     pub fn build(self) -> (StatusCode, HeaderMap, String) {
-        let mut headers = self.headers;
+        let headers = match self.toast_message {
+            Some(msg) => Self::add_toast_to_headers(self.headers, msg),
+            None => self.headers,
+        };
 
-        // Add HX-Trigger header for toast
-        if let Some(message) = self.toast_message {
-            let trigger = serde_json::json!({
-                "showToast": {
-                    "message": message
-                }
-            });
-            if let std::result::Result::Ok(value) = HeaderValue::from_str(&trigger.to_string()) {
-                headers.insert("HX-Trigger", value);
-            }
-        }
-
-        // Build content with OOB updates
-        let mut content = String::new();
-
-        // Add main content
-        if let Some(html) = self.content {
-            content.push_str(&html.0);
-        }
-
-        // Add OOB updates
-        for (target, html) in self.oob_updates {
-            content.push_str(&format!(
-                r#"<div id="{}" hx-swap-oob="true">{}</div>"#,
-                target, html.0
-            ));
-        }
+        let main_content = self.content.map(|html| html.0).unwrap_or_default();
+        let oob_content = Self::format_oob_updates(&self.oob_updates);
+        let content = format!("{}{}", main_content, oob_content);
 
         (self.status, headers, content)
+    }
+
+    // Functional helper methods
+
+    /// Format OOB updates functionally using map and join
+    fn format_oob_updates(oob_updates: &[(String, Html)]) -> String {
+        oob_updates
+            .iter()
+            .map(|(target, html)| {
+                format!(
+                    r#"<div id="{}" hx-swap-oob="true">{}</div>"#,
+                    target, html.0
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("")
+    }
+
+    /// Add a header to HeaderMap functionally
+    fn add_header_to_map(mut headers: HeaderMap, key: &str, value: &str) -> HeaderMap {
+        if let (std::result::Result::Ok(name), std::result::Result::Ok(val)) =
+            (axum::http::HeaderName::from_bytes(key.as_bytes()), HeaderValue::from_str(value)) {
+            headers.insert(name, val);
+        }
+        headers
+    }
+
+    /// Add toast header functionally
+    fn add_toast_to_headers(mut headers: HeaderMap, message: String) -> HeaderMap {
+        let trigger = serde_json::json!({
+            "showToast": {
+                "message": message
+            }
+        });
+
+        if let std::result::Result::Ok(value) = HeaderValue::from_str(&trigger.to_string()) {
+            headers.insert("HX-Trigger", value);
+        }
+        headers
     }
 }
 
@@ -276,25 +291,29 @@ impl ErrorResponse {
 
     /// Add a custom header
     pub fn header(mut self, key: impl AsRef<str>, value: impl AsRef<str>) -> Self {
-        if let std::result::Result::Ok(header_name) = axum::http::HeaderName::from_bytes(key.as_ref().as_bytes()) {
-            if let std::result::Result::Ok(header_value) = HeaderValue::from_str(value.as_ref()) {
-                self.headers.insert(header_name, header_value);
-            }
-        }
+        self.headers = Self::add_header_to_map(self.headers, key.as_ref(), value.as_ref());
         self
     }
 
     /// Build the final response
     pub fn build(self) -> (StatusCode, HeaderMap, String) {
-        let content = if let Some(html) = self.content {
-            html.0
-        } else if let Some(msg) = self.message {
-            format!("<div class=\"error\">{}</div>", msg)
-        } else {
-            String::from("<div class=\"error\">An error occurred</div>")
-        };
+        let content = self.content
+            .map(|html| html.0)
+            .or_else(|| self.message.map(|msg| format!("<div class=\"error\">{}</div>", msg)))
+            .unwrap_or_else(|| String::from("<div class=\"error\">An error occurred</div>"));
 
         (self.status, self.headers, content)
+    }
+
+    // Functional helper methods
+
+    /// Add a header to HeaderMap functionally
+    fn add_header_to_map(mut headers: HeaderMap, key: &str, value: &str) -> HeaderMap {
+        if let (std::result::Result::Ok(name), std::result::Result::Ok(val)) =
+            (axum::http::HeaderName::from_bytes(key.as_bytes()), HeaderValue::from_str(value)) {
+            headers.insert(name, val);
+        }
+        headers
     }
 }
 
@@ -374,17 +393,15 @@ impl RedirectResponse {
     pub fn build(self) -> (StatusCode, HeaderMap, ()) {
         let mut headers = HeaderMap::new();
 
-        // Add Location and HX-Redirect headers
+        // Add location headers if present
         if let Some(ref location) = self.location {
-            // Add Location header
             if let std::result::Result::Ok(value) = HeaderValue::from_str(location) {
                 headers.insert(axum::http::header::LOCATION, value.clone());
-                // Add HX-Redirect for HTMX requests
                 headers.insert("HX-Redirect", value);
             }
         }
 
-        // Add toast if present
+        // Add toast header if present
         if let Some(message) = self.toast_message {
             let trigger = serde_json::json!({
                 "showToast": {

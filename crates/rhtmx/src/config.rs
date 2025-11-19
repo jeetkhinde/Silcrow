@@ -215,29 +215,50 @@ impl Default for DevConfig {
     }
 }
 
+/// Pure function to parse config content from TOML string
+/// Separates parsing logic from I/O operations
+fn parse_config_content(content: &str) -> Result<Config> {
+    toml::from_str(content).context("Failed to parse config")
+}
+
+/// Pure function to handle empty content - returns default config
+fn handle_empty_content(content: &str) -> Option<Config> {
+    content.trim().is_empty().then(Config::default)
+}
+
+/// Pure function to read file content
+fn read_file_content(path: &Path) -> Result<String> {
+    fs::read_to_string(path)
+        .with_context(|| format!("Failed to read config file: {:?}", path))
+}
+
+/// Pure function to check if path exists
+fn check_path_exists(path: &Path) -> Option<Config> {
+    (!path.exists()).then(Config::default)
+}
+
 impl Config {
     /// Load configuration from rhtml.toml
+    /// Composed from pure functions for testability
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
 
-        // If file doesn't exist or is empty, return default config
-        if !path.exists() {
-            return Ok(Self::default());
+        // If file doesn't exist, return default config
+        if let Some(config) = check_path_exists(path) {
+            return Ok(config);
         }
 
-        let content = fs::read_to_string(path)
-            .with_context(|| format!("Failed to read config file: {:?}", path))?;
+        // Read file content
+        let content = read_file_content(path)?;
 
         // If file is empty, return default config
-        if content.trim().is_empty() {
-            return Ok(Self::default());
+        if let Some(config) = handle_empty_content(&content) {
+            return Ok(config);
         }
 
-        // Parse TOML
-        let config: Config = toml::from_str(&content)
-            .with_context(|| format!("Failed to parse config file: {:?}", path))?;
-
-        Ok(config)
+        // Parse TOML content
+        parse_config_content(&content)
+            .with_context(|| format!("Failed to parse config file: {:?}", path))
     }
 
     /// Load configuration from default path (./rhtml.toml)
@@ -280,5 +301,30 @@ mod tests {
         assert_eq!(config.routing.pages_dir, "app");
         assert_eq!(config.routing.components_dir, "ui");
         assert!(!config.routing.case_insensitive);
+    }
+
+    #[test]
+    fn test_parse_config_content_valid() {
+        let toml = r#"
+            [server]
+            port = 8080
+            host = "0.0.0.0"
+        "#;
+        let config = parse_config_content(toml).unwrap();
+        assert_eq!(config.server.port, 8080);
+        assert_eq!(config.server.host, "0.0.0.0");
+    }
+
+    #[test]
+    fn test_parse_config_content_invalid() {
+        let invalid_toml = "this is not valid toml [[[";
+        assert!(parse_config_content(invalid_toml).is_err());
+    }
+
+    #[test]
+    fn test_handle_empty_content() {
+        assert!(handle_empty_content("").is_some());
+        assert!(handle_empty_content("   \n  \t  ").is_some());
+        assert!(handle_empty_content("[server]").is_none());
     }
 }
