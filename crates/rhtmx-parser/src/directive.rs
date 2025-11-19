@@ -17,10 +17,6 @@ pub enum Directive {
     Match(String),  // r-match="variable"
     When(String),   // r-when="value"
     Default,        // r-default
-    Component {     // r-component="Button"
-        name: String,
-        props: Vec<(String, String)>, // [(key, value)]
-    },
 }
 
 /// Parser for RHTML directives
@@ -60,11 +56,6 @@ impl DirectiveParser {
     /// Check if an HTML tag has an r-default directive
     pub fn has_default_directive(tag: &str) -> bool {
         tag.contains("r-default") && !tag.contains("r-default=")
-    }
-
-    /// Check if an HTML tag has an r-component directive
-    pub fn has_component_directive(tag: &str) -> bool {
-        tag.contains("r-component=")
     }
 
     /// Extract r-if condition from a tag
@@ -120,32 +111,6 @@ impl DirectiveParser {
         Self::extract_directive_value(tag, "r-when")
     }
 
-    /// Extract r-component name and props from a tag
-    pub fn extract_component(tag: &str) -> Option<(String, Vec<(String, String)>)> {
-        let name = Self::extract_directive_value(tag, "r-component")?;
-        let props = Self::extract_props(tag);
-        Some((name, props))
-    }
-
-    /// Extract all HTML attributes as props (excluding directives)
-    fn extract_props(tag: &str) -> Vec<(String, String)> {
-        let re = Regex::new(r#"(\w+)=["']([^"']*)["']"#).unwrap();
-
-        re.captures_iter(tag)
-            .filter_map(|cap| {
-                let key = cap.get(1)?.as_str();
-                let value = cap.get(2)?.as_str();
-
-                // Skip directive attributes
-                if key.starts_with("r-") {
-                    None
-                } else {
-                    Some((key.to_string(), value.to_string()))
-                }
-            })
-            .collect()
-    }
-
     /// Extract directive value using regex
     fn extract_directive_value(tag: &str, directive: &str) -> Option<String> {
         // Match: r-if="condition" or r-if='condition'
@@ -165,7 +130,6 @@ impl DirectiveParser {
             r#"r-for=["'][^"']*["']"#,
             r#"r-match=["'][^"']*["']"#,
             r#"r-when=["'][^"']*["']"#,
-            r#"r-component=["'][^"']*["']"#,
             r#"r-else\s*"#,
             r#"r-else="#,
             r#"r-default\s*"#,
@@ -226,12 +190,6 @@ impl DirectiveParser {
 
             // r-default directive
             Self::has_default_directive(tag).then_some(Directive::Default),
-
-            // r-component directive
-            Self::has_component_directive(tag)
-                .then(|| Self::extract_component(tag))
-                .flatten()
-                .map(|(name, props)| Directive::Component { name, props }),
         ]
         .into_iter()
         .flatten()

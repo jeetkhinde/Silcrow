@@ -162,7 +162,6 @@ impl Default for RenderContext {
 /// - `r-if`, `r-else-if`, `r-else` - Conditional rendering
 /// - `r-for` - Loop rendering
 /// - `r-match`, `r-when`, `r-default` - Pattern matching
-/// - `r-component` - Component inclusion
 ///
 /// # Macros Supported
 /// - `html! {}` - HTML content
@@ -254,7 +253,7 @@ impl Renderer {
         })
     }
 
-    /// Pure function: Process r-if, r-else-if, r-else, r-for, r-match, r-component directives
+    /// Pure function: Process r-if, r-else-if, r-else, r-for, r-match directives
     ///
     /// # Arguments
     /// * `html` - HTML template content to process
@@ -280,16 +279,6 @@ impl Renderer {
                 }
 
                 let tag = &buffer[tag_start..];
-
-                if DirectiveParser::has_component_directive(tag) {
-                    let component_result = self.process_component(tag);
-                    buffer.truncate(tag_start);
-                    result.push_str(&buffer);
-                    result.push_str(&component_result.html);
-                    all_css.extend(component_result.collected_css);
-                    buffer.clear();
-                    continue;
-                }
 
                 if DirectiveParser::has_match_directive(tag) {
                     let (element, _consumed) = Self::extract_element(tag, &mut chars);
@@ -408,92 +397,6 @@ impl Renderer {
             .unwrap_or("")
             .trim_end_matches('>')
             .to_string()
-    }
-
-    /// Pure function: Process a component (r-component)
-    ///
-    /// # Arguments
-    /// * `tag` - HTML tag with r-component directive
-    ///
-    /// # Returns
-    /// * `RenderResult` - Rendered component HTML with scoped CSS
-    fn process_component(&self, tag: &str) -> RenderResult {
-        let (name, props) = match DirectiveParser::extract_component(tag) {
-            Some(info) => info,
-            None => return RenderResult::new(String::new()),
-        };
-
-        let loader = match self.context.get_template_loader() {
-            Some(loader) => loader,
-            None => return RenderResult::new(String::new()),
-        };
-
-        let component = match loader.get_component(&name) {
-            Some(comp) => comp,
-            None => return RenderResult::new(format!("<!-- Component '{}' not found -->", name)),
-        };
-
-        let component_html = &component.content;
-
-        // Create a new context with component props
-        let mut component_context = self.context.clone();
-        component_context = component_context.with_context_vars(&self.context);
-
-        for (key, value) in props {
-            component_context = component_context.with_var(&key, Value::String(value));
-        }
-
-        let component_renderer = Renderer::from_context(component_context);
-        let processed = component_renderer.process_directives(&component_html);
-        let evaluator = component_renderer.context.create_evaluator();
-        let interpolated = Self::process_interpolations_with_evaluator(&processed.html, &evaluator);
-
-        let scope_name = name.clone();
-        let scoped_html = Self::add_scope_attribute(&interpolated, &scope_name);
-
-        RenderResult {
-            html: scoped_html,
-            collected_css: processed.collected_css,
-        }
-    }
-
-    /// Pure function: Add data-rhtmx scope attribute to the root element
-    ///
-    /// # Arguments
-    /// * `html` - HTML content to add scope attribute to
-    /// * `scope_name` - Name of the scope for CSS scoping
-    ///
-    /// # Returns
-    /// * `String` - HTML with data-rhtmx attribute added
-    fn add_scope_attribute(html: &str, scope_name: &str) -> String {
-        let html = html.trim();
-
-        if let Some(first_gt) = html.find('>') {
-            if let Some(first_lt) = html.find('<') {
-                if first_lt == 0 {
-                    let tag = &html[..=first_gt];
-
-                    if tag.contains("data-rhtmx=") {
-                        return html.to_string();
-                    }
-
-                    let insert_pos = if tag.ends_with("/>") {
-                        first_gt - 1
-                    } else {
-                        first_gt
-                    };
-
-                    return format!(
-                        "{} data-rhtmx=\"{}\"{}",
-                        &html[..insert_pos],
-                        scope_name,
-                        &html[insert_pos..]
-                    );
-                }
-            }
-        }
-
-        format!("<div data-rhtmx=\"{}\">{}</div>", scope_name, html)
     }
 
     /// Pure function: Process a match block (r-match, r-when, r-default)
