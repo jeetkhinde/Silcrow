@@ -8,16 +8,11 @@ use rhtmx_parser::{DirectiveParser, ExpressionEvaluator, Value};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-/// Layout directive parsed from @layout(...) decorator
-#[derive(Debug, Clone, PartialEq)]
-pub enum LayoutDirective {
-    /// @layout(false) - No layout should be applied
-    None,
-    /// @layout("name") - Use custom layout by name
-    Custom(String),
-}
-
 /// Result of a rendering operation
+///
+/// # Fields
+/// * `html` - The rendered HTML string
+/// * `collected_css` - Set of scoped CSS styles collected during rendering
 #[derive(Debug, Clone)]
 pub struct RenderResult {
     pub html: String,
@@ -25,6 +20,13 @@ pub struct RenderResult {
 }
 
 impl RenderResult {
+    /// Creates a new RenderResult with the given HTML content
+    ///
+    /// # Arguments
+    /// * `html` - The HTML content as a String
+    ///
+    /// # Returns
+    /// A new RenderResult instance with empty CSS collection
     pub fn new(html: String) -> Self {
         Self {
             html,
@@ -32,11 +34,25 @@ impl RenderResult {
         }
     }
 
+    /// Adds a CSS string to the collected styles
+    ///
+    /// # Arguments
+    /// * `css` - CSS string to add to the collection
+    ///
+    /// # Returns
+    /// Self with the CSS added to collected_css
     pub fn with_css(mut self, css: String) -> Self {
         self.collected_css.insert(css);
         self
     }
 
+    /// Merges CSS from another RenderResult into this one
+    ///
+    /// # Arguments
+    /// * `other` - Reference to another RenderResult whose CSS to merge
+    ///
+    /// # Returns
+    /// Self with merged CSS collections
     pub fn merge_css(mut self, other: &RenderResult) -> Self {
         self.collected_css.extend(other.collected_css.clone());
         self
@@ -44,6 +60,10 @@ impl RenderResult {
 }
 
 /// Immutable rendering context that flows through the rendering pipeline
+///
+/// # Fields
+/// * `variables` - HashMap of template variables available during rendering
+/// * `template_loader` - Optional template loader for loading components
 #[derive(Clone)]
 pub struct RenderContext {
     variables: HashMap<String, Value>,
@@ -51,6 +71,10 @@ pub struct RenderContext {
 }
 
 impl RenderContext {
+    /// Creates a new empty RenderContext
+    ///
+    /// # Returns
+    /// A new RenderContext with no variables and no template loader
     pub fn new() -> Self {
         Self {
             variables: HashMap::new(),
@@ -58,6 +82,13 @@ impl RenderContext {
         }
     }
 
+    /// Creates a new RenderContext with a template loader
+    ///
+    /// # Arguments
+    /// * `template_loader` - Arc-wrapped TemplateLoader for loading components
+    ///
+    /// # Returns
+    /// A new RenderContext with the specified template loader
     pub fn with_loader(template_loader: Arc<TemplateLoader>) -> Self {
         Self {
             variables: HashMap::new(),
@@ -66,28 +97,54 @@ impl RenderContext {
     }
 
     /// Pure function: Returns a new context with an additional variable
+    ///
+    /// # Arguments
+    /// * `name` - Variable name (can be String or &str)
+    /// * `value` - Variable value of type Value
+    ///
+    /// # Returns
+    /// A new RenderContext with the added variable
     pub fn with_var(mut self, name: impl Into<String>, value: Value) -> Self {
         self.variables.insert(name.into(), value);
         self
     }
 
     /// Pure function: Returns a new context with multiple variables
+    ///
+    /// # Arguments
+    /// * `vars` - HashMap of variable names to Values
+    ///
+    /// # Returns
+    /// A new RenderContext with all variables added
     pub fn with_vars(mut self, vars: HashMap<String, Value>) -> Self {
         self.variables.extend(vars);
         self
     }
 
     /// Pure function: Returns a new context with all variables from another context
+    ///
+    /// # Arguments
+    /// * `other` - Reference to another RenderContext to copy variables from
+    ///
+    /// # Returns
+    /// A new RenderContext with merged variables
     pub fn with_context_vars(mut self, other: &RenderContext) -> Self {
         self.variables.extend(other.variables.clone());
         self
     }
 
     /// Pure function: Create an evaluator from the context's variables
+    ///
+    /// # Returns
+    /// An ExpressionEvaluator initialized with this context's variables
     fn create_evaluator(&self) -> ExpressionEvaluator {
         ExpressionEvaluator::from_variables(self.variables.clone())
     }
 
+    /// Gets a reference to the template loader if one exists
+    ///
+    /// # Returns
+    /// Option containing a reference to the Arc<TemplateLoader>
     fn get_template_loader(&self) -> Option<&Arc<TemplateLoader>> {
         self.template_loader.as_ref()
     }
@@ -100,30 +157,67 @@ impl Default for RenderContext {
 }
 
 /// HTML renderer with directive support (Immutable, Functional Programming Style)
+///
+/// Supports rendering templates with RHTMX directives like:
+/// - `r-if`, `r-else-if`, `r-else` - Conditional rendering
+/// - `r-for` - Loop rendering
+/// - `r-match`, `r-when`, `r-default` - Pattern matching
+/// - `r-component` - Component inclusion
+///
+/// # Macros Supported
+/// - `html! {}` - HTML content
+/// - `css! {}` - Scoped CSS styles
+/// - `maud! {}` - Maud syntax templates
+///
+/// # File-based Routing
+/// Uses file-based layouts with `_layout.rhtmx` format
 pub struct Renderer {
     context: RenderContext,
 }
 
 impl Renderer {
+    /// Creates a new Renderer with an empty context
+    ///
+    /// # Returns
+    /// A new Renderer instance with no variables or template loader
     pub fn new() -> Self {
         Self {
             context: RenderContext::new(),
         }
     }
 
-    /// Create a new renderer with access to components
+    /// Creates a new renderer with access to components via TemplateLoader
+    ///
+    /// # Arguments
+    /// * `template_loader` - Arc-wrapped TemplateLoader for loading components
+    ///
+    /// # Returns
+    /// A new Renderer instance with the specified template loader
     pub fn with_loader(template_loader: Arc<TemplateLoader>) -> Self {
         Self {
             context: RenderContext::with_loader(template_loader),
         }
     }
 
-    /// Create a renderer from a context
+    /// Creates a renderer from an existing RenderContext
+    ///
+    /// # Arguments
+    /// * `context` - A RenderContext to use for rendering
+    ///
+    /// # Returns
+    /// A new Renderer instance using the provided context
     pub fn from_context(context: RenderContext) -> Self {
         Self { context }
     }
 
     /// Pure function: Returns a new renderer with an additional variable
+    ///
+    /// # Arguments
+    /// * `name` - Variable name (can be String or &str)
+    /// * `value` - Variable value of type Value
+    ///
+    /// # Returns
+    /// A new Renderer with the added variable
     pub fn with_var(mut self, name: impl Into<String>, value: Value) -> Self {
         self.context = self.context.with_var(name, value);
         self
@@ -142,9 +236,16 @@ impl Renderer {
     }
 
     /// Pure function: Render a template to HTML (returns RenderResult)
+    ///
+    /// Processes all directives, interpolations, and returns rendered HTML with collected CSS.
+    ///
+    /// # Arguments
+    /// * `template_content` - The template content as a string slice
+    ///
+    /// # Returns
+    /// * `Result<RenderResult>` - Ok with rendered HTML and CSS, or Err on failure
     pub fn render(&self, template_content: &str) -> Result<RenderResult> {
-        let html = Self::extract_html(template_content);
-        let result = self.process_directives(&html);
+        let result = self.process_directives(template_content);
         let evaluator = self.context.create_evaluator();
         let interpolated = Self::process_interpolations_with_evaluator(&result.html, &evaluator);
         Ok(RenderResult {
@@ -153,138 +254,13 @@ impl Renderer {
         })
     }
 
-    /// Pure function: Find the position of slots block
-    fn find_slots_block(content: &str) -> Option<usize> {
-        content
-            .find("__rhtmx_slots__ {")
-            .or_else(|| content.find("slots {"))
-    }
-
-    /// Pure function: Check if content has a WebPage component
-    fn has_component(content: &str) -> bool {
-        let search_start = if let Some(slots_pos) = Self::find_slots_block(content) {
-            let mut depth = 0;
-            let mut found_opening = false;
-            let mut slots_end = slots_pos;
-
-            for (byte_idx, ch) in content[slots_pos..].char_indices() {
-                if ch == '{' {
-                    depth += 1;
-                    found_opening = true;
-                } else if ch == '}' {
-                    depth -= 1;
-                    if found_opening && depth == 0 {
-                        slots_end = slots_pos + byte_idx + ch.len_utf8();
-                        break;
-                    }
-                }
-            }
-            slots_end
-        } else {
-            0
-        };
-
-        content[search_start..].contains("WebPage {")
-    }
-
-    /// Pure function: Extract HTML content from rhtmx template
-    fn extract_html(content: &str) -> String {
-        let search_start = if let Some(slots_pos) = Self::find_slots_block(content) {
-            let mut depth = 0;
-            let mut found_opening = false;
-            let mut slots_end = slots_pos;
-
-            for (byte_idx, ch) in content[slots_pos..].char_indices() {
-                if ch == '{' {
-                    depth += 1;
-                    found_opening = true;
-                } else if ch == '}' {
-                    depth -= 1;
-                    if found_opening && depth == 0 {
-                        slots_end = slots_pos + byte_idx + ch.len_utf8();
-                        break;
-                    }
-                }
-            }
-            slots_end
-        } else {
-            0
-        };
-
-        if let Some(webpage_pos) = content[search_start..].find("WebPage {") {
-            let abs_webpage_pos = search_start + webpage_pos;
-            if let Some(start) = content[abs_webpage_pos..].find('{') {
-                let abs_start = abs_webpage_pos + start;
-                let mut depth = 0;
-                let mut end_pos = None;
-
-                for (byte_idx, ch) in content[abs_start..].char_indices() {
-                    if ch == '{' {
-                        depth += 1;
-                    } else if ch == '}' {
-                        depth -= 1;
-                        if depth == 0 {
-                            end_pos = Some(abs_start + byte_idx);
-                            break;
-                        }
-                    }
-                }
-
-                if let Some(end) = end_pos {
-                    let html = &content[abs_start + 1..end];
-                    return html.trim().to_string();
-                }
-            }
-        }
-
-        content.trim().to_string()
-    }
-
-    /// Pure function: Extract slot values from page template
-    fn extract_slots(page_content: &str) -> HashMap<String, String> {
-        let mut slots = HashMap::new();
-
-        if let Some(slots_start) = page_content.find("slots {") {
-            let mut depth = 0;
-            let mut found_opening = false;
-            let mut end_pos = None;
-
-            for (byte_idx, ch) in page_content[slots_start..].char_indices() {
-                if ch == '{' {
-                    depth += 1;
-                    found_opening = true;
-                } else if ch == '}' {
-                    depth -= 1;
-                    if found_opening && depth == 0 {
-                        end_pos = Some(slots_start + byte_idx);
-                        break;
-                    }
-                }
-            }
-
-            if let Some(end) = end_pos {
-                let slots_block = &page_content[slots_start + 7..end];
-
-                for line in slots_block.lines() {
-                    let line = line.trim();
-                    if line.is_empty() {
-                        continue;
-                    }
-
-                    if let Some(colon_pos) = line.find(':') {
-                        let key = line[..colon_pos].trim();
-                        let value_part = line[colon_pos + 1..].trim().trim_end_matches(',');
-                        let value = value_part.trim_matches('"');
-                        slots.insert(key.to_string(), value.to_string());
-                    }
-                }
-            }
-        }
-
-        slots
-    }
-
     /// Pure function: Process r-if, r-else-if, r-else, r-for, r-match, r-component directives
+    ///
+    /// # Arguments
+    /// * `html` - HTML template content to process
+    ///
+    /// # Returns
+    /// * `RenderResult` - Processed HTML with collected CSS
     fn process_directives(&self, html: &str) -> RenderResult {
         let mut result = String::new();
         let mut chars = html.chars().peekable();
@@ -361,6 +337,13 @@ impl Renderer {
     }
 
     /// Pure function: Extract a complete HTML element
+    ///
+    /// # Arguments
+    /// * `opening_tag` - The opening HTML tag string
+    /// * `chars` - Mutable peekable iterator of remaining characters
+    ///
+    /// # Returns
+    /// * `(String, usize)` - Tuple of (complete element HTML, characters consumed)
     fn extract_element(
         opening_tag: &str,
         chars: &mut std::iter::Peekable<std::str::Chars>,
@@ -412,6 +395,12 @@ impl Renderer {
     }
 
     /// Pure function: Get tag name from an HTML tag
+    ///
+    /// # Arguments
+    /// * `tag` - HTML tag string (e.g., "<div class='foo'>")
+    ///
+    /// # Returns
+    /// * `String` - The tag name (e.g., "div")
     fn get_tag_name(tag: &str) -> String {
         let tag = tag.trim_start_matches('<').trim_start_matches('/');
         tag.split_whitespace()
@@ -422,6 +411,12 @@ impl Renderer {
     }
 
     /// Pure function: Process a component (r-component)
+    ///
+    /// # Arguments
+    /// * `tag` - HTML tag with r-component directive
+    ///
+    /// # Returns
+    /// * `RenderResult` - Rendered component HTML with scoped CSS
     fn process_component(&self, tag: &str) -> RenderResult {
         let (name, props) = match DirectiveParser::extract_component(tag) {
             Some(info) => info,
@@ -438,7 +433,7 @@ impl Renderer {
             None => return RenderResult::new(format!("<!-- Component '{}' not found -->", name)),
         };
 
-        let component_html = Self::extract_html(&component.content);
+        let component_html = &component.content;
 
         // Create a new context with component props
         let mut component_context = self.context.clone();
@@ -463,6 +458,13 @@ impl Renderer {
     }
 
     /// Pure function: Add data-rhtmx scope attribute to the root element
+    ///
+    /// # Arguments
+    /// * `html` - HTML content to add scope attribute to
+    /// * `scope_name` - Name of the scope for CSS scoping
+    ///
+    /// # Returns
+    /// * `String` - HTML with data-rhtmx attribute added
     fn add_scope_attribute(html: &str, scope_name: &str) -> String {
         let html = html.trim();
 
@@ -495,6 +497,12 @@ impl Renderer {
     }
 
     /// Pure function: Process a match block (r-match, r-when, r-default)
+    ///
+    /// # Arguments
+    /// * `element` - Complete HTML element with r-match directive
+    ///
+    /// # Returns
+    /// * `RenderResult` - Rendered matched case with CSS
     fn process_match(&self, element: &str) -> RenderResult {
         let tag_end = element.find('>').unwrap_or(element.len());
         let opening_tag = &element[..=tag_end];
@@ -573,6 +581,13 @@ impl Renderer {
     }
 
     /// Pure function: Extract element when we already have the opening tag
+    ///
+    /// # Arguments
+    /// * `opening_tag` - The opening HTML tag string
+    /// * `chars` - Mutable peekable iterator of remaining characters
+    ///
+    /// # Returns
+    /// * `(String, usize)` - Tuple of (complete element HTML, characters consumed)
     fn extract_element_from_tag(
         opening_tag: &str,
         chars: &mut std::iter::Peekable<std::str::Chars>,
@@ -624,6 +639,12 @@ impl Renderer {
     }
 
     /// Pure function: Process a loop element (r-for)
+    ///
+    /// # Arguments
+    /// * `element` - Complete HTML element with r-for directive
+    ///
+    /// # Returns
+    /// * `RenderResult` - Rendered loop iterations with CSS
     fn process_loop(&self, element: &str) -> RenderResult {
         let tag_end = element.find('>').unwrap_or(element.len());
         let opening_tag = &element[..=tag_end];
@@ -679,6 +700,12 @@ impl Renderer {
     }
 
     /// Pure function: Process a conditional element (r-if, r-else-if, r-else)
+    ///
+    /// # Arguments
+    /// * `element` - Complete HTML element with conditional directive
+    ///
+    /// # Returns
+    /// * `RenderResult` - Rendered element if condition is true, empty otherwise
     fn process_conditional(&self, element: &str) -> RenderResult {
         let tag_end = element.find('>').unwrap_or(element.len());
         let opening_tag = &element[..=tag_end];
@@ -712,6 +739,13 @@ impl Renderer {
     }
 
     /// Pure function: Process {expression} interpolations with an evaluator
+    ///
+    /// # Arguments
+    /// * `html` - HTML content with {expression} interpolations
+    /// * `evaluator` - ExpressionEvaluator for evaluating expressions
+    ///
+    /// # Returns
+    /// * `String` - HTML with all interpolations replaced with evaluated values
     fn process_interpolations_with_evaluator(html: &str, evaluator: &ExpressionEvaluator) -> String {
         let re = Regex::new(r"\{([^}]+)\}").unwrap();
 
@@ -722,141 +756,45 @@ impl Renderer {
         .to_string()
     }
 
-    /// Pure function: Render a partial (without layout)
+    /// Renders a template without a layout wrapper (for HTMX partial responses)
+    ///
+    /// # Arguments
+    /// * `content` - Template content to render
+    ///
+    /// # Returns
+    /// * `Result<RenderResult>` - Rendered HTML without layout wrapper
     pub fn render_partial(&self, content: &str) -> Result<RenderResult> {
-        let clean_content = Self::strip_layout_directive(content);
-        self.render(&clean_content)
+        self.render(content)
     }
 
-    /// Pure function: Check if content should be rendered as a partial
-    pub fn is_partial(&self, content: &str) -> bool {
-        !Self::has_component(content)
-    }
-
-    /// Pure function: Check if content has named partials
-    pub fn has_named_partials(&self, content: &str) -> bool {
-        content.contains("partial ")
-    }
-
-    /// Pure function: List all named partials in content
-    pub fn list_partials(&self, content: &str) -> Vec<String> {
-        let mut partials = Vec::new();
-        let re = Regex::new(r"partial\s+(\w+)\s*\(").unwrap();
-
-        for cap in re.captures_iter(content) {
-            if let Some(name) = cap.get(1) {
-                partials.push(name.as_str().to_string());
-            }
-        }
-
-        partials
-    }
-
-    /// Pure function: Extract a named partial by name
-    fn extract_named_partial(content: &str, name: &str) -> Result<String> {
-        let search_pattern = format!("partial {}", name);
-
-        if let Some(start_pos) = content.find(&search_pattern) {
-            let after_partial = &content[start_pos..];
-
-            if let Some(brace_pos) = after_partial.find('{') {
-                let abs_brace_pos = start_pos + brace_pos;
-                let mut depth = 0;
-                let mut end_pos = None;
-
-                for (byte_idx, ch) in content[abs_brace_pos..].char_indices() {
-                    if ch == '{' {
-                        depth += 1;
-                    } else if ch == '}' {
-                        depth -= 1;
-                        if depth == 0 {
-                            end_pos = Some(abs_brace_pos + byte_idx);
-                            break;
-                        }
-                    }
-                }
-
-                if let Some(end) = end_pos {
-                    let html = &content[abs_brace_pos + 1..end];
-                    return Ok(html.trim().to_string());
-                }
-            }
-        }
-
-        anyhow::bail!("Partial '{}' not found", name)
-    }
-
-    /// Pure function: Render a named partial with name
-    pub fn render_named_partial(&self, content: &str, name: &str) -> Result<RenderResult> {
-        let partial_html = Self::extract_named_partial(content, name)?;
-        let processed = self.process_directives(&partial_html);
-        let evaluator = self.context.create_evaluator();
-        let interpolated = Self::process_interpolations_with_evaluator(&processed.html, &evaluator);
-
-        Ok(RenderResult {
-            html: interpolated,
-            collected_css: processed.collected_css,
-        })
-    }
-
-    /// Pure function: Parse @layout directive from page content
-    pub fn parse_layout_directive(&self, content: &str) -> Option<LayoutDirective> {
-        let re = Regex::new(r#"^\s*@layout\((false|"([^"]+)")\)"#).unwrap();
-
-        if let Some(caps) = re.captures(content) {
-            if caps.get(1).map(|m| m.as_str()) == Some("false") {
-                return Some(LayoutDirective::None);
-            } else if let Some(name) = caps.get(2) {
-                return Some(LayoutDirective::Custom(name.as_str().to_string()));
-            }
-        }
-
-        None
-    }
-
-    /// Pure function: Strip @layout directive from content
-    pub fn strip_layout_directive(content: &str) -> String {
-        let re = Regex::new(r#"^\s*@layout\((false|"[^"]+")\)\s*\n?"#).unwrap();
-        re.replace(content, "").to_string()
-    }
-
-    /// Pure function: Render page with layout
+    /// Renders a page with layout content
+    ///
+    /// Used by file-based router with `_layout.rhtmx` files.
+    /// Replaces {slots.content} in layout with rendered page content.
+    ///
+    /// # Arguments
+    /// * `layout_content` - Layout template content (from `_layout.rhtmx`)
+    /// * `page_content` - Page template content to inject into layout
+    ///
+    /// # Returns
+    /// * `Result<RenderResult>` - Rendered HTML with layout and injected CSS
     pub fn render_with_layout(
         &self,
         layout_content: &str,
         page_content: &str,
     ) -> Result<RenderResult> {
-        let clean_page_content = Self::strip_layout_directive(page_content);
-        let slots = Self::extract_slots(&clean_page_content);
+        let layout_result = self.process_directives(layout_content);
+        let page_result = self.render(page_content)?;
 
-        let layout_html_raw = Self::extract_html(layout_content);
-        let layout_result = self.process_directives(&layout_html_raw);
-
-        let page_result = self.render(&clean_page_content)?;
-
-        let mut result = layout_result.html.replace("{slots.content}", &page_result.html);
-
-        let slot_pattern =
-            Regex::new(r#"\{slots\.get\("([^"]+)"\)\.unwrap_or\("([^"]*)"\)\}"#).unwrap();
-        result = slot_pattern
-            .replace_all(&result, |caps: &regex::Captures| {
-                let key = &caps[1];
-                let default = &caps[2];
-                slots
-                    .get(key)
-                    .map(|s| s.as_str())
-                    .unwrap_or(default)
-                    .to_string()
-            })
-            .to_string();
+        let result = layout_result.html.replace("{slots.content}", &page_result.html);
 
         let evaluator = self.context.create_evaluator();
-        result = Self::process_interpolations_with_evaluator(&result, &evaluator);
+        let interpolated = Self::process_interpolations_with_evaluator(&result, &evaluator);
 
         let mut combined_css = layout_result.collected_css.clone();
         combined_css.extend(page_result.collected_css);
 
-        let final_html = Self::inject_css(&result, &combined_css);
+        let final_html = Self::inject_css(&interpolated, &combined_css);
 
         Ok(RenderResult {
             html: final_html,
@@ -865,6 +803,13 @@ impl Renderer {
     }
 
     /// Pure function: Inject collected CSS into the HTML <head>
+    ///
+    /// # Arguments
+    /// * `html` - HTML document to inject CSS into
+    /// * `collected_css` - Set of CSS strings to inject
+    ///
+    /// # Returns
+    /// * `String` - HTML with CSS injected in <head> section
     fn inject_css(html: &str, collected_css: &HashSet<String>) -> String {
         if collected_css.is_empty() {
             return html.to_string();
