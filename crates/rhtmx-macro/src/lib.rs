@@ -160,10 +160,19 @@ fn scope_css_rules(scope_name: &str, css: &str) -> String {
 /// Marks a function as a GET request handler. When used with file-based routing,
 /// the route is determined by the file location.
 ///
-/// # Example
+/// # Syntax
+///
+/// - `get! { fn name() { ... } }` - Basic handler
+/// - `get!("partial=name") { fn name() { ... } }` - Query parameter handler
+/// - `get!(":id") { fn name() { ... } }` - Route parameter handler
+/// - `get!(":id/edit") { fn name() { ... } }` - Sub-route handler
+///
+/// # Examples
 ///
 /// ```ignore
 /// // File: pages/users.rs
+///
+/// // Basic GET handler - responds to /users
 /// get! {
 ///     fn index() -> OkResponse {
 ///         let users = db::get_users()?;
@@ -171,9 +180,27 @@ fn scope_css_rules(scope_name: &str, css: &str) -> String {
 ///     }
 /// }
 ///
+/// // Query param handler - responds to /users?partial=stats
 /// get!("partial=stats") {
 ///     fn stats() -> OkResponse {
-///         Ok().render(stats_component, get_stats())
+///         let stats = db::get_stats()?;
+///         Ok().render(stats_component, stats)
+///     }
+/// }
+///
+/// // Query param handler - responds to /users?partial=list
+/// get!("partial=list") {
+///     fn user_list() -> OkResponse {
+///         let users = db::get_users()?;
+///         Ok().render(user_list_component, users)
+///     }
+/// }
+///
+/// // Route param handler - responds to /users/:id
+/// get!(":id") {
+///     fn show(id: i32) -> OkResponse {
+///         let user = db::get_user(id)?;
+///         Ok().render(user_detail, user)
 ///     }
 /// }
 /// ```
@@ -184,14 +211,23 @@ pub fn get(input: TokenStream) -> TokenStream {
 
 /// HTTP POST handler macro
 ///
-/// # Example
+/// # Examples
 ///
 /// ```ignore
+/// // Basic POST handler
 /// post! {
 ///     fn create(req: CreateUserRequest) -> OkResponse {
 ///         let user = db::create_user(req)?;
 ///         Ok().render(user_card, user)
 ///             .toast("User created!")
+///     }
+/// }
+///
+/// // Query param POST handler - responds to POST /users?action=bulk
+/// post!("action=bulk") {
+///     fn bulk_create(req: BulkCreateRequest) -> OkResponse {
+///         let users = db::bulk_create_users(req)?;
+///         Ok().render(user_list, users)
 ///     }
 /// }
 /// ```
@@ -202,14 +238,23 @@ pub fn post(input: TokenStream) -> TokenStream {
 
 /// HTTP PUT handler macro
 ///
-/// # Example
+/// # Examples
 ///
 /// ```ignore
+/// // Route param handler - responds to PUT /users/:id
 /// put!(":id") {
 ///     fn update(id: i32, req: UpdateUserRequest) -> OkResponse {
 ///         let user = db::update_user(id, req)?;
 ///         Ok().render(user_card, user)
 ///             .toast("User updated!")
+///     }
+/// }
+///
+/// // Sub-route handler - responds to PUT /users/:id/activate
+/// put!(":id/activate") {
+///     fn activate(id: i32) -> OkResponse {
+///         let user = db::activate_user(id)?;
+///         Ok().render(user_card, user)
 ///     }
 /// }
 /// ```

@@ -14,7 +14,7 @@ use axum::{
     Router,
 };
 use rhtmx::{
-    database, Config, FormData, LayoutDirective,
+    database, Config, FormData,
     QueryParams, Renderer, RequestContext, TemplateLoader,
 };
 use crate::hot_reload::{create_watcher, ChangeType};
@@ -308,8 +308,13 @@ async fn create_request_context(
 /// Render a route with layout
 async fn render_route(state: &AppState, route: &str, request_context: RequestContext) -> Response {
     // Check if there's an action handler for this route and method
+    // Try with query parameters first (more specific match)
     let method_str = request_context.method.as_str();
-    if let Some(handler) = state.action_registry.find(route, method_str) {
+    if let Some(handler) = state.action_registry.find_with_query(
+        route,
+        method_str,
+        request_context.query.as_map(),
+    ) {
         // Execute the action handler instead of rendering the template
         return handler(request_context).await.into_response();
     }
