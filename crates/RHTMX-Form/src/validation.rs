@@ -394,6 +394,12 @@ pub fn extract_validation_attrs(attrs: &[syn::Attribute]) -> Vec<ValidationAttr>
             Some("path") => {
                 validations.push(ValidationAttr::Path);
             }
+            Some("nutype") => {
+                validations.push(ValidationAttr::Nutype);
+            }
+            Some("validated") => {
+                validations.push(ValidationAttr::Validated);
+            }
             _ => {}
         }
     }
@@ -460,6 +466,10 @@ pub enum ValidationAttr {
     Query,
     Form,
     Path,
+
+    // Type-level validation (nutype, etc.)
+    Nutype,      // Field type is a nutype-validated newtype
+    Validated,   // Field type is already validated (generic marker)
 }
 
 /// Generate validation implementation for a struct
@@ -491,6 +501,12 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
             .iter()
             .any(|v| matches!(v, ValidationAttr::AllowWhitespace));
 
+        // Check if field type is already validated (nutype, etc.)
+        // If so, skip base validation but keep form-specific validators
+        let is_type_validated = validations
+            .iter()
+            .any(|v| matches!(v, ValidationAttr::Nutype | ValidationAttr::Validated));
+
         // Extract custom message, label, and message_key if present
         let custom_message = validations
             .iter()
@@ -508,18 +524,47 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
             .unwrap_or_else(|| field_name_str.clone());
 
         for validation in &validations {
+            // Skip base validation for nutype/validated fields
+            // But keep form-specific validators (NoPublicDomains, EqualsField, etc.)
+            if is_type_validated {
+                match validation {
+                    // Skip base format validators - type already validates these
+                    ValidationAttr::Email
+                    | ValidationAttr::Url
+                    | ValidationAttr::MinLength(_)
+                    | ValidationAttr::MaxLength(_)
+                    | ValidationAttr::Length(_, _)
+                    | ValidationAttr::Min(_)
+                    | ValidationAttr::Max(_)
+                    | ValidationAttr::Range(_, _)
+                    | ValidationAttr::Regex(_)
+                    | ValidationAttr::Contains(_)
+                    | ValidationAttr::NotContains(_)
+                    | ValidationAttr::StartsWith(_)
+                    | ValidationAttr::EndsWith(_)
+                    | ValidationAttr::Equals(_)
+                    | ValidationAttr::NotEquals(_) => continue,
+                    // Keep form-specific validators
+                    _ => {}
+                }
+            }
+
             let validation_check = match validation {
                 ValidationAttr::Email => {
                     quote! {
                         if !rhtmx::validation::validators::is_valid_email(&self.#field_name) {
-                            errors.insert(#field_name_str.to_string(), "Invalid email address".to_string());
+                            errors.entry(#field_name_str.to_string())
+                                .or_insert_with(Vec::new)
+                                .push("Invalid email address".to_string());
                         }
                     }
                 }
                 ValidationAttr::NoPublicDomains => {
                     quote! {
                         if rhtmx::validation::validators::is_public_domain(&self.#field_name) {
-                            errors.insert(#field_name_str.to_string(), "Public email domains not allowed".to_string());
+                            errors.entry(#field_name_str.to_string())
+                                .or_insert_with(Vec::new)
+                                .push("Public email domains not allowed".to_string());
                         }
                     }
                 }
@@ -530,49 +575,49 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                         .collect::<Vec<_>>();
                     quote! {
                         if rhtmx::validation::validators::is_blocked_domain(&self.#field_name, &vec![#(#domains_vec),*]) {
-                            errors.insert(#field_name_str.to_string(), "Email domain is blocked".to_string());
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push("Email domain is blocked".to_string());
                         }
                     }
                 }
                 ValidationAttr::Password(pattern) => {
                     quote! {
                         if let Err(msg) = rhtmx::validation::validators::validate_password(&self.#field_name, #pattern) {
-                            errors.insert(#field_name_str.to_string(), msg);
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(msg);
                         }
                     }
                 }
                 ValidationAttr::Min(min_val) => {
                     quote! {
                         if self.#field_name < #min_val {
-                            errors.insert(#field_name_str.to_string(), format!("Must be at least {}", #min_val));
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Must be at least {}", #min_val));
                         }
                     }
                 }
                 ValidationAttr::Max(max_val) => {
                     quote! {
                         if self.#field_name > #max_val {
-                            errors.insert(#field_name_str.to_string(), format!("Must be at most {}", #max_val));
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Must be at most {}", #max_val));
                         }
                     }
                 }
                 ValidationAttr::Range(min_val, max_val) => {
                     quote! {
                         if self.#field_name < #min_val || self.#field_name > #max_val {
-                            errors.insert(#field_name_str.to_string(), format!("Must be between {} and {}", #min_val, #max_val));
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Must be between {} and {}", #min_val, #max_val));
                         }
                     }
                 }
                 ValidationAttr::MinLength(min_len) => {
                     quote! {
                         if self.#field_name.len() < #min_len {
-                            errors.insert(#field_name_str.to_string(), format!("Must be at least {} characters", #min_len));
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Must be at least {} characters", #min_len));
                         }
                     }
                 }
                 ValidationAttr::MaxLength(max_len) => {
                     quote! {
                         if self.#field_name.len() > #max_len {
-                            errors.insert(#field_name_str.to_string(), format!("Must be at most {} characters", #max_len));
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Must be at most {} characters", #max_len));
                         }
                     }
                 }
@@ -580,14 +625,14 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                     quote! {
                         let len = self.#field_name.len();
                         if len < #min_len || len > #max_len {
-                            errors.insert(#field_name_str.to_string(), format!("Must be between {} and {} characters", #min_len, #max_len));
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Must be between {} and {} characters", #min_len, #max_len));
                         }
                     }
                 }
                 ValidationAttr::Regex(pattern) => {
                     quote! {
                         if !rhtmx::validation::validators::matches_regex(&self.#field_name, #pattern) {
-                            errors.insert(#field_name_str.to_string(), "Invalid format".to_string());
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push("Invalid format".to_string());
                         }
                     }
                 }
@@ -596,14 +641,14 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                         quote! {
                             if let Some(ref value) = self.#field_name {
                                 if !rhtmx::validation::validators::is_valid_url(value) {
-                                    errors.insert(#field_name_str.to_string(), "Invalid URL".to_string());
+                                    errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push("Invalid URL".to_string());
                                 }
                             }
                         }
                     } else {
                         quote! {
                             if !rhtmx::validation::validators::is_valid_url(&self.#field_name) {
-                                errors.insert(#field_name_str.to_string(), "Invalid URL".to_string());
+                                errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push("Invalid URL".to_string());
                             }
                         }
                     }
@@ -611,42 +656,42 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                 ValidationAttr::Contains(substring) => {
                     quote! {
                         if !self.#field_name.contains(#substring) {
-                            errors.insert(#field_name_str.to_string(), format!("Must contain '{}'", #substring));
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Must contain '{}'", #substring));
                         }
                     }
                 }
                 ValidationAttr::NotContains(substring) => {
                     quote! {
                         if self.#field_name.contains(#substring) {
-                            errors.insert(#field_name_str.to_string(), format!("Must not contain '{}'", #substring));
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Must not contain '{}'", #substring));
                         }
                     }
                 }
                 ValidationAttr::StartsWith(prefix) => {
                     quote! {
                         if !self.#field_name.starts_with(#prefix) {
-                            errors.insert(#field_name_str.to_string(), format!("Must start with '{}'", #prefix));
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Must start with '{}'", #prefix));
                         }
                     }
                 }
                 ValidationAttr::EndsWith(suffix) => {
                     quote! {
                         if !self.#field_name.ends_with(#suffix) {
-                            errors.insert(#field_name_str.to_string(), format!("Must end with '{}'", #suffix));
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Must end with '{}'", #suffix));
                         }
                     }
                 }
                 ValidationAttr::Equals(value) => {
                     quote! {
                         if self.#field_name != #value {
-                            errors.insert(#field_name_str.to_string(), format!("Must equal '{}'", #value));
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Must equal '{}'", #value));
                         }
                     }
                 }
                 ValidationAttr::NotEquals(value) => {
                     quote! {
                         if self.#field_name == #value {
-                            errors.insert(#field_name_str.to_string(), format!("Must not equal '{}'", #value));
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Must not equal '{}'", #value));
                         }
                     }
                 }
@@ -654,7 +699,7 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                     let other_field_ident = syn::Ident::new(other_field, proc_macro2::Span::call_site());
                     quote! {
                         if self.#field_name != self.#other_field_ident {
-                            errors.insert(#field_name_str.to_string(), format!("Must match {}", #other_field));
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Must match {}", #other_field));
                         }
                     }
                 }
@@ -664,10 +709,10 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                         if self.#dep_field_ident == #dep_value {
                             if let Some(ref val) = self.#field_name {
                                 if val.is_empty() {
-                                    errors.insert(#field_name_str.to_string(), format!("Required when {} is {}", #dep_field, #dep_value));
+                                    errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Required when {} is {}", #dep_field, #dep_value));
                                 }
                             } else {
-                                errors.insert(#field_name_str.to_string(), format!("Required when {} is {}", #dep_field, #dep_value));
+                                errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Required when {} is {}", #dep_field, #dep_value));
                             }
                         }
                     }
@@ -675,14 +720,14 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                 ValidationAttr::MinItems(min_count) => {
                     quote! {
                         if self.#field_name.len() < #min_count {
-                            errors.insert(#field_name_str.to_string(), format!("Must have at least {} items", #min_count));
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Must have at least {} items", #min_count));
                         }
                     }
                 }
                 ValidationAttr::MaxItems(max_count) => {
                     quote! {
                         if self.#field_name.len() > #max_count {
-                            errors.insert(#field_name_str.to_string(), format!("Must have at most {} items", #max_count));
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Must have at most {} items", #max_count));
                         }
                     }
                 }
@@ -692,7 +737,7 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                             let mut seen = std::collections::HashSet::new();
                             for item in &self.#field_name {
                                 if !seen.insert(item) {
-                                    errors.insert(#field_name_str.to_string(), "All items must be unique".to_string());
+                                    errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push("All items must be unique".to_string());
                                     break;
                                 }
                             }
@@ -708,7 +753,7 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                         {
                             let allowed = vec![#(#values_vec),*];
                             if !allowed.contains(&self.#field_name.as_str()) {
-                                errors.insert(#field_name_str.to_string(), format!("Must be one of: {}", allowed.join(", ")));
+                                errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(format!("Must be one of: {}", allowed.join(", ")));
                             }
                         }
                     }
@@ -717,7 +762,7 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                     let func_ident = syn::Ident::new(func_name, proc_macro2::Span::call_site());
                     quote! {
                         if let Err(msg) = #func_ident(&self.#field_name) {
-                            errors.insert(#field_name_str.to_string(), msg);
+                            errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(msg);
                         }
                     }
                 }
@@ -728,7 +773,7 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                             .unwrap_or_else(|| format!("{} is required", field_label));
                         quote! {
                             if self.#field_name.is_none() {
-                                errors.insert(#field_name_str.to_string(), #error_msg.to_string());
+                                errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(#error_msg.to_string());
                             }
                         }
                     } else {
@@ -741,7 +786,9 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                 | ValidationAttr::AllowWhitespace
                 | ValidationAttr::Query
                 | ValidationAttr::Form
-                | ValidationAttr::Path => continue,
+                | ValidationAttr::Path
+                | ValidationAttr::Nutype
+                | ValidationAttr::Validated => continue,
             };
 
             validation_code.push(validation_check);
@@ -755,7 +802,7 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
                     .unwrap_or_else(|| format!("{} is required", field_label));
                 validation_code.push(quote! {
                     if self.#field_name.trim().is_empty() {
-                        errors.insert(#field_name_str.to_string(), #error_msg.to_string());
+                        errors.entry(#field_name_str.to_string()).or_insert_with(Vec::new).push(#error_msg.to_string());
                     }
                 });
             }
@@ -764,8 +811,8 @@ pub fn impl_validate(input: &DeriveInput) -> TokenStream {
 
     quote! {
         impl rhtmx::validation::Validate for #name {
-            fn validate(&self) -> Result<(), std::collections::HashMap<String, String>> {
-                let mut errors = std::collections::HashMap::new();
+            fn validate(&self) -> Result<(), std::collections::HashMap<String, Vec<String>>> {
+                let mut errors: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
 
                 #(#validation_code)*
 
@@ -803,7 +850,26 @@ fn is_string_type(ty: &syn::Type) -> bool {
 fn validation_to_html5_attrs(validations: &[ValidationAttr]) -> Vec<(&'static str, String)> {
     let mut attrs = Vec::new();
 
+    // Check if type is already validated (nutype, etc.)
+    let is_type_validated = validations
+        .iter()
+        .any(|v| matches!(v, ValidationAttr::Nutype | ValidationAttr::Validated));
+
     for validation in validations {
+        // Skip base validators for nutype/validated fields
+        if is_type_validated {
+            match validation {
+                ValidationAttr::Email
+                | ValidationAttr::Url
+                | ValidationAttr::MinLength(_)
+                | ValidationAttr::MaxLength(_)
+                | ValidationAttr::Min(_)
+                | ValidationAttr::Max(_)
+                | ValidationAttr::Regex(_) => continue,
+                _ => {}
+            }
+        }
+
         match validation {
             ValidationAttr::Email => {
                 attrs.push(("type", "email".to_string()));
@@ -840,7 +906,35 @@ fn validation_to_html5_attrs(validations: &[ValidationAttr]) -> Vec<(&'static st
 fn validation_to_json(validations: &[ValidationAttr]) -> String {
     let mut json_parts = Vec::new();
 
+    // Check if type is already validated (nutype, etc.)
+    let is_type_validated = validations
+        .iter()
+        .any(|v| matches!(v, ValidationAttr::Nutype | ValidationAttr::Validated));
+
     for validation in validations {
+        // Skip base validators for nutype/validated fields - type handles these
+        // But keep form-specific validators (NoPublicDomains, EqualsField, etc.)
+        if is_type_validated {
+            match validation {
+                ValidationAttr::Email
+                | ValidationAttr::Url
+                | ValidationAttr::MinLength(_)
+                | ValidationAttr::MaxLength(_)
+                | ValidationAttr::Length(_, _)
+                | ValidationAttr::Min(_)
+                | ValidationAttr::Max(_)
+                | ValidationAttr::Range(_, _)
+                | ValidationAttr::Regex(_)
+                | ValidationAttr::Contains(_)
+                | ValidationAttr::NotContains(_)
+                | ValidationAttr::StartsWith(_)
+                | ValidationAttr::EndsWith(_)
+                | ValidationAttr::Equals(_)
+                | ValidationAttr::NotEquals(_) => continue,
+                _ => {}
+            }
+        }
+
         match validation {
             ValidationAttr::Email => {
                 json_parts.push(r#""email": true"#.to_string());

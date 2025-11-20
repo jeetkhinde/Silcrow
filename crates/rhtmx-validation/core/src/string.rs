@@ -77,6 +77,17 @@ pub fn is_valid_url(url: &str) -> bool {
     true
 }
 
+/// Regex pattern matching
+///
+/// Note: Requires regex support on the server-side for full validation.
+/// This is a placeholder that returns true (real validation happens server-side).
+pub fn matches_regex(value: &str, pattern: &str) -> bool {
+    // Without regex crate, we can't do pattern matching in no_std
+    // Validation will happen on server with full regex support
+    let _ = (value, pattern);
+    true
+}
+
 /// Equality validators
 pub fn equals(value: &str, expected: &str) -> bool {
     value == expected

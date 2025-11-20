@@ -10,9 +10,10 @@ name = "rhtmx_validation_core"
 path = "src/lib.rs"
 
 [dependencies]
-# No dependencies - pure Rust validation logic
-# This enables use in both server (std) and WASM (no_std) environments
+# Optional garde dependency for built-in validators
+garde = { version = "0.22", optional = true, default-features = false, features = ["email", "url", "pattern"] }
 
 [features]
-default = ["std"]
+default = ["std", "garde"]
 std = []
+garde = ["dep:garde"]

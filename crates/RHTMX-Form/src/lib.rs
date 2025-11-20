@@ -130,7 +130,9 @@ mod validation;
         custom,
         query,
         form,
-        path
+        path,
+        nutype,
+        validated
     )
 )]
 pub fn derive_validate(input: TokenStream) -> TokenStream {
@@ -238,7 +240,9 @@ pub fn derive_validate(input: TokenStream) -> TokenStream {
         custom,
         query,
         form,
-        path
+        path,
+        nutype,
+        validated
     )
 )]
 pub fn derive_form_field(input: TokenStream) -> TokenStream {
