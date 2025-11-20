@@ -552,6 +552,374 @@ pub struct PositiveInt(i64);
 pub struct NonNegativeInt(i64);
 
 // =============================================================================
+// URL Types
+// =============================================================================
+
+/// Valid URL address
+///
+/// **Business Rule**: Accepts any valid URL (http, https, ftp, etc.)
+///
+/// **Use when**: You need to validate URL format
+#[nutype(
+    validate(predicate = is_valid_url),
+    derive(
+        Debug,
+        Clone,
+        PartialEq,
+        Eq,
+        Hash,
+        AsRef,
+        TryFrom,
+        Into,
+        Deref,
+        Display,
+        Serialize,
+        Deserialize,
+    )
+)]
+pub struct UrlAddress(String);
+
+/// HTTPS-only URL
+///
+/// **Business Rule**: Only accepts HTTPS URLs (secure connections only)
+///
+/// **Use when**: You need to enforce secure connections
+#[nutype(
+    validate(predicate = is_https_url),
+    derive(
+        Debug,
+        Clone,
+        PartialEq,
+        Eq,
+        Hash,
+        AsRef,
+        TryFrom,
+        Into,
+        Deref,
+        Display,
+        Serialize,
+        Deserialize,
+    )
+)]
+pub struct HttpsUrl(String);
+
+// URL validation predicates
+fn is_valid_url(s: &str) -> bool {
+    // Basic URL validation
+    if s.len() < 10 {
+        return false;
+    }
+
+    // Must start with a protocol
+    let has_protocol = s.starts_with("http://")
+        || s.starts_with("https://")
+        || s.starts_with("ftp://")
+        || s.starts_with("ws://")
+        || s.starts_with("wss://");
+
+    if !has_protocol {
+        return false;
+    }
+
+    // Must have at least one dot after protocol
+    let after_protocol = s.split("://").nth(1).unwrap_or("");
+    after_protocol.contains('.')
+}
+
+fn is_https_url(s: &str) -> bool {
+    s.starts_with("https://") && is_valid_url(s)
+}
+
+// =============================================================================
+// Specialized Numeric Types
+// =============================================================================
+
+/// Age (18-120 years)
+///
+/// **Business Rule**: Standard adult age range
+///
+/// **Use when**: Age verification, user registration
+#[nutype(
+    validate(greater_or_equal = 18, less_or_equal = 120),
+    derive(
+        Debug,
+        Clone,
+        Copy,
+        PartialEq,
+        Eq,
+        PartialOrd,
+        Ord,
+        AsRef,
+        TryFrom,
+        Into,
+        Deref,
+        Display,
+        Serialize,
+        Deserialize,
+    )
+)]
+pub struct Age(i64);
+
+/// Percentage (0-100)
+///
+/// **Business Rule**: Standard percentage value
+///
+/// **Use when**: Progress, discounts, ratings
+#[nutype(
+    validate(greater_or_equal = 0, less_or_equal = 100),
+    derive(
+        Debug,
+        Clone,
+        Copy,
+        PartialEq,
+        Eq,
+        PartialOrd,
+        Ord,
+        AsRef,
+        TryFrom,
+        Into,
+        Deref,
+        Display,
+        Serialize,
+        Deserialize,
+    )
+)]
+pub struct Percentage(i64);
+
+/// Network port (1-65535)
+///
+/// **Business Rule**: Valid TCP/UDP port range
+///
+/// **Use when**: Network configuration
+#[nutype(
+    validate(greater_or_equal = 1, less_or_equal = 65535),
+    derive(
+        Debug,
+        Clone,
+        Copy,
+        PartialEq,
+        Eq,
+        PartialOrd,
+        Ord,
+        AsRef,
+        TryFrom,
+        Into,
+        Deref,
+        Display,
+        Serialize,
+        Deserialize,
+    )
+)]
+pub struct Port(i64);
+
+// =============================================================================
+// Collection Types
+// =============================================================================
+
+/// Non-empty vector
+///
+/// **Business Rule**: Vector must have at least one element
+///
+/// **Use when**: Tags, categories, selections that can't be empty
+#[nutype(
+    validate(predicate = is_non_empty_vec),
+    derive(
+        Debug,
+        Clone,
+        PartialEq,
+        Eq,
+        AsRef,
+        TryFrom,
+        Into,
+        Deref,
+        Serialize,
+        Deserialize,
+    )
+)]
+pub struct NonEmptyVec<T>(Vec<T>);
+
+fn is_non_empty_vec<T>(v: &Vec<T>) -> bool {
+    !v.is_empty()
+}
+
+// =============================================================================
+// String Pattern Types
+// =============================================================================
+
+/// US Phone Number
+///
+/// **Business Rule**: Validates US phone numbers (10 digits)
+///
+/// **Formats accepted**:
+/// - (123) 456-7890
+/// - 123-456-7890
+/// - 1234567890
+///
+/// **Use when**: US phone number validation
+#[nutype(
+    validate(predicate = is_valid_phone_number),
+    derive(
+        Debug,
+        Clone,
+        PartialEq,
+        Eq,
+        Hash,
+        AsRef,
+        TryFrom,
+        Into,
+        Deref,
+        Display,
+        Serialize,
+        Deserialize,
+    )
+)]
+pub struct PhoneNumber(String);
+
+/// US Zip Code
+///
+/// **Business Rule**: Validates US zip codes (5 or 9 digits)
+///
+/// **Formats accepted**:
+/// - 12345
+/// - 12345-6789
+///
+/// **Use when**: US address validation
+#[nutype(
+    validate(predicate = is_valid_zip_code),
+    derive(
+        Debug,
+        Clone,
+        PartialEq,
+        Eq,
+        Hash,
+        AsRef,
+        TryFrom,
+        Into,
+        Deref,
+        Display,
+        Serialize,
+        Deserialize,
+    )
+)]
+pub struct ZipCode(String);
+
+/// IPv4 Address
+///
+/// **Business Rule**: Validates IPv4 addresses
+///
+/// **Format**: xxx.xxx.xxx.xxx (0-255 per octet)
+///
+/// **Use when**: Network configuration, IP whitelisting
+#[nutype(
+    validate(predicate = is_valid_ipv4),
+    derive(
+        Debug,
+        Clone,
+        PartialEq,
+        Eq,
+        Hash,
+        AsRef,
+        TryFrom,
+        Into,
+        Deref,
+        Display,
+        Serialize,
+        Deserialize,
+    )
+)]
+pub struct IpAddress(String);
+
+/// UUID (Universally Unique Identifier)
+///
+/// **Business Rule**: Validates UUID format (v4)
+///
+/// **Format**: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+///
+/// **Use when**: API keys, unique identifiers
+#[nutype(
+    validate(predicate = is_valid_uuid),
+    derive(
+        Debug,
+        Clone,
+        PartialEq,
+        Eq,
+        Hash,
+        AsRef,
+        TryFrom,
+        Into,
+        Deref,
+        Display,
+        Serialize,
+        Deserialize,
+    )
+)]
+pub struct Uuid(String);
+
+// Pattern validation predicates
+fn is_valid_phone_number(s: &str) -> bool {
+    // Remove common separators
+    let digits: String = s.chars()
+        .filter(|c| c.is_ascii_digit())
+        .collect();
+
+    // US phone number: exactly 10 digits
+    digits.len() == 10
+}
+
+fn is_valid_zip_code(s: &str) -> bool {
+    // Remove dash if present
+    let parts: Vec<&str> = s.split('-').collect();
+
+    match parts.len() {
+        1 => {
+            // 5-digit zip
+            parts[0].len() == 5 && parts[0].chars().all(|c| c.is_ascii_digit())
+        }
+        2 => {
+            // 9-digit zip (xxxxx-xxxx)
+            parts[0].len() == 5
+                && parts[1].len() == 4
+                && parts[0].chars().all(|c| c.is_ascii_digit())
+                && parts[1].chars().all(|c| c.is_ascii_digit())
+        }
+        _ => false,
+    }
+}
+
+fn is_valid_ipv4(s: &str) -> bool {
+    let parts: Vec<&str> = s.split('.').collect();
+
+    if parts.len() != 4 {
+        return false;
+    }
+
+    parts.iter().all(|part| {
+        part.parse::<u8>().is_ok()
+    })
+}
+
+fn is_valid_uuid(s: &str) -> bool {
+    // Basic UUID v4 validation
+    // Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+    let parts: Vec<&str> = s.split('-').collect();
+
+    if parts.len() != 5 {
+        return false;
+    }
+
+    // Check segment lengths
+    if parts[0].len() != 8 || parts[1].len() != 4 || parts[2].len() != 4
+        || parts[3].len() != 4 || parts[4].len() != 12 {
+        return false;
+    }
+
+    // All parts should be hex
+    parts.iter().all(|part| {
+        part.chars().all(|c| c.is_ascii_hexdigit())
+    })
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -650,5 +1018,95 @@ mod tests {
         assert!(PositiveInt::try_from(0).is_err());
         assert!(PositiveInt::try_from(1).is_ok());
         assert!(PositiveInt::try_from(-1).is_err());
+    }
+
+    // URL tests
+    #[test]
+    fn test_url_address() {
+        assert!(UrlAddress::try_new("https://example.com".to_string()).is_ok());
+        assert!(UrlAddress::try_new("http://example.com".to_string()).is_ok());
+        assert!(UrlAddress::try_new("ftp://files.example.com".to_string()).is_ok());
+        assert!(UrlAddress::try_new("not-a-url".to_string()).is_err());
+        assert!(UrlAddress::try_new("http://".to_string()).is_err());  // No domain
+    }
+
+    #[test]
+    fn test_https_url() {
+        assert!(HttpsUrl::try_new("https://example.com".to_string()).is_ok());
+        assert!(HttpsUrl::try_new("http://example.com".to_string()).is_err());  // Must be HTTPS
+        assert!(HttpsUrl::try_new("ftp://example.com".to_string()).is_err());
+    }
+
+    // Specialized numeric tests
+    #[test]
+    fn test_age() {
+        assert!(Age::try_from(17).is_err());  // Too young
+        assert!(Age::try_from(18).is_ok());
+        assert!(Age::try_from(65).is_ok());
+        assert!(Age::try_from(120).is_ok());
+        assert!(Age::try_from(121).is_err());  // Too old
+    }
+
+    #[test]
+    fn test_percentage() {
+        assert!(Percentage::try_from(-1).is_err());
+        assert!(Percentage::try_from(0).is_ok());
+        assert!(Percentage::try_from(50).is_ok());
+        assert!(Percentage::try_from(100).is_ok());
+        assert!(Percentage::try_from(101).is_err());
+    }
+
+    #[test]
+    fn test_port() {
+        assert!(Port::try_from(0).is_err());  // Port 0 invalid
+        assert!(Port::try_from(1).is_ok());
+        assert!(Port::try_from(80).is_ok());
+        assert!(Port::try_from(443).is_ok());
+        assert!(Port::try_from(65535).is_ok());
+        assert!(Port::try_from(65536).is_err());  // Out of range
+    }
+
+    // Collection tests
+    #[test]
+    fn test_non_empty_vec() {
+        assert!(NonEmptyVec::try_new(Vec::<String>::new()).is_err());  // Empty
+        assert!(NonEmptyVec::try_new(vec!["item".to_string()]).is_ok());
+        assert!(NonEmptyVec::try_new(vec![1, 2, 3]).is_ok());
+    }
+
+    // Pattern tests
+    #[test]
+    fn test_phone_number() {
+        assert!(PhoneNumber::try_new("1234567890".to_string()).is_ok());
+        assert!(PhoneNumber::try_new("123-456-7890".to_string()).is_ok());
+        assert!(PhoneNumber::try_new("(123) 456-7890".to_string()).is_ok());
+        assert!(PhoneNumber::try_new("123456789".to_string()).is_err());  // Too short
+        assert!(PhoneNumber::try_new("12345678901".to_string()).is_err());  // Too long
+    }
+
+    #[test]
+    fn test_zip_code() {
+        assert!(ZipCode::try_new("12345".to_string()).is_ok());
+        assert!(ZipCode::try_new("12345-6789".to_string()).is_ok());
+        assert!(ZipCode::try_new("1234".to_string()).is_err());  // Too short
+        assert!(ZipCode::try_new("123456".to_string()).is_err());  // Too long
+        assert!(ZipCode::try_new("12345-678".to_string()).is_err());  // Invalid +4
+    }
+
+    #[test]
+    fn test_ip_address() {
+        assert!(IpAddress::try_new("192.168.1.1".to_string()).is_ok());
+        assert!(IpAddress::try_new("0.0.0.0".to_string()).is_ok());
+        assert!(IpAddress::try_new("255.255.255.255".to_string()).is_ok());
+        assert!(IpAddress::try_new("256.1.1.1".to_string()).is_err());  // Out of range
+        assert!(IpAddress::try_new("192.168.1".to_string()).is_err());  // Missing octet
+    }
+
+    #[test]
+    fn test_uuid() {
+        assert!(Uuid::try_new("550e8400-e29b-41d4-a716-446655440000".to_string()).is_ok());
+        assert!(Uuid::try_new("123e4567-e89b-12d3-a456-426614174000".to_string()).is_ok());
+        assert!(Uuid::try_new("not-a-uuid".to_string()).is_err());
+        assert!(Uuid::try_new("550e8400-e29b-41d4-a716".to_string()).is_err());  // Too short
     }
 }

@@ -202,6 +202,22 @@ validate_work_email("user@gmail.com");  // false
 ### Numeric Types
 - `PositiveInt` - Integer > 0
 - `NonNegativeInt` - Integer >= 0
+- `Age` - Integer 18-120 (adult age range)
+- `Percentage` - Integer 0-100
+- `Port` - Integer 1-65535 (valid network port)
+
+### URL Types
+- `UrlAddress` - Valid URL (http, https, ftp, ws, wss)
+- `HttpsUrl` - HTTPS-only URL (secure connections only)
+
+### Pattern Types
+- `PhoneNumber` - US phone number (10 digits, accepts formatting)
+- `ZipCode` - US zip code (12345 or 12345-6789)
+- `IpAddress` - IPv4 address (xxx.xxx.xxx.xxx)
+- `Uuid` - UUID format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+
+### Collection Types
+- `NonEmptyVec<T>` - Vector with at least one element
 
 ## 🎨 Custom Types for Your Domain
 
@@ -267,7 +283,7 @@ cargo run --example business_rules_in_types
 cargo run --example route_specific_types
 ```
 
-All 12 tests passing ✅
+All 25 tests passing ✅
 WASM compatible ✅
 
 ## 📦 Installation
@@ -292,6 +308,24 @@ let work_email = WorkEmailAddress::try_new("user@acme.com".to_string())?;
 let basic = PasswordBasic::try_new("pass12".to_string())?;
 let strong = PasswordStrong::try_new("Password123!".to_string())?;
 let phrase = PasswordPhrase3::try_new("Correct-Horse-Battery-Staple".to_string())?;
+
+// Specialized types
+let age = Age::try_from(25)?;
+let discount = Percentage::try_from(15)?;
+let server_port = Port::try_from(8080)?;
+
+// URLs
+let website = UrlAddress::try_new("https://example.com".to_string())?;
+let secure_api = HttpsUrl::try_new("https://api.example.com".to_string())?;
+
+// Patterns
+let phone = PhoneNumber::try_new("(555) 123-4567".to_string())?;
+let zip = ZipCode::try_new("12345-6789".to_string())?;
+let ip = IpAddress::try_new("192.168.1.1".to_string())?;
+let id = Uuid::try_new("550e8400-e29b-41d4-a716-446655440000".to_string())?;
+
+// Collections
+let tags = NonEmptyVec::try_new(vec!["rust".to_string(), "htmx".to_string()])?;
 ```
 
 ## 📖 See Also

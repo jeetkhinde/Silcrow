@@ -57,25 +57,32 @@ product_name: ProductName  // ✅
 #### URL Validators
 | Macro | Nutype Type | Status |
 |-------|-------------|--------|
-| `#[url]` | `UrlAddress` | ❌ TODO - Easy to add |
+| `#[url]` | `UrlAddress` | ✅ Replaced |
+| N/A | `HttpsUrl` | ✅ New type |
 
-**Should create:**
+**Created:**
 ```rust
 #[nutype(
     validate(predicate = is_valid_url),
     derive(Debug, Clone, Serialize, Deserialize)
 )]
 pub struct UrlAddress(String);
+
+#[nutype(
+    validate(predicate = is_https_url),
+    derive(Debug, Clone, Serialize, Deserialize)
+)]
+pub struct HttpsUrl(String);
 ```
 
 #### Numeric Validators
 | Macro | Nutype Type | Status |
 |-------|-------------|--------|
-| `#[min(n)]` | `PositiveInt`, etc. | ⚠️ Create specific types |
+| `#[min(n)]` | `PositiveInt`, `NonNegativeInt` | ✅ Replaced |
 | `#[max(n)]` | Custom nutype | ⚠️ Create as needed |
-| `#[range(min, max)]` | Custom nutype | ⚠️ Create as needed |
+| `#[range(min, max)]` | `Age`, `Percentage`, `Port` | ✅ Replaced |
 
-**Example:**
+**Created:**
 ```rust
 #[nutype(
     validate(greater_or_equal = 18, less_or_equal = 120),
@@ -83,36 +90,75 @@ pub struct UrlAddress(String);
 )]
 pub struct Age(i64);
 
+#[nutype(
+    validate(greater_or_equal = 0, less_or_equal = 100),
+    derive(Debug, Clone, Copy, Serialize, Deserialize)
+)]
+pub struct Percentage(i64);
+
+#[nutype(
+    validate(greater_or_equal = 1, less_or_equal = 65535),
+    derive(Debug, Clone, Copy, Serialize, Deserialize)
+)]
+pub struct Port(i64);
+
 age: Age  // ✅ 18-120 enforced by type
 ```
 
 #### String Pattern Validators
 | Macro | Nutype Type | Status |
 |-------|-------------|--------|
-| `#[regex(pattern)]` | Custom nutype | ⚠️ Create as needed |
+| `#[regex(pattern)]` | `PhoneNumber`, `ZipCode`, `IpAddress`, `Uuid` | ✅ Replaced |
 | `#[contains(str)]` | Custom nutype | ⚠️ Create as needed |
-| `#[starts_with(str)]` | Custom nutype | ⚠️ Create as needed |
+| `#[starts_with(str)]` | `HttpsUrl` | ✅ Replaced |
 | `#[ends_with(str)]` | Custom nutype | ⚠️ Create as needed |
 
-**Example:**
+**Created:**
 ```rust
 #[nutype(
-    validate(predicate = starts_with_https),
+    validate(predicate = is_valid_phone_number),
     derive(Debug, Clone, Serialize, Deserialize)
 )]
-pub struct HttpsUrl(String);
+pub struct PhoneNumber(String);
 
-fn starts_with_https(s: &str) -> bool {
-    s.starts_with("https://")
-}
+#[nutype(
+    validate(predicate = is_valid_zip_code),
+    derive(Debug, Clone, Serialize, Deserialize)
+)]
+pub struct ZipCode(String);
+
+#[nutype(
+    validate(predicate = is_valid_ipv4),
+    derive(Debug, Clone, Serialize, Deserialize)
+)]
+pub struct IpAddress(String);
+
+#[nutype(
+    validate(predicate = is_valid_uuid),
+    derive(Debug, Clone, Serialize, Deserialize)
+)]
+pub struct Uuid(String);
 ```
 
 #### Collection Validators
 | Macro | Nutype Type | Status |
 |-------|-------------|--------|
-| `#[min_items(n)]` | Custom nutype | ⚠️ Create as needed |
+| `#[min_items(n)]` | `NonEmptyVec<T>` | ✅ Replaced |
 | `#[max_items(n)]` | Custom nutype | ⚠️ Create as needed |
 | `#[unique]` | Custom nutype | ⚠️ Create as needed |
+
+**Created:**
+```rust
+#[nutype(
+    validate(predicate = is_non_empty_vec),
+    derive(Debug, Clone, Serialize, Deserialize)
+)]
+pub struct NonEmptyVec<T>(Vec<T>);
+
+fn is_non_empty_vec<T>(v: &Vec<T>) -> bool {
+    !v.is_empty()
+}
+```
 
 ---
 
@@ -176,37 +222,55 @@ struct UserForm {
 
 ```rust
 // Available NOW:
+// Email types
 EmailAddress, AnyEmailAddress
 WorkEmailAddress
 BusinessEmailAddress
+
+// Password types
 PasswordBasic, PasswordMedium, PasswordStrong
 SuperStrongPassword, PasswordPhrase, PasswordPhrase3, ModernPassword
+
+// String types
 Username, NonEmptyString
+
+// Numeric types
 PositiveInt, NonNegativeInt
+Age, Percentage, Port
+
+// URL types
+UrlAddress, HttpsUrl
+
+// Pattern types
+PhoneNumber, ZipCode, IpAddress, Uuid
+
+// Collection types
+NonEmptyVec<T>
 ```
 
 ### Phase 3 (Future): More Domain Types
 
-**Should add:**
+**Could add (as needed):**
 ```rust
-// URL types
-UrlAddress
-HttpsUrl
-
-// Numeric ranges
-Age(18..120)
-Percentage(0..100)
-Port(1..65535)
-
-// String patterns
-PhoneNumber
-ZipCode
-IpAddress
-Uuid
-
 // Collections
-NonEmptyVec<T>
 UniqueVec<T>
+BoundedVec<T, MIN, MAX>
+
+// International patterns
+InternationalPhoneNumber
+PostalCode  // International zip codes
+
+// More URL variants
+WebSocketUrl (ws://, wss://)
+FtpUrl
+
+// IPv6
+Ipv6Address
+
+// Custom domains
+SocialSecurityNumber
+CreditCardNumber
+Iban
 ```
 
 ---
