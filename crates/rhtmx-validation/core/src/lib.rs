@@ -13,15 +13,9 @@ pub mod string;
 pub mod numeric;
 pub mod collection;
 
-#[cfg(feature = "garde")]
-pub mod garde_validators;
-
 // Re-export all validators
 pub use email::*;
 pub use password::*;
 pub use string::*;
 pub use numeric::*;
 pub use collection::*;
-
-#[cfg(feature = "garde")]
-pub use garde_validators::*;

@@ -12,8 +12,7 @@ proc-macro = true
 syn = { version = "2.0", features = ["full", "extra-traits"] }
 quote = "1.0"
 proc-macro2 = "1.0"
-rhtmx-validation-core = { path = "../rhtmx-validation/core" }
-garde = { version = "0.22.0", features = ["email", "url", "pattern"] }
+rhtmx-validation-core = { path = "../rhtmx-validation/core", default-features = false }
 
 [features]
 nutype = []

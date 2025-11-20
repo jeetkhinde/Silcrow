@@ -1929,7 +1929,6 @@ dependencies = [
 name = "rhtmx-form"
 version = "0.1.0"
 dependencies = [
- "garde",
  "proc-macro2",
  "quote",
  "rhtmx-validation-core",
@@ -2047,9 +2046,6 @@ dependencies = [
 [[package]]
 name = "rhtmx-validation-core"
 version = "0.1.0"
-dependencies = [
- "garde",
-]
 
 [[package]]
 name = "rhtmx-validation-wasm"

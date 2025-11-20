@@ -96,41 +96,19 @@ pub fn is_valid_email(email: &str) -> bool {
 
 /// Checks if email domain is a public domain (gmail, yahoo, etc.)
 pub fn is_public_domain(email: &str) -> bool {
-    #[cfg(feature = "garde")]
-    {
-        // Use garde custom validator
-        use crate::garde_validators::no_public_email;
-        no_public_email(email, &()).is_err()
-    }
-
-    #[cfg(not(feature = "garde"))]
-    {
-        // Fallback implementation
-        if let Some(domain) = email.split('@').nth(1) {
-            PUBLIC_DOMAINS.iter().any(|&d| d.eq_ignore_ascii_case(domain))
-        } else {
-            false
-        }
+    if let Some(domain) = email.split('@').nth(1) {
+        PUBLIC_DOMAINS.iter().any(|&d| d.eq_ignore_ascii_case(domain))
+    } else {
+        false
     }
 }
 
 /// Checks if email domain is in the blocked list
 pub fn is_blocked_domain(email: &str, blocked: &[String]) -> bool {
-    #[cfg(feature = "garde")]
-    {
-        // Use garde custom validator
-        use crate::garde_validators::blocked_domain_validator;
-        blocked_domain_validator(email, blocked).is_err()
-    }
-
-    #[cfg(not(feature = "garde"))]
-    {
-        // Fallback implementation
-        if let Some(domain) = email.split('@').nth(1) {
-            blocked.iter().any(|b| b == domain)
-        } else {
-            false
-        }
+    if let Some(domain) = email.split('@').nth(1) {
+        blocked.iter().any(|b| b == domain)
+    } else {
+        false
     }
 }
 

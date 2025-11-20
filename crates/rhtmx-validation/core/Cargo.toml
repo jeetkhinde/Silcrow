@@ -10,10 +10,8 @@ name = "rhtmx_validation_core"
 path = "src/lib.rs"
 
 [dependencies]
-# Optional garde dependency for built-in validators
-garde = { version = "0.22", optional = true, default-features = false, features = ["email", "url", "pattern"] }
+# No dependencies needed - validation is now done via nutype types
 
 [features]
-default = ["std", "garde"]
+default = ["std"]
 std = []
-garde = ["dep:garde"]

@@ -44,28 +44,16 @@ impl PasswordPattern {
 /// - "strong": 8+ chars with uppercase, lowercase, digit, special char
 /// - Any other string: treated as custom pattern name (not implemented in core)
 pub fn validate_password(password: &str, pattern: &str) -> Result<(), String> {
-    #[cfg(feature = "garde")]
-    {
-        // Use garde custom validator
-        use crate::garde_validators::password_strength;
-        password_strength(password, pattern)
-            .map_err(|e| e.to_string())
-    }
+    let pattern_enum = PasswordPattern::parse(pattern);
 
-    #[cfg(not(feature = "garde"))]
-    {
-        // Fallback to built-in validation
-        let pattern_enum = PasswordPattern::parse(pattern);
-
-        match pattern_enum {
-            PasswordPattern::Basic => validate_basic(password),
-            PasswordPattern::Medium => validate_medium(password),
-            PasswordPattern::Strong => validate_strong(password),
-            PasswordPattern::Custom(_) => {
-                // For custom patterns, we'd need regex support
-                // For now, default to strong validation
-                validate_strong(password)
-            }
+    match pattern_enum {
+        PasswordPattern::Basic => validate_basic(password),
+        PasswordPattern::Medium => validate_medium(password),
+        PasswordPattern::Strong => validate_strong(password),
+        PasswordPattern::Custom(_) => {
+            // For custom patterns, we'd need regex support
+            // For now, default to strong validation
+            validate_strong(password)
         }
     }
 }
