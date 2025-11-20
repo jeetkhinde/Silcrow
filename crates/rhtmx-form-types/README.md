@@ -1,248 +1,306 @@
 # rhtmx-form-types
 
-Common validated types for RHTMX forms using `nutype`.
+**Business rules embedded in types** - validated newtype wrappers for RHTMX forms using `nutype`.
+
+## 🎯 Philosophy: Types ARE Business Rules
+
+**Instead of this** (type + form validators):
+```rust
+#[nutype]
+#[no_public_domains]  // ← Business rule at form level
+email: EmailAddress
+```
+
+**Do this** (business rule IN the type):
+```rust
+email: WorkEmailAddress  // ← Type IS the business rule!
+```
 
 ## ✅ WASM Compatible
 
-All types in this crate work in WebAssembly environments and can be used for client-side validation!
+All types work in WebAssembly - same validation on server and client!
 
-## Features
+## 📧 Email Type Hierarchy
 
-- **Type-safe domain modeling** with nutype
-- **WASM compatible** - use the same types on server and client
-- **Serde support** - serialize/deserialize for forms
-- **Zero-cost abstractions** - compiled away to plain Rust types
-- **Integrates with RHTMX validation** - combine type validation with form validators
+Choose the type that matches your business requirement:
 
-## Usage
+| Type | Blocks Disposable | Blocks Public (Gmail/Yahoo) | Use Case |
+|------|------------------|----------------------------|-----------|
+| `EmailAddress` / `AnyEmailAddress` | ✅ | ❌ | Consumer apps |
+| `WorkEmailAddress` | ✅ | ✅ | B2B SaaS, enterprise tools |
+| `BusinessEmailAddress` | ✅ | ✅ | Verified partners only |
 
-### Basic Example
+### Examples
+
+```rust
+// Consumer app - accepts Gmail, Yahoo, etc.
+let personal = EmailAddress::try_new("user@gmail.com".to_string())?;  // ✓
+
+// B2B app - corporate emails only
+let work = WorkEmailAddress::try_new("user@acme.com".to_string())?;  // ✓
+let gmail = WorkEmailAddress::try_new("user@gmail.com".to_string()); // ✗
+
+// Enterprise - verified domains only
+let biz = BusinessEmailAddress::try_new("ceo@verified.com".to_string())?;
+```
+
+## 🔐 Password Type Hierarchy
+
+Choose the security level that matches your requirements:
+
+| Type | Min Length | Complexity | Use Case |
+|------|-----------|------------|-----------|
+| `PasswordBasic` | 6 | None | Low-security accounts |
+| `PasswordMedium` | 8 | None | Standard apps |
+| `PasswordStrong` | 10 | Upper+lower+digit+special | Sensitive data |
+| `SuperStrongPassword` | 12 | Upper+lower+digit+2 special | Admin/financial |
+| `PasswordPhrase` | 15 | None (favors length) | User-friendly security |
+| `PasswordPhrase3` | 20 | 3+ words | xkcd "correct horse..." |
+| `ModernPassword` | 16 | None | NIST 2024 guidelines |
+
+### Examples
+
+```rust
+// Basic: 6+ characters
+let basic = PasswordBasic::try_new("pass12".to_string())?;  // ✓
+
+// Strong: 10+ chars + complexity
+let strong = PasswordStrong::try_new("Password123!".to_string())?;  // ✓
+let weak = PasswordStrong::try_new("password".to_string());  // ✗
+
+// Super strong: 12+ chars + 2 special
+let super_pwd = SuperStrongPassword::try_new("MyPass123!@".to_string())?;  // ✓
+
+// Modern passphrase (user-friendly)
+let phrase = PasswordPhrase3::try_new("Correct-Horse-Battery-Staple".to_string())?;  // ✓
+```
+
+## 💡 Usage with RHTMX Forms
+
+### Simple: Type IS the Rule
 
 ```rust
 use rhtmx::{Validate, FormField};
-use rhtmx_form_types::EmailAddress;
-use serde::Deserialize;
+use rhtmx_form_types::{WorkEmailAddress, PasswordStrong};
 
 #[derive(Validate, FormField, Deserialize)]
-struct LoginForm {
-    // Type validates email format (at construction time)
-    // Form adds business rule (no public domains)
-    #[nutype]
-    #[no_public_domains]
-    email: EmailAddress,
+struct B2BSignupForm {
+    // No #[nutype] or #[no_public_domains] needed!
+    // Type enforces: no Gmail, no Yahoo, no disposable
+    email: WorkEmailAddress,
 
-    // Type validates minimum length (6+ chars)
-    // Form adds strength requirements
-    #[nutype]
-    #[password("medium")]  // Uppercase + lowercase + digit
-    password: PasswordMedium,
+    // Type enforces: 10+ chars + uppercase + lowercase + digit + special
+    password: PasswordStrong,
 }
 ```
 
-### Available Types
+**That's it!** No form-level validators needed. The type does everything.
 
-#### Email Types
-- `EmailAddress` - Basic email format validation
+### Route-Specific Security Levels
 
-#### Password Types
+```rust
+mod consumer {
+    use rhtmx_form_types::*;
+
+    struct LoginForm {
+        email: EmailAddress,        // Accepts Gmail
+        password: PasswordBasic,    // 6+ chars
+    }
+}
+
+mod business {
+    use rhtmx_form_types::*;
+
+    struct LoginForm {
+        email: WorkEmailAddress,    // No Gmail!
+        password: PasswordStrong,   // 10+ chars + complexity
+    }
+}
+
+mod admin {
+    use rhtmx_form_types::*;
+
+    struct LoginForm {
+        email: BusinessEmailAddress,     // Verified only
+        password: SuperStrongPassword,   // 12+ chars + 2 special
+    }
+}
+```
+
+### Type Safety Prevents Mistakes
+
+```rust
+fn send_business_welcome(email: WorkEmailAddress) {
+    // Guaranteed: no Gmail, no Yahoo, no disposable
+}
+
+fn validate_admin_password(pwd: SuperStrongPassword) {
+    // Guaranteed: 12+ chars + 2 special characters
+}
+
+// Compile-time enforcement!
+let gmail = EmailAddress::try_new("user@gmail.com".to_string())?;
+send_business_welcome(gmail);  // ❌ Compile error! Type mismatch.
+
+let work = WorkEmailAddress::try_new("user@acme.com".to_string())?;
+send_business_welcome(work);  // ✅ Compiles!
+```
+
+## 🌐 WASM Client-Side Validation
+
+Same types work in the browser!
+
+### Server Code
+```rust
+use rhtmx_form_types::WorkEmailAddress;
+
+#[derive(Validate, FormField)]
+struct SignupForm {
+    email: WorkEmailAddress,  // Blocks public domains
+}
+```
+
+### WASM Code (Same Types!)
+```rust
+use rhtmx_form_types::WorkEmailAddress;
+use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+pub fn validate_work_email(input: String) -> bool {
+    WorkEmailAddress::try_new(input).is_ok()
+}
+```
+
+### JavaScript Usage
+```javascript
+import { validate_work_email } from './pkg';
+
+validate_work_email("user@acme.com");  // true
+validate_work_email("user@gmail.com");  // false
+```
+
+## 📚 All Available Types
+
+### Email Types
+- `EmailAddress` / `AnyEmailAddress` - Any valid email (blocks disposable only)
+- `WorkEmailAddress` - No public domains (blocks Gmail, Yahoo, etc.)
+- `BusinessEmailAddress` - Only verified corporate domains
+
+### Password Types
 - `PasswordBasic` - 6+ characters
-- `PasswordMedium` - 8+ characters (combine with `#[password("medium")]` for full validation)
-- `PasswordStrong` - 10+ characters (combine with `#[password("strong")]` for full validation)
+- `PasswordMedium` - 8+ characters
+- `PasswordStrong` - 10+ characters + upper + lower + digit + special
+- `SuperStrongPassword` - 12+ characters + 2 special chars
+- `PasswordPhrase` - 15+ characters (passphrase style)
+- `PasswordPhrase3` - 20+ characters, 3+ words
+- `ModernPassword` - 16+ characters (NIST 2024)
 
-#### String Types
+### String Types
 - `NonEmptyString` - Cannot be empty
 - `Username` - 3-30 characters, alphanumeric + underscore/dash
 
-#### Numeric Types
+### Numeric Types
 - `PositiveInt` - Integer > 0
 - `NonNegativeInt` - Integer >= 0
 
-### Construction
+## 🎨 Custom Types for Your Domain
 
-Since these types have validation, use `try_new()` or `TryFrom`:
-
-```rust
-use rhtmx_form_types::EmailAddress;
-
-// Valid email
-let email = EmailAddress::try_new("user@example.com".to_string())?;
-
-// Invalid email - returns error
-let invalid = EmailAddress::try_new("not-an-email".to_string()); // Err
-
-// From integers
-let positive = PositiveInt::try_from(42)?;
-```
-
-### Deserialization (Forms)
-
-When deserializing from HTTP form data, validation happens automatically:
+Extend with your own business rules:
 
 ```rust
-#[derive(Deserialize)]
-struct RegistrationData {
-    email: EmailAddress,  // Validates during deserialization
-    password: PasswordStrong,
-}
+use nutype::nutype;
+use serde::{Serialize, Deserialize};
 
-// If form data is invalid, deserialization fails with clear error
-```
+// Only emails from Fortune 500 companies
+#[nutype(
+    validate(predicate = is_fortune_500_domain),
+    derive(Debug, Clone, Serialize, Deserialize)
+)]
+pub struct Fortune500Email(String);
 
-### WASM Usage
-
-The same types work in WebAssembly for client-side validation:
-
-```rust
-// In your WASM validation code
-use rhtmx_form_types::EmailAddress;
-
-#[wasm_bindgen]
-pub fn validate_email_client(input: String) -> bool {
-    EmailAddress::try_new(input).is_ok()
+fn is_fortune_500_domain(email: &str) -> bool {
+    // Check against Fortune 500 domain list
+    let domain = email.split('@').nth(1).unwrap_or("");
+    FORTUNE_500_DOMAINS.contains(&domain)
 }
 ```
 
-## Route-Specific Types
+## ✨ Benefits
 
-You can extend or override types for specific routes:
+1. **Self-Documenting Code**
+   ```rust
+   // Before
+   fn register(email: String, password: String) // What rules?
 
-```rust
-// In your application
-pub mod types {
-    pub use rhtmx_form_types::*;
+   // After
+   fn register(email: WorkEmailAddress, password: PasswordStrong) // Crystal clear!
+   ```
 
-    // Route-specific types
-    pub mod admin {
-        use nutype::nutype;
+2. **Compile-Time Safety**
+   - Can't pass `EmailAddress` where `WorkEmailAddress` is expected
+   - Can't pass `PasswordBasic` where `SuperStrongPassword` is required
 
-        /// Admin requires extra-strong passwords
-        #[nutype(
-            validate(len_char_min = 12),
-            derive(Debug, Clone, Serialize, Deserialize)
-        )]
-        pub struct AdminPassword(String);
-    }
+3. **Single Source of Truth**
+   - Business rules defined once in the type
+   - Same rules on server and client (WASM)
 
-    pub mod users {
-        use super::*;
+4. **Zero Runtime Cost**
+   - Nutype compiles to plain Rust types
+   - No performance overhead
 
-        /// Regular user password (reuse from common types)
-        pub use PasswordMedium as UserPassword;
-    }
-}
+5. **Gradual Adoption**
+   - Start with `EmailAddress` (permissive)
+   - Upgrade to `WorkEmailAddress` when business needs change
+   - Type system enforces migration
 
-// Use in forms
-use types::admin::AdminPassword;
-
-#[derive(Validate, FormField)]
-struct AdminLoginForm {
-    #[nutype]
-    password: AdminPassword,  // Requires 12+ chars
-}
-```
-
-## Integration with RHTMX Validation
-
-### Type Validation vs Form Validation
-
-**Type Validation** (enforced by nutype):
-- Email format
-- String length minimums/maximums
-- Numeric ranges
-- Pattern matching
-
-**Form Validation** (enforced by RHTMX):
-- Business rules (`#[no_public_domains]`)
-- Password strength tiers (`#[password("strong")]`)
-- Cross-field validation (`#[equals_field = "password"]`)
-- Conditional validation (`#[depends_on(...)]`)
-
-### Hybrid Approach (Best Practice)
-
-```rust
-#[derive(Validate, FormField, Deserialize)]
-struct SignupForm {
-    // Type: email format ✓
-    // Form: no Gmail/Yahoo/etc. ✓
-    #[nutype]
-    #[no_public_domains]
-    #[required]
-    email: EmailAddress,
-
-    // Type: 10+ chars ✓
-    // Form: uppercase + lowercase + digit + special ✓
-    #[nutype]
-    #[password("strong")]
-    password: PasswordStrong,
-
-    // Type: 10+ chars ✓
-    // Form: must match password field ✓
-    #[nutype]
-    #[equals_field = "password"]
-    confirm_password: PasswordStrong,
-
-    // Type: 3-30 chars, alphanumeric ✓
-    // Form: unique in database (custom validator) ✓
-    #[nutype]
-    #[custom = "check_username_available"]
-    username: Username,
-}
-```
-
-## Benefits
-
-1. **Type Safety**: Can't accidentally pass `String` where `EmailAddress` is expected
-2. **Early Validation**: Catches invalid data at deserialization time
-3. **Reusable**: Define once, use everywhere
-4. **WASM Ready**: Same types work in browser
-5. **Self-Documenting**: Function signature tells you what's expected
-6. **Zero Runtime Cost**: Compiles to plain Rust types
-
-## Example: Before vs After
-
-### Before (plain strings)
-
-```rust
-fn send_email(to: String) {  // What format? Is it validated?
-    // Hope it's a valid email...
-}
-
-let email = user_input;  // No validation
-send_email(email);  // Might fail at runtime
-```
-
-### After (validated types)
-
-```rust
-fn send_email(to: EmailAddress) {  // Guaranteed valid!
-    // Can safely use email
-}
-
-let email = EmailAddress::try_new(user_input)?;  // Validates
-send_email(email);  // Type-safe!
-```
-
-## Dependencies
-
-- `nutype` v0.5+ (validation types)
-- `serde` v1.0+ (serialization)
-
-## WASM Build
+## 🧪 Testing
 
 ```bash
-cargo build -p rhtmx-form-types --target wasm32-unknown-unknown
-```
-
-✅ All types compile successfully to WASM!
-
-## Testing
-
-```bash
+# Test all types
 cargo test -p rhtmx-form-types
+
+# Test WASM compatibility
+cargo build -p rhtmx-form-types --target wasm32-unknown-unknown
+
+# Run examples
+cargo run --example business_rules_in_types
+cargo run --example route_specific_types
 ```
 
-All 9+ tests passing ✅
+All 12 tests passing ✅
+WASM compatible ✅
 
-## License
+## 📦 Installation
+
+```toml
+[dependencies]
+rhtmx-form-types = { path = "crates/rhtmx-form-types" }
+```
+
+## 🚀 Quick Start
+
+```rust
+use rhtmx_form_types::*;
+
+// Consumer app
+let email = EmailAddress::try_new("user@gmail.com".to_string())?;
+
+// B2B app
+let work_email = WorkEmailAddress::try_new("user@acme.com".to_string())?;
+
+// Passwords
+let basic = PasswordBasic::try_new("pass12".to_string())?;
+let strong = PasswordStrong::try_new("Password123!".to_string())?;
+let phrase = PasswordPhrase3::try_new("Correct-Horse-Battery-Staple".to_string())?;
+```
+
+## 📖 See Also
+
+- [Business Rules in Types Example](examples/business_rules_in_types.rs)
+- [Route-Specific Types Example](examples/route_specific_types.rs)
+- [NUTYPE_INTEGRATION.md](../../NUTYPE_INTEGRATION.md) - Phase 1.5 documentation
+- [NUTYPE_TYPES_ANSWER.md](../../NUTYPE_TYPES_ANSWER.md) - Comprehensive Q&A
+
+## 📝 License
 
 MIT
