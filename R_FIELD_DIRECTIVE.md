@@ -398,11 +398,331 @@ email: String,
 cargo run --example r_field_directive
 ```
 
+## Working with Nutype Validated Types
+
+RHTMX provides pre-built validated types in `rhtmx-form-types` that work seamlessly with `r-field`. These types enforce validation at the **type level**, eliminating redundant validation logic.
+
+### Basic Nutype Usage
+
+Simply use the Nutype type directly - no additional markers needed!
+
+```rust
+use rhtmx::{html, Html, Validate, FormField};
+use rhtmx_form_types::{WorkEmailAddress, PasswordStrong, Username};
+use serde::Deserialize;
+
+#[derive(Validate, FormField, Deserialize)]
+struct RegisterForm {
+    email: WorkEmailAddress,      // ✅ Blocks public domains (Gmail, Yahoo, etc.)
+    password: PasswordStrong,      // ✅ 10+ chars with complexity
+    username: Username,            // ✅ 3-30 chars, alphanumeric + _/-
+}
+
+fn register_page(form: &RegisterForm) -> Html {
+    html! {
+        <form action="/register" method="post">
+            <input type="email" r-field={form.email} placeholder="work@company.com" />
+            <input type="password" r-field={form.password} />
+            <input r-field={form.username} />
+            <button type="submit">Register</button>
+        </form>
+    }
+}
+```
+
+**What happens:**
+- ✅ `WorkEmailAddress::try_new()` validates email format + blocks public/disposable domains
+- ✅ `PasswordStrong::try_new()` validates 10+ chars + uppercase + lowercase + digit + special
+- ✅ `Username::try_new()` validates 3-30 chars, alphanumeric + underscore/dash
+- ✅ r-field generates clean HTML with `name` attributes
+- ✅ No redundant validation logic!
+
+### Available Nutype Types
+
+#### Email Types
+
+```rust
+use rhtmx_form_types::{EmailAddress, WorkEmailAddress, BusinessEmailAddress};
+
+#[derive(Validate, FormField, Deserialize)]
+struct EmailExamples {
+    // Any valid email (blocks disposable only)
+    personal: EmailAddress,
+
+    // No public domains (Gmail, Yahoo, Hotmail, etc.)
+    work: WorkEmailAddress,
+
+    // Strictest validation (corporate domains only)
+    business: BusinessEmailAddress,
+}
+
+html! {
+    <input type="email" r-field={form.personal} />
+    <input type="email" r-field={form.work} />
+    <input type="email" r-field={form.business} />
+}
+```
+
+**Validation Rules:**
+| Type | Valid | Invalid |
+|------|-------|---------|
+| `EmailAddress` | `user@gmail.com`, `user@company.com` | `user@tempmail.com` |
+| `WorkEmailAddress` | `user@company.com` | `user@gmail.com`, `user@yahoo.com` |
+| `BusinessEmailAddress` | `user@verified-corp.com` | Public or disposable domains |
+
+#### Password Types
+
+```rust
+use rhtmx_form_types::{
+    PasswordBasic,       // 6+ chars
+    PasswordMedium,      // 8+ chars
+    PasswordStrong,      // 10+ chars + complexity
+    SuperStrongPassword, // 12+ chars + 2 special chars
+    PasswordPhrase,      // 15+ chars (passphrase style)
+    PasswordPhrase3,     // 20+ chars, 3+ words
+    ModernPassword,      // 16+ chars (NIST 2024)
+};
+
+#[derive(Validate, FormField, Deserialize)]
+struct SecurityLevels {
+    // Basic (low security)
+    basic: PasswordBasic,         // "secret"
+
+    // Standard (medium security)
+    medium: PasswordMedium,       // "password"
+
+    // Strong (high security) - RECOMMENDED
+    strong: PasswordStrong,       // "Password123!"
+
+    // Super strong (very high security)
+    super_strong: SuperStrongPassword,  // "Password123!@"
+
+    // Passphrase (high security, user-friendly)
+    phrase: PasswordPhrase,       // "BlueSky-Mountain"
+
+    // Multi-word passphrase
+    phrase3: PasswordPhrase3,     // "Correct-Horse-Battery-Staple"
+
+    // Modern NIST guidelines
+    modern: ModernPassword,       // "MyLongPassword2024"
+}
+
+html! {
+    <input type="password" r-field={form.strong} placeholder="10+ chars, mixed case, digit, special" />
+    <input type="password" r-field={form.modern} placeholder="16+ chars" />
+}
+```
+
+**Choose the right password type for your security needs:**
+- 🔒 **PasswordBasic** - Non-critical accounts
+- 🔒🔒 **PasswordMedium/Strong** - Standard applications
+- 🔒🔒🔒 **SuperStrongPassword** - Financial/admin accounts
+- 🔑 **PasswordPhrase/ModernPassword** - User-friendly + secure
+
+#### String Types
+
+```rust
+use rhtmx_form_types::{NonEmptyString, Username};
+
+#[derive(Validate, FormField, Deserialize)]
+struct ProfileForm {
+    // Cannot be empty
+    bio: NonEmptyString,
+
+    // 3-30 chars, alphanumeric + _/-
+    username: Username,
+}
+
+html! {
+    <input r-field={form.username} placeholder="john_doe" />
+    <textarea r-field={form.bio}></textarea>
+}
+```
+
+#### Numeric Types
+
+```rust
+use rhtmx_form_types::{PositiveInt, NonNegativeInt, Age, Percentage, Port};
+
+#[derive(Validate, FormField, Deserialize)]
+struct NumericForm {
+    age: Age,                    // 18-120
+    discount: Percentage,        // 0-100
+    quantity: PositiveInt,       // > 0
+    rating: NonNegativeInt,      // >= 0
+    server_port: Port,           // 1-65535
+}
+
+html! {
+    <input type="number" r-field={form.age} placeholder="18-120" />
+    <input type="number" r-field={form.discount} placeholder="0-100%" />
+    <input type="number" r-field={form.server_port} placeholder="1-65535" />
+}
+```
+
+#### URL Types
+
+```rust
+use rhtmx_form_types::{UrlAddress, HttpsUrl};
+
+#[derive(Validate, FormField, Deserialize)]
+struct LinkForm {
+    // Any valid URL (http, https, ftp, etc.)
+    website: UrlAddress,
+
+    // HTTPS only (secure connections)
+    api_endpoint: HttpsUrl,
+}
+
+html! {
+    <input type="url" r-field={form.website} placeholder="https://example.com" />
+    <input type="url" r-field={form.api_endpoint} placeholder="HTTPS only" />
+}
+```
+
+#### Pattern Types (US-Specific)
+
+```rust
+use rhtmx_form_types::{PhoneNumber, ZipCode, IpAddress, Uuid};
+
+#[derive(Validate, FormField, Deserialize)]
+struct USAddressForm {
+    phone: PhoneNumber,      // (123) 456-7890
+    zip: ZipCode,            // 12345 or 12345-6789
+    ip: IpAddress,           // 192.168.1.1
+    id: Uuid,                // 550e8400-e29b-41d4-a716-446655440000
+}
+
+html! {
+    <input type="tel" r-field={form.phone} placeholder="(123) 456-7890" />
+    <input r-field={form.zip} placeholder="12345" />
+    <input r-field={form.ip} placeholder="192.168.1.1" />
+    <input r-field={form.id} placeholder="UUID v4" />
+}
+```
+
+### Real-World Example: B2B Registration
+
+```rust
+use rhtmx::{html, Html, Validate, FormField};
+use rhtmx_form_types::{WorkEmailAddress, PasswordStrong, Username, PhoneNumber, NonEmptyString};
+use serde::Deserialize;
+
+#[derive(Validate, FormField, Deserialize)]
+struct B2BRegistration {
+    username: Username,
+    email: WorkEmailAddress,           // Only corporate emails
+    password: PasswordStrong,
+
+    #[equals_field = "password"]       // ✅ Form-level validator still works!
+    confirm_password: PasswordStrong,
+
+    company: NonEmptyString,
+    phone: PhoneNumber,
+}
+
+fn registration_form(form: &B2BRegistration) -> Html {
+    html! {
+        <form action="/register" method="post" class="registration">
+            <div class="form-group">
+                <label>Username</label>
+                <input r-field={form.username} class="form-control" />
+                <small>3-30 characters, alphanumeric + underscore/dash</small>
+            </div>
+
+            <div class="form-group">
+                <label>Work Email</label>
+                <input type="email" r-field={form.email} class="form-control" />
+                <small>Corporate email only (no Gmail, Yahoo, etc.)</small>
+            </div>
+
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" r-field={form.password} class="form-control" />
+                <small>10+ chars, uppercase, lowercase, digit, special character</small>
+            </div>
+
+            <div class="form-group">
+                <label>Confirm Password</label>
+                <input type="password" r-field={form.confirm_password} class="form-control" />
+            </div>
+
+            <div class="form-group">
+                <label>Company Name</label>
+                <input r-field={form.company} class="form-control" />
+            </div>
+
+            <div class="form-group">
+                <label>Phone</label>
+                <input type="tel" r-field={form.phone} class="form-control" placeholder="(123) 456-7890" />
+            </div>
+
+            <button type="submit" class="btn-primary">Create Account</button>
+        </form>
+    }
+}
+```
+
+### Combining Nutype with Form-Level Validators
+
+If you need **additional** form-level validators on Nutype fields, use the `#[nutype]` marker to avoid duplication:
+
+```rust
+#[derive(Validate, FormField, Deserialize)]
+struct LoginForm {
+    #[nutype]                          // ← Skip base validators
+    #[equals_field = "confirm_email"]  // ✅ Cross-field validation
+    email: WorkEmailAddress,
+
+    #[nutype]
+    #[equals_field = "email"]
+    confirm_email: WorkEmailAddress,
+}
+```
+
+**Without `#[nutype]` marker:** If you add validators like `#[email]` to a `WorkEmailAddress` field, validation would run twice (redundant).
+
+**With `#[nutype]` marker:** Base validators are skipped, only form-specific ones (like `#[equals_field]`) are kept.
+
+### Benefits of Nutype Types
+
+✅ **Type-Level Validation** - Impossible to construct invalid values
+✅ **Zero Redundancy** - No duplicate validation logic
+✅ **Business Rules in Types** - `WorkEmailAddress` IS the business rule
+✅ **Reusable** - Use same types across multiple forms
+✅ **Self-Documenting** - Type name explains validation rules
+✅ **Compile-Time Safety** - Invalid types = compiler error
+✅ **Works with r-field** - Seamless integration with zero boilerplate
+
+### When to Use Nutype vs. Form Validators
+
+**Use Nutype types when:**
+- ✅ Validation is a fundamental domain constraint (e.g., "work emails only")
+- ✅ You'll reuse the validation across multiple forms
+- ✅ The type itself represents a business rule
+
+**Use form-level validators when:**
+- ✅ Validation is specific to one form (e.g., "age must be 21+ for this contest")
+- ✅ Cross-field validation (e.g., `#[equals_field]`)
+- ✅ Custom business logic (e.g., `#[custom]`)
+
+**Best of both worlds:**
+```rust
+#[derive(Validate, FormField, Deserialize)]
+struct ContestEntry {
+    email: WorkEmailAddress,     // ← Type-level: work email only
+
+    #[min(21)]                   // ← Form-level: contest requires 21+
+    age: Age,                    // ← Type-level: 18-120 range
+}
+```
+
 ## Related Documentation
 
 - [Unified Validation](./UNIFIED_VALIDATION.md) - Single source of truth for validation
 - [FormField Trait](./crates/rhtmx/src/form_field.rs) - Field attribute generation
 - [Validate Derive](./crates/RHTMX-Form/src/lib.rs) - Validation macro
+- [Nutype Types](./crates/rhtmx-form-types/src/lib.rs) - Pre-built validated types
 
 ## Summary
 
