@@ -399,11 +399,8 @@ fn load_templates_from_dir_pure(
             // Recursively load subdirectories
             let sub_results = load_templates_from_dir_pure(&path, pages_dir)?;
             results.extend(sub_results);
-        } else if matches!(
-            path.extension().and_then(|s| s.to_str()),
-            Some("rjx" | "rhtml" | "rhtmx")
-        ) {
-            // Load template files (.rsx for App Router, .rhtml/.rhtmx for legacy)
+        } else if path.extension().and_then(|s| s.to_str()) == Some("rsx") {
+            // Load .rsx template files (App Router convention)
             let template_data = load_template_pure(&path, pages_dir)?;
             results.push(template_data);
         }

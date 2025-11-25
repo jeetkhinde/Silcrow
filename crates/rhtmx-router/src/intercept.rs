@@ -8,13 +8,13 @@
 /// ```
 /// use rhtmx_router::InterceptLevel;
 ///
-/// // pages/feed/(.)/photo/[id].rhtml → SameLevel
+/// // pages/feed/(.)/photo/[id].rsx → SameLevel
 /// let same = InterceptLevel::SameLevel;
 ///
-/// // pages/feed/(..)/photo/[id].rhtml → OneLevelUp
+/// // pages/feed/(..)/photo/[id].rsx → OneLevelUp
 /// let up = InterceptLevel::OneLevelUp;
 ///
-/// // pages/feed/(...)/photo/[id].rhtml → FromRoot
+/// // pages/feed/(...)/photo/[id].rsx → FromRoot
 /// let root = InterceptLevel::FromRoot;
 /// ```
 ///

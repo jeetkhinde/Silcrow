@@ -7,19 +7,19 @@ One-page cheat sheet for all layout configuration options in RHTMX Router.
 ### _nolayout Marker
 ```
 pages/
-├── _layout.rhtml
+├── _layout.rsx
 └── api/
     ├── _nolayout     ← Blocks all layouts in this directory
-    └── users.rhtml   → No layout applied
+    └── users.rsx   → No layout applied
 ```
 
 ### Named Layouts
 ```
 pages/
-├── _layout.rhtml              # Default
-├── _layout.admin.rhtml        # Alternative
+├── _layout.rsx              # Default
+├── _layout.admin.rsx        # Alternative
 └── admin/
-    └── dashboard.rhtml
+    └── dashboard.rsx
 ```
 
 ---
@@ -78,36 +78,36 @@ START
 
 ### Print Page
 ```rust
-// File: pages/dashboard/print/report.rhtml
-Route::from_path("pages/dashboard/print/report.rhtml", "pages")
+// File: pages/dashboard/print/report.rsx
+Route::from_path("pages/dashboard/print/report.rsx", "pages")
     .with_root_layout()  // Skips dashboard sidebar
 ```
 
 ### API Endpoint
 ```rust
-// File: pages/api/v2/users.rhtml
-Route::from_path("pages/api/v2/users.rhtml", "pages")
+// File: pages/api/v2/users.rsx
+Route::from_path("pages/api/v2/users.rsx", "pages")
     .with_no_layout()  // No HTML wrapper
 ```
 
 ### HTMX Partial
 ```rust
-// File: pages/dashboard/users/list.rhtml
-Route::from_path("pages/dashboard/users/list.rhtml", "pages")
+// File: pages/dashboard/users/list.rsx
+Route::from_path("pages/dashboard/users/list.rsx", "pages")
     .with_no_layout()  // Returns fragment only
 ```
 
 ### Admin Section
 ```rust
-// File: pages/admin/dashboard.rhtml
-Route::from_path("pages/admin/dashboard.rhtml", "pages")
-    .with_named_layout("admin")  // Uses _layout.admin.rhtml
+// File: pages/admin/dashboard.rsx
+Route::from_path("pages/admin/dashboard.rsx", "pages")
+    .with_named_layout("admin")  // Uses _layout.admin.rsx
 ```
 
 ### Modal/Dialog
 ```rust
-// File: pages/dashboard/(.)users/modal.rhtml
-Route::from_path("pages/dashboard/(.)users/modal.rhtml", "pages")
+// File: pages/dashboard/(.)users/modal.rsx
+Route::from_path("pages/dashboard/(.)users/modal.rsx", "pages")
     .with_no_layout()  // Modal content without layout
 ```
 
@@ -150,7 +150,7 @@ route.with_named_layout("admin")
 
 Directory: /dashboard/settings
 
-Looks for: _layout.admin.rhtml
+Looks for: _layout.admin.rsx
 Uses: That layout regardless of file location
 ```
 
@@ -161,7 +161,7 @@ Uses: That layout regardless of file location
 Combine multiple builder methods:
 
 ```rust
-Route::from_path("pages/users/profile.rhtml", "pages")
+Route::from_path("pages/users/profile.rsx", "pages")
     .with_named_layout("vendor")
     .with_meta("title", "User Profile")
     .with_meta("permission", "users.read")
@@ -236,33 +236,33 @@ admin::layout(content, admin::Slots::new("Title").sidebar(sidebar))
 ### Multi-Level Hierarchy
 ```
 pages/
-├── _layout.rhtml           # Level 0
+├── _layout.rsx           # Level 0
 ├── dashboard/
-│   ├── _layout.rhtml       # Level 1 (overrides root)
+│   ├── _layout.rsx       # Level 1 (overrides root)
 │   ├── admin/
-│   │   ├── _layout.rhtml   # Level 2 (overrides dashboard)
-│   │   └── users.rhtml     # Uses level 2
-│   └── settings.rhtml      # Uses level 1
+│   │   ├── _layout.rsx   # Level 2 (overrides dashboard)
+│   │   └── users.rsx     # Uses level 2
+│   └── settings.rsx      # Uses level 1
 ```
 
 ### Multiple Layout Options
 ```
 pages/
-├── _layout.rhtml           # Default
-├── _layout.admin.rhtml     # For admin pages
-├── _layout.public.rhtml    # For public pages
+├── _layout.rsx           # Default
+├── _layout.admin.rsx     # For admin pages
+├── _layout.public.rsx    # For public pages
 └── admin/
-    └── dashboard.rhtml     # Route applies named layout
+    └── dashboard.rsx     # Route applies named layout
 ```
 
 ### No-Layout Zone
 ```
 pages/
-├── _layout.rhtml
+├── _layout.rsx
 └── api/
     ├── _nolayout           # Marker
-    ├── users.rhtml         # No layout
-    └── posts.rhtml         # No layout
+    ├── users.rsx         # No layout
+    └── posts.rsx         # No layout
 ```
 
 ---
@@ -292,30 +292,30 @@ pages/
 
 ### Template 1: Basic Route
 ```rust
-Route::from_path("pages/about.rhtml", "pages")
+Route::from_path("pages/about.rsx", "pages")
 ```
 
 ### Template 2: No Layout Route
 ```rust
-Route::from_path("pages/api/data.rhtml", "pages")
+Route::from_path("pages/api/data.rsx", "pages")
     .with_no_layout()
 ```
 
 ### Template 3: Alternative Layout
 ```rust
-Route::from_path("pages/admin/dashboard.rhtml", "pages")
+Route::from_path("pages/admin/dashboard.rsx", "pages")
     .with_named_layout("admin")
 ```
 
 ### Template 4: Print/Special Page
 ```rust
-Route::from_path("pages/dashboard/print/report.rhtml", "pages")
+Route::from_path("pages/dashboard/print/report.rsx", "pages")
     .with_root_layout()
 ```
 
 ### Template 5: Intercepting Route
 ```rust
-Route::from_path("pages/dashboard/(.)users/modal.rhtml", "pages")
+Route::from_path("pages/dashboard/(.)users/modal.rsx", "pages")
     .with_no_layout()
 ```
 

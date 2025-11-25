@@ -22,14 +22,14 @@
 | Catch-all routes | ✅ `[...slug]` | ✅ `[...slug]` | ✅ **100%** | Requires 1+ segments |
 | Optional catch-all | ✅ `[[...slug]]` | ✅ `[[...slug]]` | ✅ **100%** | Matches 0+ segments |
 | **Layouts & UI** |
-| Root layout | ✅ `layout.tsx` | ✅ `_layout.rhtml` | ✅ **100%** | Persists across navigation |
+| Root layout | ✅ `layout.tsx` | ✅ `_layout.rsx` | ✅ **100%** | Persists across navigation |
 | Nested layouts | ✅ | ✅ | ✅ **100%** | Hierarchical layout resolution |
 | Named layouts | ❌ | ✅ `_layout.name.rhtml` | ⭐ **Bonus** | rhtmx extension |
 | Layout options | ❌ | ✅ | ⭐ **Bonus** | None, Root, Named, Pattern |
-| Loading UI | ✅ `loading.tsx` | ✅ `loading.rhtml` | ✅ **100%** | Automatic loading states |
-| Error boundaries | ✅ `error.tsx` | ✅ `_error.rhtml` | ✅ **100%** | Hierarchical error pages |
-| Not Found | ✅ `not-found.tsx` | ✅ `not-found.rhtml` | ✅ **100%** | Section-specific 404s |
-| Templates | ✅ `template.tsx` | ✅ `_template.rhtml` | ✅ **100%** | Re-mount on navigation |
+| Loading UI | ✅ `loading.tsx` | ✅ `loading.rsx` | ✅ **100%** | Automatic loading states |
+| Error boundaries | ✅ `error.tsx` | ✅ `_error.rsx` | ✅ **100%** | Hierarchical error pages |
+| Not Found | ✅ `not-found.tsx` | ✅ `not-found.rsx` | ✅ **100%** | Section-specific 404s |
+| Templates | ✅ `template.tsx` | ✅ `_template.rsx` | ✅ **100%** | Re-mount on navigation |
 | **Advanced Routing** |
 | Route groups | ✅ `(folder)` | ✅ `(folder)` | ✅ **100%** | Organizational only |
 | Parallel routes | ✅ `@slot` | ✅ `@slot` | ✅ **100%** | Multiple slots per route |
@@ -253,11 +253,11 @@ assert_eq!(route.intercept_target, Some("photo/[id]".to_string()));
 
 #### rhtmx-router
 ```rust
-// pages/_layout.rhtml
-// pages/dashboard/_layout.rhtml
-// pages/dashboard/loading.rhtml
-// pages/dashboard/_error.rhtml
-// pages/dashboard/not-found.rhtml
+// pages/_layout.rsx
+// pages/dashboard/_layout.rsx
+// pages/dashboard/loading.rsx
+// pages/dashboard/_error.rsx
+// pages/dashboard/not-found.rsx
 
 assert!(router.get_layout("/dashboard").is_some());
 assert!(router.get_loading_page("/dashboard").is_some());
@@ -399,7 +399,7 @@ let route = Route::from_path("pages/blog/[slug]/page.rsx", "pages")
 ### 3. Streaming & Suspense
 **Status:** ⚠️ Not applicable
 **Reason:** React-specific features
-**Alternative:** Use loading.rhtml for loading states, frameworks can implement streaming
+**Alternative:** Use loading.rsx for loading states, frameworks can implement streaming
 
 ---
 
@@ -509,7 +509,7 @@ pages/
 ├── (marketing)/
 │   ├── about.rhtml
 │   └── contact.rhtml
-└── _layout.rhtml
+└── _layout.rsx
 ```
 
 **Result:** ✅ Identical routing behavior
@@ -537,8 +537,8 @@ pages/
     ├── @analytics/page.rsx
     ├── @team/page.rsx
     ├── @notifications/page.rsx
-    ├── _layout.rhtml
-    ├── loading.rhtml
+    ├── _layout.rsx
+    ├── loading.rsx
     └── page.rsx
 ```
 
@@ -565,7 +565,7 @@ pages/
 │   ├── page.rsx                 # Grid
 │   ├── [id].rhtml                  # Full page
 │   └── (.)/[id].rhtml              # Modal
-└── _layout.rhtml
+└── _layout.rsx
 ```
 
 **Result:** ✅ Identical routing behavior
@@ -658,11 +658,11 @@ cargo test --test nextjs_parity_tests  # Integration (25)
 | Next.js | rhtmx-router | Notes |
 |---------|--------------|-------|
 | `page.tsx` | `page.rsx` or `page.rhtml` | Use `page.rsx` for cleaner paths |
-| `layout.tsx` | `_layout.rhtml` | Underscore prefix |
-| `loading.tsx` | `loading.rhtml` | No prefix needed |
-| `error.tsx` | `_error.rhtml` | Underscore prefix |
-| `not-found.tsx` | `not-found.rhtml` | No prefix needed |
-| `template.tsx` | `_template.rhtml` | Underscore prefix |
+| `layout.tsx` | `_layout.rsx` | Underscore prefix |
+| `loading.tsx` | `loading.rsx` | No prefix needed |
+| `error.tsx` | `_error.rsx` | Underscore prefix |
+| `not-found.tsx` | `not-found.rsx` | No prefix needed |
+| `template.tsx` | `_template.rsx` | Underscore prefix |
 | `[slug]` | `[slug]` | Identical |
 | `[...slug]` | `[...slug]` | Identical |
 | `[[...slug]]` | `[[...slug]]` | Identical |
@@ -675,9 +675,9 @@ cargo test --test nextjs_parity_tests  # Integration (25)
 **Example Migration:**
 ```
 Next.js app/                    rhtmx pages/
-├── layout.tsx          →       ├── _layout.rhtml
+├── layout.tsx          →       ├── _layout.rsx
 ├── page.tsx            →       ├── page.rsx
-├── loading.tsx         →       ├── loading.rhtml
+├── loading.tsx         →       ├── loading.rsx
 └── blog/                       └── blog/
     ├── [slug]/                     ├── [slug].rhtml
     │   └── page.tsx                └── [slug]/

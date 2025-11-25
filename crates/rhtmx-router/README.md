@@ -106,14 +106,14 @@ Layouts are automatically inherited through the directory hierarchy.
 
 ```
 pages/
-  ├── _layout.rhtml              # Root layout
+  ├── _layout.rsx              # Root layout
   ├── page.rsx                   # Home page (uses root layout)
   ├── dashboard/
-  │   ├── _layout.rhtml          # Dashboard layout
+  │   ├── _layout.rsx          # Dashboard layout
   │   ├── page.rsx            # Uses dashboard layout
   │   └── settings/page.rsx         # Uses dashboard layout
   └── api/
-      ├── _error.rhtml           # API error page
+      ├── _error.rsx           # API error page
       └── users.rhtml            # Uses root layout (no API layout exists)
 ```
 
@@ -141,9 +141,9 @@ Error pages work identically to layouts:
 
 ```
 pages/
-  ├── _error.rhtml           # Root error page
+  ├── _error.rsx           # Root error page
   └── api/
-      ├── _error.rhtml       # API-specific error page
+      ├── _error.rsx       # API-specific error page
       └── users.rhtml
 ```
 
@@ -349,9 +349,9 @@ assert_eq!(m.params.get("slug"), Some(&"api/reference".to_string()));
 ```rust
 let mut router = Router::new();
 
-router.add_route(Route::from_path("pages/_layout.rhtml", "pages"));
-router.add_route(Route::from_path("pages/dashboard/_layout.rhtml", "pages"));
-router.add_route(Route::from_path("pages/dashboard/admin/_layout.rhtml", "pages"));
+router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
+router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
+router.add_route(Route::from_path("pages/dashboard/admin/_layout.rsx", "pages"));
 
 // Get layout for deep path
 let layout = router.get_layout("/dashboard/admin/settings").unwrap();
@@ -367,8 +367,8 @@ assert_eq!(layout.pattern, "/dashboard/admin");  // No /dashboard/admin/users la
 ```rust
 let mut router = Router::new();
 
-router.add_route(Route::from_path("pages/_error.rhtml", "pages"));
-router.add_route(Route::from_path("pages/api/_error.rhtml", "pages"));
+router.add_route(Route::from_path("pages/_error.rsx", "pages"));
+router.add_route(Route::from_path("pages/api/_error.rsx", "pages"));
 
 let error = router.get_error_page("/api/users").unwrap();
 assert_eq!(error.pattern, "/api");
@@ -381,7 +381,7 @@ assert_eq!(error.pattern, "/");
 
 ```rust
 let mut router = Router::new();
-router.add_route(Route::from_path("pages/dashboard/_layout.rhtml", "pages"));
+router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
 
 // All work correctly:
 assert!(router.get_layout("/dashboard/settings").is_some());

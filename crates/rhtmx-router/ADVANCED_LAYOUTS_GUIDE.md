@@ -25,14 +25,14 @@ Layouts are discovered by walking up the directory hierarchy:
 
 ```
 pages/
-├── _layout.rhtml              # Root layout (applies to all pages)
+├── _layout.rsx              # Root layout (applies to all pages)
 ├── page.rsx                # Uses root layout
 └── dashboard/
-    ├── _layout.rhtml          # Dashboard layout (overrides root)
+    ├── _layout.rsx          # Dashboard layout (overrides root)
     ├── page.rsx            # Uses dashboard layout
     └── admin/
-        ├── _layout.rhtml      # Admin layout (overrides dashboard)
-        └── users.rhtml        # Uses admin layout
+        ├── _layout.rsx      # Admin layout (overrides dashboard)
+        └── users.rsx        # Uses admin layout
 ```
 
 When matching a route, the router walks up the hierarchy:
@@ -65,12 +65,12 @@ Create an empty file named `_nolayout` in the directory where you want to stop l
 
 ```
 pages/
-├── _layout.rhtml           # Root layout
+├── _layout.rsx           # Root layout
 ├── dashboard/
-│   ├── _layout.rhtml       # Dashboard layout
+│   ├── _layout.rsx       # Dashboard layout
 │   ├── _nolayout           # 👈 No layout marker
 │   └── api/
-│       └── users.json.rhtml    # No layout applied
+│       └── users.json.rsx    # No layout applied
 ```
 
 Any route under `dashboard/` will **not use layouts**, even if parent layouts exist.
@@ -81,8 +81,8 @@ Any route under `dashboard/` will **not use layouts**, even if parent layouts ex
 let mut router = Router::new();
 
 // Add layouts
-router.add_route(Route::from_path("pages/_layout.rhtml", "pages"));
-router.add_route(Route::from_path("pages/dashboard/_layout.rhtml", "pages"));
+router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
+router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
 router.add_route(Route::from_path("pages/dashboard/_nolayout", "pages"));
 
 // Result:
@@ -109,7 +109,7 @@ let is_no_layout_zone = router.nolayout_patterns.contains("/dashboard");
 You can also explicitly set no layout via the builder:
 
 ```rust
-let route = Route::from_path("pages/dashboard/api/users.rhtml", "pages")
+let route = Route::from_path("pages/dashboard/api/users.rsx", "pages")
     .with_no_layout();  // Explicitly remove layout
 
 assert_eq!(route.layout_option, LayoutOption::None);
@@ -138,7 +138,7 @@ pub enum LayoutOption {
 ```rust
 use rhtmx_router::{Route, LayoutOption};
 
-let route = Route::from_path("pages/users/profile.rhtml", "pages");
+let route = Route::from_path("pages/users/profile.rsx", "pages");
 assert_eq!(route.layout_option, LayoutOption::Inherit);
 
 // Inheritance walks up: /users/profile → /users → /
@@ -147,7 +147,7 @@ assert_eq!(route.layout_option, LayoutOption::Inherit);
 #### 2. None - No Layout
 
 ```rust
-let route = Route::from_path("pages/api/data.rhtml", "pages")
+let route = Route::from_path("pages/api/data.rsx", "pages")
     .with_no_layout();
 
 // Router will not apply any layout to this route
@@ -156,7 +156,7 @@ let route = Route::from_path("pages/api/data.rhtml", "pages")
 #### 3. Root - Skip Intermediate Layouts
 
 ```rust
-let route = Route::from_path("pages/dashboard/admin/report.rhtml", "pages")
+let route = Route::from_path("pages/dashboard/admin/report.rsx", "pages")
     .with_root_layout();
 
 // Even if /dashboard and /dashboard/admin have layouts,
@@ -166,16 +166,16 @@ let route = Route::from_path("pages/dashboard/admin/report.rhtml", "pages")
 #### 4. Named - Use Specific Layout
 
 ```rust
-let route = Route::from_path("pages/vendors/settings.rhtml", "pages")
+let route = Route::from_path("pages/vendors/settings.rsx", "pages")
     .with_named_layout("vendor");
 
-// Router looks for _layout.vendor.rhtml instead of walking hierarchy
+// Router looks for _layout.vendor.rsx instead of walking hierarchy
 ```
 
 #### 5. Pattern - Use Layout at Specific Path
 
 ```rust
-let route = Route::from_path("pages/api/v2/users.rhtml", "pages")
+let route = Route::from_path("pages/api/v2/users.rsx", "pages")
     .with_layout_pattern("/api");
 
 // Uses layout from /api, ignoring /api/v2
@@ -193,12 +193,12 @@ You want to skip the immediate parent layout but accept the grandparent or root 
 
 ```
 pages/
-├── _layout.rhtml                    # Root layout (main site)
+├── _layout.rsx                    # Root layout (main site)
 ├── dashboard/
-│   ├── _layout.rhtml               # Dashboard layout (sidebar + content)
+│   ├── _layout.rsx               # Dashboard layout (sidebar + content)
 │   └── print/
-│       ├── report.rhtml            # Should use root, not dashboard!
-│       └── invoice.rhtml
+│       ├── report.rsx            # Should use root, not dashboard!
+│       └── invoice.rsx
 ```
 
 **Problem:** By default, `/dashboard/print/report` uses dashboard layout.
@@ -206,7 +206,7 @@ pages/
 **Solution 1: Use `Root` LayoutOption**
 
 ```rust
-let route = Route::from_path("pages/dashboard/print/report.rhtml", "pages")
+let route = Route::from_path("pages/dashboard/print/report.rsx", "pages")
     .with_root_layout();
 
 // Forces root layout only, skips dashboard layout
@@ -215,7 +215,7 @@ let route = Route::from_path("pages/dashboard/print/report.rhtml", "pages")
 **Solution 2: Use `_nolayout` with Builder Method**
 
 ```rust
-let route = Route::from_path("pages/dashboard/print/report.rhtml", "pages")
+let route = Route::from_path("pages/dashboard/print/report.rsx", "pages")
     .with_no_layout();
 
 // Returns no layout at all (for HTMX partials or API endpoints)
@@ -224,7 +224,7 @@ let route = Route::from_path("pages/dashboard/print/report.rhtml", "pages")
 **Solution 3: Use `Pattern` LayoutOption**
 
 ```rust
-let route = Route::from_path("pages/dashboard/print/report.rhtml", "pages")
+let route = Route::from_path("pages/dashboard/print/report.rsx", "pages")
     .with_layout_pattern("/");  // Explicit root path
 
 // Uses layout at /, skips /dashboard
@@ -238,17 +238,17 @@ use rhtmx_router::{Router, Route, LayoutOption};
 let mut router = Router::new();
 
 // Add layouts
-router.add_route(Route::from_path("pages/_layout.rhtml", "pages"));
-router.add_route(Route::from_path("pages/dashboard/_layout.rhtml", "pages"));
+router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
+router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
 
 // Add routes with different layout options
 router.add_route(
-    Route::from_path("pages/dashboard/settings.rhtml", "pages")
+    Route::from_path("pages/dashboard/settings.rsx", "pages")
         .with_layout_option(LayoutOption::Inherit)  // Uses dashboard layout
 );
 
 router.add_route(
-    Route::from_path("pages/dashboard/print/report.rhtml", "pages")
+    Route::from_path("pages/dashboard/print/report.rsx", "pages")
         .with_root_layout()  // Skips dashboard, uses root only
 );
 
@@ -278,18 +278,18 @@ Named layouts let you create multiple layout options and select them by name.
 
 ### Creating Named Layouts
 
-File naming convention: `_layout.{name}.rhtml`
+File naming convention: `_layout.{name}.rsx`
 
 ```
 pages/
-├── _layout.rhtml              # Default layout
-├── _layout.admin.rhtml        # Admin layout
-├── _layout.public.rhtml       # Public layout
+├── _layout.rsx              # Default layout
+├── _layout.admin.rsx        # Admin layout
+├── _layout.public.rsx       # Public layout
 ├── dashboard/
 │   ├── admin/
-│   │   └── users.rhtml        # Will use admin layout
+│   │   └── users.rsx        # Will use admin layout
 │   └── public/
-│       └── faq.rhtml          # Will use public layout
+│       └── faq.rsx          # Will use public layout
 ```
 
 ### Selecting Named Layouts
@@ -298,21 +298,21 @@ pages/
 use rhtmx_router::{Route, LayoutOption};
 
 // Route 1: Uses admin layout
-let admin_route = Route::from_path("pages/dashboard/admin/users.rhtml", "pages")
+let admin_route = Route::from_path("pages/dashboard/admin/users.rsx", "pages")
     .with_named_layout("admin");
 
 // Route 2: Uses public layout
-let public_route = Route::from_path("pages/dashboard/public/faq.rhtml", "pages")
+let public_route = Route::from_path("pages/dashboard/public/faq.rsx", "pages")
     .with_named_layout("public");
 
 // Route 3: Uses default layout
-let default_route = Route::from_path("pages/dashboard/settings.rhtml", "pages");
+let default_route = Route::from_path("pages/dashboard/settings.rsx", "pages");
 ```
 
 ### Detecting Named Layouts
 
 ```rust
-let route = Route::from_path("pages/_layout.admin.rhtml", "pages");
+let route = Route::from_path("pages/_layout.admin.rsx", "pages");
 assert!(route.is_layout);
 assert_eq!(route.layout_name, Some("admin".to_string()));
 ```
@@ -339,11 +339,11 @@ Intercepting routes use parentheses to indicate interception level:
 ```
 pages/
 ├── dashboard/
-│   ├── layout.rhtml
+│   ├── layout.rsx
 │   ├── page.rsx
 │   └── (.) users/
-│       ├── modal.rhtml        # Shows as modal when /dashboard/users/modal
-│       └── details.rhtml
+│       ├── modal.rsx        # Shows as modal when /dashboard/users/modal
+│       └── details.rsx
 ```
 
 ### Detecting Intercepting Routes
@@ -351,7 +351,7 @@ pages/
 ```rust
 use rhtmx_router::{Route, InterceptLevel};
 
-let route = Route::from_path("pages/dashboard/(.)users/modal.rhtml", "pages");
+let route = Route::from_path("pages/dashboard/(.)users/modal.rsx", "pages");
 assert!(route.is_intercepting);
 assert_eq!(route.intercept_level, Some(InterceptLevel::SameLevel));
 assert_eq!(route.intercept_target, Some("users".to_string()));
@@ -360,11 +360,11 @@ assert_eq!(route.intercept_target, Some("users".to_string()));
 ### Using with Layout Control
 
 ```rust
-let modal_route = Route::from_path("pages/dashboard/(.)users/modal.rhtml", "pages")
+let modal_route = Route::from_path("pages/dashboard/(.)users/modal.rsx", "pages")
     .with_no_layout();  // Modal content without layout
 
 // Combine intercepting with layout options
-let intercept_with_root = Route::from_path("pages/dashboard/(.)users/modal.rhtml", "pages")
+let intercept_with_root = Route::from_path("pages/dashboard/(.)users/modal.rsx", "pages")
     .with_root_layout();  // Modal uses root layout only
 ```
 
