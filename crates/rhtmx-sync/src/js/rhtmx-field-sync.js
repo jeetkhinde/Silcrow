@@ -1,11 +1,21 @@
 /**
- * rhtmx-field-sync.js
- * Client-side field-level synchronization for RHTMX (CRDT-like)
+ * rhtmx-field-sync.js - WebSocket-based Field-Level Sync
+ * Client-side field-level synchronization for RHTMX with WebSocket/SSE support
+ *
+ * Features:
+ * - WebSocket primary, SSE fallback
+ * - Automatic reconnection with exponential backoff
+ * - Offline queue with automatic sync
+ * - Heartbeat/ping-pong
+ * - Connection state management
+ * - Optimistic field updates
+ * - CRDT-like field-level conflict resolution
  *
  * Usage:
  * <script src="/api/sync/field-client.js"
  *         data-sync-entities="users,posts"
  *         data-field-strategy="last-write-wins"
+ *         data-use-websocket="true"
  *         data-debug="false">
  * </script>
  */
@@ -13,16 +23,43 @@
 (function() {
     'use strict';
 
+    // Connection states
+    const ConnectionState = {
+        DISCONNECTED: 'disconnected',
+        CONNECTING: 'connecting',
+        CONNECTED: 'connected',
+        RECONNECTING: 'reconnecting',
+        FALLBACK_SSE: 'fallback_sse'
+    };
+
     class RHTMXFieldSync {
         constructor(config) {
             this.entities = config.entities || [];
             this.fieldStrategy = config.fieldStrategy || 'last-write-wins';
+            this.useWebSocket = config.useWebSocket !== false; // Default true
             this.debug = config.debug || false;
+
+            // Connection management
+            this.connectionState = ConnectionState.DISCONNECTED;
+            this.ws = null;
+            this.eventSource = null;
+            this.reconnectAttempts = 0;
+            this.maxReconnectAttempts = 10;
+            this.reconnectDelay = 1000;
+            this.maxReconnectDelay = 30000;
+            this.heartbeatInterval = null;
+            this.heartbeatTimeout = null;
+
+            // Sync state
             this.db = null;
             this.syncInProgress = false;
-            this.pendingChanges = new Map(); // Track local changes
+            this.pendingChanges = new Map();
+            this.isOnline = navigator.onLine;
 
-            this.log('Initializing RHTMX Field Sync', { entities: this.entities });
+            this.log('Initializing RHTMX Field Sync', {
+                entities: this.entities,
+                useWebSocket: this.useWebSocket
+            });
         }
 
         log(...args) {
@@ -40,7 +77,7 @@
          */
         async initIndexedDB() {
             return new Promise((resolve, reject) => {
-                const request = indexedDB.open('rhtmx-field-cache', 1);
+                const request = indexedDB.open('rhtmx-field-cache', 2);
 
                 request.onerror = () => {
                     this.error('Failed to open IndexedDB', request.error);
@@ -64,7 +101,7 @@
                         }
                     }
 
-                    // Create field metadata store (tracks field versions/timestamps)
+                    // Create field metadata store
                     if (!db.objectStoreNames.contains('_field_meta')) {
                         const metaStore = db.createObjectStore('_field_meta', { keyPath: 'key' });
                         metaStore.createIndex('entity_field', ['entity', 'entity_id', 'field']);
@@ -72,12 +109,20 @@
 
                     // Create pending field changes store
                     if (!db.objectStoreNames.contains('_pending_fields')) {
-                        db.createObjectStore('_pending_fields', { autoIncrement: true });
+                        const pendingStore = db.createObjectStore('_pending_fields', { autoIncrement: true });
+                        pendingStore.createIndex('timestamp', 'timestamp');
                     }
 
                     // Create entity version store
                     if (!db.objectStoreNames.contains('_versions')) {
                         db.createObjectStore('_versions', { keyPath: 'entity' });
+                    }
+
+                    // Create optimistic field updates store
+                    if (!db.objectStoreNames.contains('_optimistic_fields')) {
+                        db.createObjectStore('_optimistic_fields', {
+                            keyPath: ['entity', 'entity_id', 'field']
+                        });
                     }
 
                     this.log('IndexedDB schema created');
@@ -99,34 +144,235 @@
         }
 
         /**
-         * Sync field changes for a single entity
+         * Sync field changes for a single entity via HTTP
          */
         async syncEntity(entity) {
             try {
-                // Get last known version
                 const lastVersion = await this.getLastVersion(entity);
+                this.log(`Syncing ${entity} fields since version ${lastVersion}`);
 
-                // Fetch field changes from server
                 const response = await fetch(`/api/field-sync/${entity}?since=${lastVersion}`);
-
                 if (!response.ok) {
-                    throw new Error(`Failed to sync ${entity}: ${response.statusText}`);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
                 const data = await response.json();
                 this.log(`Received ${data.changes.length} field changes for ${entity}`);
 
-                // Apply field changes to local storage
                 await this.applyFieldChanges(entity, data.changes);
-
-                // Update version
                 await this.setLastVersion(entity, data.version);
 
-                // Trigger UI refresh
                 this.triggerRefresh(entity);
+                this.log(`Synced ${entity} to version ${data.version}`);
+            } catch (error) {
+                this.error(`Failed to sync ${entity}:`, error);
+            }
+        }
+
+        /**
+         * Connect to real-time sync (WebSocket or SSE)
+         */
+        connectRealtime() {
+            if (this.useWebSocket && 'WebSocket' in window) {
+                this.connectWebSocket();
+            } else {
+                this.log('WebSocket not available, feature limited');
+            }
+        }
+
+        /**
+         * Connect via WebSocket
+         */
+        connectWebSocket() {
+            if (this.connectionState === ConnectionState.CONNECTING ||
+                this.connectionState === ConnectionState.CONNECTED) {
+                return;
+            }
+
+            this.updateConnectionState(ConnectionState.CONNECTING);
+            this.log('Connecting to Field Sync WebSocket');
+
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${location.host}/api/field-sync/ws`;
+
+            try {
+                this.ws = new WebSocket(wsUrl);
+
+                this.ws.onopen = () => {
+                    this.log('Field Sync WebSocket connected');
+                    this.updateConnectionState(ConnectionState.CONNECTED);
+                    this.reconnectAttempts = 0;
+                    this.reconnectDelay = 1000;
+
+                    // Subscribe to entities
+                    this.sendMessage({
+                        type: 'subscribe',
+                        entities: this.entities
+                    });
+
+                    // Start heartbeat
+                    this.startHeartbeat();
+
+                    // Sync pending offline mutations
+                    this.syncPendingChanges();
+                };
+
+                this.ws.onmessage = (event) => {
+                    try {
+                        const message = JSON.parse(event.data);
+                        this.handleWebSocketMessage(message);
+                    } catch (error) {
+                        this.error('Failed to parse WebSocket message:', error);
+                    }
+                };
+
+                this.ws.onerror = (error) => {
+                    this.error('WebSocket error:', error);
+                };
+
+                this.ws.onclose = () => {
+                    this.log('Field Sync WebSocket closed');
+                    this.stopHeartbeat();
+                    this.handleDisconnect();
+                };
 
             } catch (error) {
-                this.error(`Error syncing ${entity}:`, error);
+                this.error('Failed to create WebSocket:', error);
+                this.updateConnectionState(ConnectionState.DISCONNECTED);
+            }
+        }
+
+        /**
+         * Handle WebSocket messages
+         */
+        async handleWebSocketMessage(message) {
+            this.log('Received Field Sync message:', message.type);
+
+            switch (message.type) {
+                case 'field_change':
+                    await this.applyFieldChanges(message.change.entity, [message.change]);
+                    this.triggerRefresh(message.change.entity);
+                    break;
+
+                case 'push_ack':
+                    this.log('Field push acknowledged:', message);
+                    // Clear optimistic updates
+                    if (message.applied > 0) {
+                        await this.clearPendingForEntity(message.entity, message.entity_id);
+                    }
+                    break;
+
+                case 'conflict':
+                    this.handleConflict(message);
+                    break;
+
+                case 'error':
+                    this.error('Server error:', message.message);
+                    break;
+
+                case 'pong':
+                    this.resetHeartbeatTimeout();
+                    break;
+            }
+        }
+
+        /**
+         * Send message via WebSocket
+         */
+        sendMessage(message) {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify(message));
+                return true;
+            }
+            return false;
+        }
+
+        /**
+         * Start heartbeat ping/pong
+         */
+        startHeartbeat() {
+            this.stopHeartbeat();
+
+            this.heartbeatInterval = setInterval(() => {
+                if (this.sendMessage({ type: 'ping' })) {
+                    this.heartbeatTimeout = setTimeout(() => {
+                        this.error('Heartbeat timeout, reconnecting');
+                        this.ws.close();
+                    }, 5000);
+                }
+            }, 30000);
+        }
+
+        /**
+         * Stop heartbeat
+         */
+        stopHeartbeat() {
+            if (this.heartbeatInterval) {
+                clearInterval(this.heartbeatInterval);
+                this.heartbeatInterval = null;
+            }
+            if (this.heartbeatTimeout) {
+                clearTimeout(this.heartbeatTimeout);
+                this.heartbeatTimeout = null;
+            }
+        }
+
+        /**
+         * Reset heartbeat timeout
+         */
+        resetHeartbeatTimeout() {
+            if (this.heartbeatTimeout) {
+                clearTimeout(this.heartbeatTimeout);
+                this.heartbeatTimeout = null;
+            }
+        }
+
+        /**
+         * Handle disconnection
+         */
+        handleDisconnect() {
+            this.updateConnectionState(ConnectionState.DISCONNECTED);
+
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                this.reconnect();
+            } else {
+                this.log('Max reconnect attempts reached');
+            }
+        }
+
+        /**
+         * Reconnect with exponential backoff
+         */
+        reconnect() {
+            this.reconnectAttempts++;
+            this.updateConnectionState(ConnectionState.RECONNECTING);
+
+            const delay = Math.min(
+                this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
+                this.maxReconnectDelay
+            );
+
+            this.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+
+            setTimeout(() => {
+                if (this.useWebSocket) {
+                    this.connectWebSocket();
+                }
+            }, delay);
+        }
+
+        /**
+         * Update connection state and emit event
+         */
+        updateConnectionState(newState) {
+            const oldState = this.connectionState;
+            this.connectionState = newState;
+
+            if (oldState !== newState) {
+                this.log(`Connection state: ${oldState} -> ${newState}`);
+                window.dispatchEvent(new CustomEvent('rhtmx:field:connection:state', {
+                    detail: { state: newState, oldState }
+                }));
             }
         }
 
@@ -152,7 +398,6 @@
 
                 // Process each entity instance
                 for (const [entityId, entityChanges] of changesByEntity) {
-                    // Get current entity data
                     const getRequest = entityStore.get(entityId);
 
                     getRequest.onsuccess = () => {
@@ -178,7 +423,6 @@
                             });
                         }
 
-                        // Save updated entity
                         entityStore.put(entityData);
                         this.log(`Applied ${entityChanges.length} field changes to ${entity}:${entityId}`);
                     };
@@ -190,32 +434,53 @@
         }
 
         /**
-         * Record a local field change
+         * Record a local field change (with optimistic update)
          */
         async recordFieldChange(entity, entityId, field, value) {
             const timestamp = new Date().toISOString();
 
-            // Apply to local IndexedDB immediately (optimistic update)
-            await this.applyLocalFieldChange(entity, entityId, field, value, timestamp);
+            // Apply optimistically
+            await this.applyOptimisticFieldChange(entity, entityId, field, value, timestamp);
+            this.triggerRefresh(entity);
 
-            // Queue for sync to server
-            await this.queueFieldChange(entity, entityId, field, value, timestamp);
-
-            // Sync to server if online
-            if (navigator.onLine) {
-                await this.syncPendingChanges(entity);
+            if (this.connectionState === ConnectionState.CONNECTED) {
+                // Send via WebSocket
+                this.sendMessage({
+                    type: 'push_fields',
+                    entity,
+                    entity_id: entityId,
+                    fields: [{
+                        field,
+                        value,
+                        action: 'update',
+                        timestamp
+                    }]
+                });
+            } else {
+                // Queue for later
+                await this.queueFieldChange(entity, entityId, field, value, timestamp);
             }
         }
 
         /**
-         * Apply local field change immediately
+         * Apply optimistic field change
          */
-        async applyLocalFieldChange(entity, entityId, field, value, timestamp) {
+        async applyOptimisticFieldChange(entity, entityId, field, value, timestamp) {
             return new Promise((resolve, reject) => {
-                const tx = this.db.transaction([entity, '_field_meta'], 'readwrite');
-                const entityStore = tx.objectStore(entity);
-                const metaStore = tx.objectStore('_field_meta');
+                const tx = this.db.transaction(['_optimistic_fields', entity, '_field_meta'], 'readwrite');
 
+                // Store in optimistic
+                const optStore = tx.objectStore('_optimistic_fields');
+                optStore.put({
+                    entity,
+                    entity_id: entityId,
+                    field,
+                    value,
+                    timestamp: Date.now()
+                });
+
+                // Apply to entity
+                const entityStore = tx.objectStore(entity);
                 const getRequest = entityStore.get(entityId);
 
                 getRequest.onsuccess = () => {
@@ -224,6 +489,7 @@
                     entityStore.put(entityData);
 
                     // Update field metadata
+                    const metaStore = tx.objectStore('_field_meta');
                     const metaKey = `${entity}:${entityId}:${field}`;
                     metaStore.put({
                         key: metaKey,
@@ -255,7 +521,7 @@
                     value: value,
                     action: 'update',
                     timestamp: timestamp,
-                    queued_at: new Date().toISOString()
+                    queued_at: Date.now()
                 });
 
                 tx.oncomplete = () => {
@@ -267,92 +533,148 @@
         }
 
         /**
-         * Sync pending field changes to server
+         * Sync pending field changes
          */
-        async syncPendingChanges(entity) {
+        async syncPendingChanges() {
             if (this.syncInProgress) return;
             this.syncInProgress = true;
 
             try {
-                const pendingChanges = await this.getPendingChanges(entity);
+                const pending = await this.getPendingFieldChanges();
+                this.log(`Syncing ${pending.length} pending field changes`);
 
-                if (pendingChanges.length === 0) {
+                if (pending.length === 0) {
                     this.syncInProgress = false;
                     return;
                 }
 
-                this.log(`Syncing ${pendingChanges.length} pending field changes for ${entity}`);
-
-                const response = await fetch(`/api/field-sync/${entity}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        changes: pendingChanges.map(c => ({
-                            entity_id: c.entity_id,
-                            field: c.field,
-                            value: c.value,
-                            action: c.action,
-                            timestamp: c.timestamp
-                        }))
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`Failed to sync pending changes: ${response.statusText}`);
+                // Group by entity and entity_id
+                const grouped = new Map();
+                for (const change of pending) {
+                    const key = `${change.entity}:${change.entity_id}`;
+                    if (!grouped.has(key)) {
+                        grouped.set(key, {
+                            entity: change.entity,
+                            entity_id: change.entity_id,
+                            fields: []
+                        });
+                    }
+                    grouped.get(key).fields.push({
+                        field: change.field,
+                        value: change.value,
+                        action: change.action,
+                        timestamp: change.timestamp
+                    });
                 }
 
-                const result = await response.json();
-
-                // Handle conflicts
-                if (result.conflicts && result.conflicts.length > 0) {
-                    this.log(`Detected ${result.conflicts.length} conflicts`);
-                    await this.handleConflicts(result.conflicts);
+                // Send each group
+                for (const [key, group] of grouped) {
+                    if (this.connectionState === ConnectionState.CONNECTED) {
+                        this.sendMessage({
+                            type: 'push_fields',
+                            entity: group.entity,
+                            entity_id: group.entity_id,
+                            fields: group.fields
+                        });
+                    } else {
+                        // Use HTTP fallback
+                        await this.pushFieldsViaHTTP(group);
+                    }
                 }
 
-                // Clear synced changes
-                await this.clearPendingChanges(pendingChanges);
-
-                this.log('Pending changes synced successfully');
+                // Clear pending
+                await this.clearPendingFieldChanges();
 
             } catch (error) {
-                this.error('Error syncing pending changes:', error);
+                this.error('Failed to sync pending field changes:', error);
             } finally {
                 this.syncInProgress = false;
             }
         }
 
         /**
-         * Get pending changes for an entity
+         * Push fields via HTTP (fallback)
          */
-        async getPendingChanges(entity) {
+        async pushFieldsViaHTTP(group) {
+            try {
+                const response = await fetch(`/api/field-sync/${group.entity}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        changes: group.fields.map(f => ({
+                            entity_id: group.entity_id,
+                            field: f.field,
+                            value: f.value,
+                            action: f.action,
+                            timestamp: f.timestamp
+                        }))
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                this.log('Fields pushed via HTTP:', result);
+
+                // Handle conflicts
+                if (result.conflicts && result.conflicts.length > 0) {
+                    for (const conflict of result.conflicts) {
+                        this.handleConflict(conflict);
+                    }
+                }
+            } catch (error) {
+                this.error('Failed to push fields via HTTP:', error);
+                throw error;
+            }
+        }
+
+        /**
+         * Handle field conflict
+         */
+        handleConflict(conflict) {
+            this.log('Field conflict detected:', conflict);
+
+            // Emit custom event
+            window.dispatchEvent(new CustomEvent('rhtmx:field:conflict', {
+                detail: conflict
+            }));
+
+            // Apply resolution based on strategy
+            if (this.fieldStrategy === 'server-wins' && conflict.server_value !== undefined) {
+                this.applyFieldChanges(conflict.entity, [{
+                    entity_id: conflict.entity_id,
+                    field: conflict.field,
+                    value: conflict.server_value,
+                    action: 'update',
+                    timestamp: conflict.server_timestamp
+                }]);
+            }
+        }
+
+        /**
+         * Get pending field changes
+         */
+        async getPendingFieldChanges() {
             return new Promise((resolve, reject) => {
                 const tx = this.db.transaction(['_pending_fields'], 'readonly');
                 const store = tx.objectStore('_pending_fields');
                 const request = store.getAll();
 
-                request.onsuccess = () => {
-                    const allChanges = request.result;
-                    const entityChanges = allChanges.filter(c => c.entity === entity);
-                    resolve(entityChanges);
-                };
-
+                request.onsuccess = () => resolve(request.result || []);
                 request.onerror = () => reject(request.error);
             });
         }
 
         /**
-         * Clear pending changes
+         * Clear pending field changes
          */
-        async clearPendingChanges(changes) {
+        async clearPendingFieldChanges() {
             return new Promise((resolve, reject) => {
                 const tx = this.db.transaction(['_pending_fields'], 'readwrite');
                 const store = tx.objectStore('_pending_fields');
-
-                // Note: In a real implementation, we'd need to track keys
-                // For simplicity, we're clearing all for now
-                const request = store.clear();
+                store.clear();
 
                 tx.oncomplete = () => resolve();
                 tx.onerror = () => reject(tx.error);
@@ -360,32 +682,35 @@
         }
 
         /**
-         * Handle field-level conflicts
+         * Clear pending for specific entity
          */
-        async handleConflicts(conflicts) {
-            for (const conflict of conflicts) {
-                this.log('Conflict detected:', conflict);
+        async clearPendingForEntity(entity, entityId) {
+            return new Promise((resolve, reject) => {
+                const tx = this.db.transaction(['_optimistic_fields'], 'readwrite');
+                const store = tx.objectStore('_optimistic_fields');
 
-                // Emit custom event for application to handle
-                window.dispatchEvent(new CustomEvent('rhtmx:field:conflict', {
-                    detail: conflict
-                }));
+                // Clear all optimistic updates for this entity instance
+                const range = IDBKeyRange.bound(
+                    [entity, entityId, ''],
+                    [entity, entityId, '\uffff']
+                );
 
-                // Apply resolution based on strategy
-                if (this.fieldStrategy === 'server-wins') {
-                    await this.applyFieldChanges(conflict.entity, [{
-                        entity_id: conflict.entity_id,
-                        field: conflict.field,
-                        value: conflict.server_value,
-                        action: 'update',
-                        timestamp: conflict.server_timestamp
-                    }]);
-                }
-            }
+                const request = store.openCursor(range);
+                request.onsuccess = (event) => {
+                    const cursor = event.target.result;
+                    if (cursor) {
+                        cursor.delete();
+                        cursor.continue();
+                    }
+                };
+
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
         }
 
         /**
-         * Get last synced version for entity
+         * Get last synced version
          */
         async getLastVersion(entity) {
             return new Promise((resolve) => {
@@ -397,19 +722,17 @@
                     const result = request.result;
                     resolve(result ? result.version : 0);
                 };
-
                 request.onerror = () => resolve(0);
             });
         }
 
         /**
-         * Set last synced version for entity
+         * Set last synced version
          */
         async setLastVersion(entity, version) {
             return new Promise((resolve, reject) => {
                 const tx = this.db.transaction(['_versions'], 'readwrite');
                 const store = tx.objectStore('_versions');
-
                 store.put({ entity: entity, version: version });
 
                 tx.oncomplete = () => resolve();
@@ -418,7 +741,7 @@
         }
 
         /**
-         * Trigger HTMX refresh for entity
+         * Trigger HTMX refresh
          */
         triggerRefresh(entity) {
             const event = new CustomEvent(`rhtmx:${entity}:field-changed`, {
@@ -426,24 +749,41 @@
                 bubbles: true
             });
             document.body.dispatchEvent(event);
-            this.log(`Triggered refresh event for ${entity}`);
+            this.log(`Triggered field refresh for ${entity}`);
         }
 
         /**
-         * Setup offline/online handlers
+         * Setup online/offline handlers
          */
         setupOfflineHandlers() {
             window.addEventListener('online', async () => {
-                this.log('Back online, syncing pending changes');
-                for (const entity of this.entities) {
-                    await this.syncPendingChanges(entity);
-                    await this.syncEntity(entity);
+                this.log('Back online');
+                this.isOnline = true;
+
+                if (this.useWebSocket) {
+                    this.connectWebSocket();
+                } else {
+                    await this.syncPendingChanges();
+                    for (const entity of this.entities) {
+                        await this.syncEntity(entity);
+                    }
                 }
             });
 
             window.addEventListener('offline', () => {
-                this.log('Went offline, changes will be queued');
+                this.log('Went offline');
+                this.isOnline = false;
             });
+        }
+
+        /**
+         * Cleanup on page unload
+         */
+        cleanup() {
+            this.stopHeartbeat();
+            if (this.ws) {
+                this.ws.close();
+            }
         }
 
         /**
@@ -453,6 +793,7 @@
             const scriptTag = document.currentScript;
             const entities = scriptTag.getAttribute('data-sync-entities');
             const fieldStrategy = scriptTag.getAttribute('data-field-strategy') || 'last-write-wins';
+            const useWebSocket = scriptTag.getAttribute('data-use-websocket') !== 'false';
             const debug = scriptTag.getAttribute('data-debug') === 'true';
 
             if (!entities) {
@@ -462,8 +803,9 @@
 
             const config = {
                 entities: entities.split(',').map(e => e.trim()),
-                fieldStrategy: fieldStrategy,
-                debug: debug
+                fieldStrategy,
+                useWebSocket,
+                debug
             };
 
             const sync = new RHTMXFieldSync(config);
@@ -471,19 +813,25 @@
             try {
                 await sync.initIndexedDB();
                 await sync.initialSync();
+                sync.connectRealtime();
                 sync.setupOfflineHandlers();
+
+                // Cleanup on page unload
+                window.addEventListener('beforeunload', () => sync.cleanup());
 
                 // Make available globally
                 window.RHTMXFieldSync = sync;
 
                 console.log('[RHTMX Field Sync] Initialization complete');
+                window.dispatchEvent(new CustomEvent('rhtmx:field:sync:ready'));
+
             } catch (error) {
                 console.error('[RHTMX Field Sync] Initialization failed:', error);
             }
         }
     }
 
-    // Auto-initialize if script tag has data attributes
+    // Auto-initialize
     if (document.currentScript && document.currentScript.hasAttribute('data-sync-entities')) {
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => RHTMXFieldSync.init());
