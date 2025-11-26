@@ -1,11 +1,20 @@
 /**
- * rhtmx-sync.js
- * Client-side IndexedDB synchronization for RHTMX
+ * rhtmx-sync.js - WebSocket-based Entity Sync
+ * Client-side IndexedDB synchronization for RHTMX with WebSocket/SSE support
+ *
+ * Features:
+ * - WebSocket primary, SSE fallback
+ * - Automatic reconnection with exponential backoff
+ * - Offline queue with automatic sync
+ * - Heartbeat/ping-pong
+ * - Connection state management
+ * - Optimistic UI updates
  *
  * Usage:
  * <script src="/api/sync/client.js"
  *         data-sync-entities="users,posts"
  *         data-conflict-strategy="last-write-wins"
+ *         data-use-websocket="true"
  *         data-debug="false">
  * </script>
  */
@@ -13,16 +22,43 @@
 (function() {
     'use strict';
 
+    // Connection states
+    const ConnectionState = {
+        DISCONNECTED: 'disconnected',
+        CONNECTING: 'connecting',
+        CONNECTED: 'connected',
+        RECONNECTING: 'reconnecting',
+        FALLBACK_SSE: 'fallback_sse'
+    };
+
     class RHTMXSync {
         constructor(config) {
             this.entities = config.entities || [];
             this.conflictStrategy = config.conflictStrategy || 'last-write-wins';
+            this.useWebSocket = config.useWebSocket !== false; // Default true
             this.debug = config.debug || false;
-            this.db = null;
-            this.eventSource = null;
-            this.syncInProgress = false;
 
-            this.log('Initializing RHTMX Sync', { entities: this.entities });
+            // Connection management
+            this.connectionState = ConnectionState.DISCONNECTED;
+            this.ws = null;
+            this.eventSource = null;
+            this.reconnectAttempts = 0;
+            this.maxReconnectAttempts = 10;
+            this.reconnectDelay = 1000; // Start at 1 second
+            this.maxReconnectDelay = 30000; // Max 30 seconds
+            this.heartbeatInterval = null;
+            this.heartbeatTimeout = null;
+
+            // Sync state
+            this.db = null;
+            this.syncInProgress = false;
+            this.offlineQueue = [];
+            this.isOnline = navigator.onLine;
+
+            this.log('Initializing RHTMX Sync', {
+                entities: this.entities,
+                useWebSocket: this.useWebSocket
+            });
         }
 
         log(...args) {
@@ -40,7 +76,7 @@
          */
         async initIndexedDB() {
             return new Promise((resolve, reject) => {
-                const request = indexedDB.open('rhtmx-cache', 1);
+                const request = indexedDB.open('rhtmx-cache', 2); // Version 2 for schema updates
 
                 request.onerror = () => {
                     this.error('Failed to open IndexedDB', request.error);
@@ -69,9 +105,15 @@
                         db.createObjectStore('_meta', { keyPath: 'key' });
                     }
 
-                    // Create pending mutations store
+                    // Create pending mutations store with timestamp index
                     if (!db.objectStoreNames.contains('_pending')) {
-                        db.createObjectStore('_pending', { autoIncrement: true });
+                        const pendingStore = db.createObjectStore('_pending', { autoIncrement: true });
+                        pendingStore.createIndex('timestamp', 'timestamp');
+                    }
+
+                    // Create optimistic updates store
+                    if (!db.objectStoreNames.contains('_optimistic')) {
+                        db.createObjectStore('_optimistic', { keyPath: ['entity', 'entity_id'] });
                     }
 
                     this.log('IndexedDB schema created');
@@ -93,15 +135,13 @@
         }
 
         /**
-         * Sync a single entity
+         * Sync a single entity via HTTP
          */
         async syncEntity(entity) {
             try {
-                // Get last known version
                 const lastVersion = await this.getLastVersion(entity);
                 this.log(`Syncing ${entity} since version ${lastVersion}`);
 
-                // Fetch changes from server
                 const response = await fetch(`/api/sync/${entity}?since=${lastVersion}`);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -110,12 +150,10 @@
                 const data = await response.json();
                 this.log(`Received ${data.changes.length} changes for ${entity}`);
 
-                // Apply changes to IndexedDB
                 await this.applyChanges(entity, data.changes);
-
-                // Update version
                 await this.setLastVersion(entity, data.version);
 
+                this.triggerRefresh(entity);
                 this.log(`Synced ${entity} to version ${data.version}`);
             } catch (error) {
                 this.error(`Failed to sync ${entity}:`, error);
@@ -123,68 +161,208 @@
         }
 
         /**
-         * Apply changes to IndexedDB
+         * Connect to real-time sync (WebSocket or SSE)
          */
-        async applyChanges(entity, changes) {
-            const tx = this.db.transaction(entity, 'readwrite');
-            const store = tx.objectStore(entity);
+        connectRealtime() {
+            if (this.useWebSocket && 'WebSocket' in window) {
+                this.connectWebSocket();
+            } else {
+                this.connectSSE();
+            }
+        }
 
-            for (const change of changes) {
-                try {
-                    if (change.action === 'delete') {
-                        await store.delete(change.entity_id);
-                    } else if (change.data) {
-                        await store.put(change.data);
-                    }
-                } catch (error) {
-                    this.error(`Failed to apply change to ${entity}:`, error);
-                }
+        /**
+         * Connect via WebSocket
+         */
+        connectWebSocket() {
+            if (this.connectionState === ConnectionState.CONNECTING ||
+                this.connectionState === ConnectionState.CONNECTED) {
+                return;
             }
 
-            return new Promise((resolve, reject) => {
-                tx.oncomplete = () => resolve();
-                tx.onerror = () => reject(tx.error);
-            });
-        }
+            this.updateConnectionState(ConnectionState.CONNECTING);
+            this.log('Connecting to WebSocket');
 
-        /**
-         * Get last synced version for entity
-         */
-        async getLastVersion(entity) {
-            const tx = this.db.transaction('_meta', 'readonly');
-            const store = tx.objectStore('_meta');
-            const request = store.get(`${entity}_version`);
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${location.host}/api/sync/ws`;
 
-            return new Promise((resolve) => {
-                request.onsuccess = () => {
-                    const result = request.result;
-                    resolve(result ? result.value : 0);
+            try {
+                this.ws = new WebSocket(wsUrl);
+
+                this.ws.onopen = () => {
+                    this.log('WebSocket connected');
+                    this.updateConnectionState(ConnectionState.CONNECTED);
+                    this.reconnectAttempts = 0;
+                    this.reconnectDelay = 1000;
+
+                    // Subscribe to entities
+                    this.sendMessage({
+                        type: 'subscribe',
+                        entities: this.entities
+                    });
+
+                    // Start heartbeat
+                    this.startHeartbeat();
+
+                    // Sync pending offline mutations
+                    this.syncPendingMutations();
                 };
-                request.onerror = () => {
-                    this.error('Failed to get version', request.error);
-                    resolve(0);
+
+                this.ws.onmessage = (event) => {
+                    try {
+                        const message = JSON.parse(event.data);
+                        this.handleWebSocketMessage(message);
+                    } catch (error) {
+                        this.error('Failed to parse WebSocket message:', error);
+                    }
                 };
-            });
+
+                this.ws.onerror = (error) => {
+                    this.error('WebSocket error:', error);
+                };
+
+                this.ws.onclose = () => {
+                    this.log('WebSocket closed');
+                    this.stopHeartbeat();
+                    this.handleDisconnect();
+                };
+
+            } catch (error) {
+                this.error('Failed to create WebSocket:', error);
+                this.fallbackToSSE();
+            }
         }
 
         /**
-         * Set last synced version for entity
+         * Handle WebSocket messages
          */
-        async setLastVersion(entity, version) {
-            const tx = this.db.transaction('_meta', 'readwrite');
-            const store = tx.objectStore('_meta');
-            await store.put({ key: `${entity}_version`, value: version });
+        async handleWebSocketMessage(message) {
+            this.log('Received WebSocket message:', message.type);
 
-            return new Promise((resolve, reject) => {
-                tx.oncomplete = () => resolve();
-                tx.onerror = () => reject(tx.error);
-            });
+            switch (message.type) {
+                case 'change':
+                    await this.applyChanges(message.change.entity, [message.change]);
+                    this.triggerRefresh(message.change.entity);
+                    break;
+
+                case 'push_ack':
+                    this.log('Push acknowledged:', message);
+                    // Remove from optimistic updates
+                    await this.clearOptimistic(message.entity, message.entity_id);
+                    break;
+
+                case 'error':
+                    this.error('Server error:', message.message);
+                    break;
+
+                case 'pong':
+                    this.resetHeartbeatTimeout();
+                    break;
+            }
         }
 
         /**
-         * Connect to SSE for real-time updates
+         * Send message via WebSocket
+         */
+        sendMessage(message) {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify(message));
+                return true;
+            }
+            return false;
+        }
+
+        /**
+         * Start heartbeat ping/pong
+         */
+        startHeartbeat() {
+            this.stopHeartbeat();
+
+            // Send ping every 30 seconds
+            this.heartbeatInterval = setInterval(() => {
+                if (this.sendMessage({ type: 'ping' })) {
+                    // Expect pong within 5 seconds
+                    this.heartbeatTimeout = setTimeout(() => {
+                        this.error('Heartbeat timeout, reconnecting');
+                        this.ws.close();
+                    }, 5000);
+                }
+            }, 30000);
+        }
+
+        /**
+         * Stop heartbeat
+         */
+        stopHeartbeat() {
+            if (this.heartbeatInterval) {
+                clearInterval(this.heartbeatInterval);
+                this.heartbeatInterval = null;
+            }
+            if (this.heartbeatTimeout) {
+                clearTimeout(this.heartbeatTimeout);
+                this.heartbeatTimeout = null;
+            }
+        }
+
+        /**
+         * Reset heartbeat timeout
+         */
+        resetHeartbeatTimeout() {
+            if (this.heartbeatTimeout) {
+                clearTimeout(this.heartbeatTimeout);
+                this.heartbeatTimeout = null;
+            }
+        }
+
+        /**
+         * Handle disconnection
+         */
+        handleDisconnect() {
+            this.updateConnectionState(ConnectionState.DISCONNECTED);
+
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                this.reconnect();
+            } else {
+                this.log('Max reconnect attempts reached, falling back to SSE');
+                this.fallbackToSSE();
+            }
+        }
+
+        /**
+         * Reconnect with exponential backoff
+         */
+        reconnect() {
+            this.reconnectAttempts++;
+            this.updateConnectionState(ConnectionState.RECONNECTING);
+
+            const delay = Math.min(
+                this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
+                this.maxReconnectDelay
+            );
+
+            this.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+
+            setTimeout(() => {
+                if (this.useWebSocket) {
+                    this.connectWebSocket();
+                }
+            }, delay);
+        }
+
+        /**
+         * Fallback to SSE
+         */
+        fallbackToSSE() {
+            this.log('Falling back to SSE');
+            this.useWebSocket = false;
+            this.connectSSE();
+        }
+
+        /**
+         * Connect via SSE
          */
         connectSSE() {
+            this.updateConnectionState(ConnectionState.FALLBACK_SSE);
             this.log('Connecting to SSE');
 
             this.eventSource = new EventSource('/api/sync/events');
@@ -194,168 +372,175 @@
                     const change = JSON.parse(event.data);
                     this.log('Received SSE update', change);
 
-                    // Apply change to IndexedDB
                     await this.applyChanges(change.entity, [change]);
-
-                    // Update version
-                    await this.setLastVersion(change.entity, change.version);
-
-                    // Trigger HTMX refresh
-                    this.triggerRefresh(change.entity, change.entity_id);
+                    this.triggerRefresh(change.entity);
                 } catch (error) {
                     this.error('Failed to process SSE event:', error);
                 }
             });
 
             this.eventSource.onerror = (error) => {
-                this.error('SSE connection error:', error);
-                // Will auto-reconnect
+                this.error('SSE error:', error);
+                // SSE will auto-reconnect
             };
-
-            this.log('SSE connected');
         }
 
         /**
-         * Trigger HTMX refresh for affected elements
+         * Update connection state and emit event
          */
-        triggerRefresh(entity, entityId) {
-            // Trigger custom event for entity change
-            const event = new CustomEvent(`rhtmx:${entity}:changed`, {
-                detail: { id: entityId },
-                bubbles: true,
-            });
-            document.body.dispatchEvent(event);
-        }
+        updateConnectionState(newState) {
+            const oldState = this.connectionState;
+            this.connectionState = newState;
 
-        /**
-         * Setup offline mutation handlers
-         */
-        setupOfflineHandlers() {
-            this.log('Setting up offline handlers');
-
-            // Intercept HTMX requests when offline
-            document.body.addEventListener('htmx:beforeRequest', async (evt) => {
-                if (!navigator.onLine) {
-                    this.log('Offline request intercepted', evt.detail);
-                    evt.preventDefault();
-                    await this.handleOfflineRequest(evt);
-                }
-            });
-
-            // Sync pending mutations when back online
-            window.addEventListener('online', async () => {
-                this.log('Back online, syncing pending mutations');
-                await this.syncPendingMutations();
-            });
-
-            window.addEventListener('offline', () => {
-                this.log('Now offline');
-            });
-        }
-
-        /**
-         * Handle request when offline
-         */
-        async handleOfflineRequest(evt) {
-            const target = evt.detail.target;
-            const verb = evt.detail.verb;
-            const path = evt.detail.path;
-
-            // Extract entity from path (e.g., /api/users -> users)
-            const entityMatch = path.match(/\/api\/(\w+)/);
-            if (!entityMatch) {
-                this.error('Cannot determine entity from path:', path);
-                return;
-            }
-
-            const entity = entityMatch[1];
-
-            // Get form data if POST/PUT/PATCH
-            if (verb === 'POST' || verb === 'PUT' || verb === 'PATCH') {
-                const formData = new FormData(target);
-                const data = Object.fromEntries(formData.entries());
-
-                // Queue mutation
-                await this.queueMutation(entity, verb, data);
-
-                // Update local IndexedDB
-                if (verb === 'POST') {
-                    data.id = Date.now(); // Temporary ID
-                }
-                await this.applyLocalMutation(entity, verb, data);
-
-                // Trigger success
-                this.triggerRefresh(entity, data.id);
+            if (oldState !== newState) {
+                this.log(`Connection state: ${oldState} -> ${newState}`);
+                window.dispatchEvent(new CustomEvent('rhtmx:connection:state', {
+                    detail: { state: newState, oldState }
+                }));
             }
         }
 
         /**
-         * Queue mutation for later sync
+         * Apply changes to IndexedDB
          */
-        async queueMutation(entity, action, data) {
-            const tx = this.db.transaction('_pending', 'readwrite');
-            const store = tx.objectStore('_pending');
-
-            await store.add({
-                entity,
-                action,
-                data,
-                timestamp: Date.now(),
-            });
+        async applyChanges(entity, changes) {
+            if (changes.length === 0) return;
 
             return new Promise((resolve, reject) => {
+                const tx = this.db.transaction(entity, 'readwrite');
+                const store = tx.objectStore(entity);
+
+                for (const change of changes) {
+                    try {
+                        if (change.action === 'delete') {
+                            store.delete(change.entity_id);
+                        } else if (change.data) {
+                            store.put(change.data);
+                        }
+                    } catch (error) {
+                        this.error(`Failed to apply change to ${entity}:`, error);
+                    }
+                }
+
                 tx.oncomplete = () => resolve();
                 tx.onerror = () => reject(tx.error);
             });
         }
 
         /**
-         * Apply mutation to local IndexedDB
+         * Push change (with optimistic update)
          */
-        async applyLocalMutation(entity, action, data) {
-            const tx = this.db.transaction(entity, 'readwrite');
-            const store = tx.objectStore(entity);
+        async pushChange(entity, entityId, action, data) {
+            // Apply optimistically
+            await this.applyOptimistic(entity, entityId, data);
+            this.triggerRefresh(entity);
 
-            if (action === 'DELETE') {
-                await store.delete(data.id);
+            if (this.connectionState === ConnectionState.CONNECTED) {
+                // Send via WebSocket
+                this.sendMessage({
+                    type: 'push',
+                    entity,
+                    entity_id: entityId,
+                    action,
+                    data
+                });
             } else {
-                await store.put(data);
+                // Queue for later
+                await this.queueMutation(entity, entityId, action, data);
             }
+        }
 
+        /**
+         * Apply optimistic update
+         */
+        async applyOptimistic(entity, entityId, data) {
             return new Promise((resolve, reject) => {
+                const tx = this.db.transaction(['_optimistic', entity], 'readwrite');
+
+                // Store in optimistic
+                const optStore = tx.objectStore('_optimistic');
+                optStore.put({ entity, entity_id: entityId, data, timestamp: Date.now() });
+
+                // Apply to entity store
+                const entityStore = tx.objectStore(entity);
+                if (data) {
+                    entityStore.put(data);
+                } else {
+                    entityStore.delete(entityId);
+                }
+
                 tx.oncomplete = () => resolve();
                 tx.onerror = () => reject(tx.error);
             });
         }
 
         /**
-         * Sync pending mutations when back online
+         * Clear optimistic update
+         */
+        async clearOptimistic(entity, entityId) {
+            return new Promise((resolve, reject) => {
+                const tx = this.db.transaction('_optimistic', 'readwrite');
+                const store = tx.objectStore('_optimistic');
+                store.delete([entity, entityId]);
+
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        /**
+         * Queue mutation for offline sync
+         */
+        async queueMutation(entity, entityId, action, data) {
+            return new Promise((resolve, reject) => {
+                const tx = this.db.transaction('_pending', 'readwrite');
+                const store = tx.objectStore('_pending');
+
+                store.add({
+                    entity,
+                    entity_id: entityId,
+                    action,
+                    data,
+                    timestamp: Date.now()
+                });
+
+                tx.oncomplete = () => {
+                    this.log(`Queued mutation: ${entity}:${entityId}`);
+                    resolve();
+                };
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        /**
+         * Sync pending mutations
          */
         async syncPendingMutations() {
             if (this.syncInProgress) return;
             this.syncInProgress = true;
 
             try {
-                const tx = this.db.transaction('_pending', 'readonly');
-                const store = tx.objectStore('_pending');
-                const request = store.getAll();
-
-                const pending = await new Promise((resolve, reject) => {
-                    request.onsuccess = () => resolve(request.result);
-                    request.onerror = () => reject(request.error);
-                });
-
+                const pending = await this.getPendingMutations();
                 this.log(`Syncing ${pending.length} pending mutations`);
 
                 for (const mutation of pending) {
-                    await this.pushMutation(mutation);
+                    if (this.connectionState === ConnectionState.CONNECTED) {
+                        this.sendMessage({
+                            type: 'push',
+                            entity: mutation.entity,
+                            entity_id: mutation.entity_id,
+                            action: mutation.action,
+                            data: mutation.data
+                        });
+                    } else {
+                        // Use HTTP fallback
+                        await this.pushViaHTTP(mutation);
+                    }
                 }
 
-                // Clear pending queue
-                await this.clearPending();
+                // Clear pending
+                await this.clearPendingMutations();
 
-                // Re-sync all entities
-                await this.initialSync();
             } catch (error) {
                 this.error('Failed to sync pending mutations:', error);
             } finally {
@@ -364,97 +549,196 @@
         }
 
         /**
-         * Push a mutation to the server
+         * Push via HTTP (fallback)
          */
-        async pushMutation(mutation) {
+        async pushViaHTTP(mutation) {
             try {
                 const response = await fetch(`/api/sync/${mutation.entity}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         changes: [{
-                            id: mutation.data.id.toString(),
-                            action: mutation.action.toLowerCase(),
-                            data: mutation.data,
-                        }],
-                    }),
+                            id: mutation.entity_id,
+                            action: mutation.action,
+                            data: mutation.data
+                        }]
+                    })
                 });
 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
                 }
 
-                this.log('Pushed mutation', mutation);
+                this.log('Mutation pushed via HTTP:', mutation);
             } catch (error) {
-                this.error('Failed to push mutation:', error);
+                this.error('Failed to push via HTTP:', error);
                 throw error;
             }
         }
 
         /**
+         * Get pending mutations
+         */
+        async getPendingMutations() {
+            return new Promise((resolve, reject) => {
+                const tx = this.db.transaction('_pending', 'readonly');
+                const store = tx.objectStore('_pending');
+                const request = store.getAll();
+
+                request.onsuccess = () => resolve(request.result || []);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        /**
          * Clear pending mutations
          */
-        async clearPending() {
-            const tx = this.db.transaction('_pending', 'readwrite');
-            const store = tx.objectStore('_pending');
-            await store.clear();
-
+        async clearPendingMutations() {
             return new Promise((resolve, reject) => {
+                const tx = this.db.transaction('_pending', 'readwrite');
+                const store = tx.objectStore('_pending');
+                store.clear();
+
                 tx.oncomplete = () => resolve();
                 tx.onerror = () => reject(tx.error);
             });
         }
 
         /**
-         * Initialize the sync system
+         * Get last synced version
          */
-        async init() {
+        async getLastVersion(entity) {
+            return new Promise((resolve) => {
+                const tx = this.db.transaction('_meta', 'readonly');
+                const store = tx.objectStore('_meta');
+                const request = store.get(`${entity}_version`);
+
+                request.onsuccess = () => {
+                    const result = request.result;
+                    resolve(result ? result.value : 0);
+                };
+                request.onerror = () => resolve(0);
+            });
+        }
+
+        /**
+         * Set last synced version
+         */
+        async setLastVersion(entity, version) {
+            return new Promise((resolve, reject) => {
+                const tx = this.db.transaction('_meta', 'readwrite');
+                const store = tx.objectStore('_meta');
+                store.put({ key: `${entity}_version`, value: version });
+
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        /**
+         * Trigger HTMX refresh
+         */
+        triggerRefresh(entity) {
+            const event = new CustomEvent(`rhtmx:${entity}:changed`, {
+                detail: { entity },
+                bubbles: true
+            });
+            document.body.dispatchEvent(event);
+            this.log(`Triggered refresh for ${entity}`);
+        }
+
+        /**
+         * Setup online/offline handlers
+         */
+        setupOfflineHandlers() {
+            window.addEventListener('online', async () => {
+                this.log('Back online');
+                this.isOnline = true;
+
+                // Reconnect WebSocket or sync pending
+                if (this.useWebSocket) {
+                    this.connectWebSocket();
+                } else {
+                    await this.syncPendingMutations();
+                    for (const entity of this.entities) {
+                        await this.syncEntity(entity);
+                    }
+                }
+            });
+
+            window.addEventListener('offline', () => {
+                this.log('Went offline');
+                this.isOnline = false;
+            });
+        }
+
+        /**
+         * Cleanup on page unload
+         */
+        cleanup() {
+            this.stopHeartbeat();
+            if (this.ws) {
+                this.ws.close();
+            }
+            if (this.eventSource) {
+                this.eventSource.close();
+            }
+        }
+
+        /**
+         * Initialize everything
+         */
+        static async init() {
+            const scriptTag = document.currentScript;
+            const entities = scriptTag.getAttribute('data-sync-entities');
+            const conflictStrategy = scriptTag.getAttribute('data-conflict-strategy') || 'last-write-wins';
+            const useWebSocket = scriptTag.getAttribute('data-use-websocket') !== 'false';
+            const debug = scriptTag.getAttribute('data-debug') === 'true';
+
+            if (!entities) {
+                console.error('[RHTMX Sync] No entities specified in data-sync-entities');
+                return;
+            }
+
+            const config = {
+                entities: entities.split(',').map(e => e.trim()),
+                conflictStrategy,
+                useWebSocket,
+                debug
+            };
+
+            const sync = new RHTMXSync(config);
+
             try {
-                await this.initIndexedDB();
-                await this.initialSync();
-                this.connectSSE();
-                this.setupOfflineHandlers();
+                await sync.initIndexedDB();
+                await sync.initialSync();
+                sync.connectRealtime();
+                sync.setupOfflineHandlers();
 
-                this.log('RHTMX Sync initialized successfully');
+                // Cleanup on page unload
+                window.addEventListener('beforeunload', () => sync.cleanup());
 
-                // Dispatch ready event
-                document.dispatchEvent(new Event('rhtmx:sync:ready'));
+                // Make available globally
+                window.rhtmxSync = sync;
+
+                console.log('[RHTMX Sync] Initialization complete');
+                window.dispatchEvent(new CustomEvent('rhtmx:sync:ready'));
+
             } catch (error) {
-                this.error('Failed to initialize:', error);
+                console.error('[RHTMX Sync] Initialization failed:', error);
             }
         }
     }
 
-    // Auto-initialize when DOM is ready
-    function autoInit() {
-        const script = document.currentScript ||
-                      document.querySelector('[data-sync-entities]');
-
-        if (!script) {
-            console.warn('[RHTMX Sync] No configuration found. Add data-sync-entities attribute to script tag.');
-            return;
+    // Auto-initialize
+    if (document.currentScript && document.currentScript.hasAttribute('data-sync-entities')) {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => RHTMXSync.init());
+        } else {
+            RHTMXSync.init();
         }
-
-        const entities = (script.dataset.syncEntities || '').split(',').filter(e => e.trim());
-        const conflictStrategy = script.dataset.conflictStrategy || 'last-write-wins';
-        const debug = script.dataset.debug === 'true';
-
-        if (entities.length === 0) {
-            console.warn('[RHTMX Sync] No entities specified in data-sync-entities');
-            return;
-        }
-
-        const sync = new RHTMXSync({ entities, conflictStrategy, debug });
-        sync.init();
-
-        // Expose to window for manual control
-        window.rhtmxSync = sync;
     }
 
-    // Initialize when DOM is ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', autoInit);
-    } else {
-        autoInit();
-    }
+    // Export for manual initialization
+    window.RHTMXSync = RHTMXSync;
 })();
