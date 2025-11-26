@@ -6,8 +6,9 @@ Automatic IndexedDB synchronization for RHTMX applications with **minimal develo
 
 - ✅ **Zero-config sync**: Add one derive macro, get automatic sync
 - ✅ **Offline support**: Mutations queue when offline, sync when online
-- ✅ **Real-time updates**: SSE pushes changes to all connected clients
+- ✅ **Real-time updates**: WebSocket (bidirectional) or SSE (fallback)
 - ✅ **Conflict resolution**: Last-write-wins, client-wins, server-wins strategies
+- ✅ **Field-level sync**: CRDT-like field granularity (like Yjs/Automerge)
 - ✅ **Type-safe**: Rust's type system ensures correctness
 - ✅ **Lightweight client**: ~12 KB JavaScript (no external dependencies)
 - ✅ **Works with existing code**: No changes to your HTMX templates
@@ -283,13 +284,163 @@ Requires:
 - Simple conflict resolution (CRDTs planned)
 - 50MB IndexedDB quota (browser default)
 
+## Field-Level Sync (New!)
+
+rhtmx-sync now supports **field-level synchronization** similar to Yjs and Automerge. This allows fine-grained conflict resolution at the field level instead of syncing entire entities.
+
+### Quick Start with Field-Level Sync
+
+#### 1. Enable field-level sync in your config
+
+```rust
+use rhtmx_sync::{SyncEngine, SyncConfig, FieldMergeStrategy};
+
+let sync_engine = SyncEngine::new(
+    SyncConfig::new(db_pool.clone(), vec!["users".to_string()])
+        .with_field_sync(FieldMergeStrategy::LastWriteWins)
+).await?;
+```
+
+#### 2. Use the field-level sync client
+
+```html
+<script src="/api/sync/field-client.js"
+        data-sync-entities="users"
+        data-field-strategy="last-write-wins"
+        data-debug="true">
+</script>
+```
+
+#### 3. Track field changes from JavaScript
+
+```javascript
+// Record a field change
+window.RHTMXFieldSync.recordFieldChange('users', '1', 'name', 'Alice');
+
+// Listen for field-level conflicts
+window.addEventListener('rhtmx:field:conflict', (e) => {
+    console.log('Field conflict:', e.detail);
+});
+```
+
+### Field Merge Strategies
+
+```rust
+pub enum FieldMergeStrategy {
+    LastWriteWins,  // Timestamp-based (default)
+    KeepBoth,       // Report conflict, let app decide
+    ServerWins,     // Always prefer server value
+    ClientWins,     // Always prefer client value
+}
+```
+
+### Field-Level API Endpoints
+
+When field-level sync is enabled, these additional endpoints are available:
+
+- `GET /api/field-sync/:entity?since=:version` - Get field changes
+- `POST /api/field-sync/:entity` - Push field changes
+- `GET /api/field-sync/:entity/:entity_id/latest` - Get latest field values
+- `GET /api/sync/field-client.js` - Field sync JavaScript client
+
+### Benefits of Field-Level Sync
+
+1. **Fine-grained conflict resolution**: Two users can edit different fields simultaneously without conflicts
+2. **Reduced bandwidth**: Only changed fields are transmitted
+3. **Better user experience**: Less chance of losing work due to conflicts
+4. **CRDT-like behavior**: Similar to Yjs, Automerge for collaborative editing
+
+## WebSocket Support (New!)
+
+rhtmx-sync now supports **WebSocket** for bidirectional real-time sync, which is more efficient than SSE.
+
+### Benefits of WebSocket over SSE
+
+1. **Bidirectional**: Push and pull through same connection (SSE is one-way)
+2. **Lower overhead**: Single persistent connection vs SSE + HTTP POST
+3. **Better for real-time sync**: Immediate updates both ways
+4. **More resource efficient**: Less connections, less bandwidth
+
+### WebSocket Endpoints
+
+When you add sync routes, both WebSocket and SSE endpoints are available:
+
+- **WebSocket (preferred)**: `ws://localhost:3000/api/sync/ws` - Entity-level sync
+- **WebSocket (field-level)**: `ws://localhost:3000/api/field-sync/ws` - Field-level sync
+- **SSE (fallback)**: `GET /api/sync/events` - For browsers without WebSocket
+
+### WebSocket Protocol
+
+#### Entity-Level Sync Messages
+
+```json
+// Client subscribes to entities
+{"type": "subscribe", "entities": ["users", "posts"]}
+
+// Client requests sync
+{"type": "sync", "entity": "users", "since": 42}
+
+// Server sends change
+{"type": "change", "change": {...}}
+
+// Client pushes change
+{"type": "push", "entity": "users", "entity_id": "1", "action": "update", "data": {...}}
+
+// Server acknowledges
+{"type": "push_ack", "entity": "users", "entity_id": "1", "version": 43}
+```
+
+#### Field-Level Sync Messages
+
+```json
+// Client pushes field changes
+{
+  "type": "push_fields",
+  "entity": "users",
+  "entity_id": "1",
+  "fields": [
+    {"field": "name", "value": "Alice", "action": "update", "timestamp": "2024-01-01T12:00:00Z"}
+  ]
+}
+
+// Server sends field change
+{"type": "field_change", "change": {...}}
+
+// Server acknowledges with conflict info
+{"type": "push_ack", "entity": "users", "entity_id": "1", "applied": 3, "conflicts": 1}
+```
+
+## Multi-Tab Sync (New!)
+
+rhtmx-sync now supports **multi-tab synchronization** using the BroadcastChannel API. This allows tabs in the same browser to share sync state instantly without server round-trips.
+
+### How It Works
+
+When one tab receives an update (via WebSocket or makes a local change), it broadcasts to all other tabs:
+
+1. **Automatic Broadcasting**: Changes received from server are automatically broadcast to other tabs
+2. **Optimistic Updates**: Local changes are immediately shared with other tabs
+3. **No Server Round-Trip**: Tabs communicate directly via BroadcastChannel
+4. **Infinite Loop Prevention**: Each tab has a unique ID and ignores its own broadcasts
+
+### Benefits
+
+- **Instant UI sync**: All tabs stay in sync in real-time
+- **Reduced server load**: Tabs don't need to poll or wait for server notifications
+- **Better UX**: Users see consistent state across all tabs
+- **Zero configuration**: Automatically enabled when BroadcastChannel is available
+
+### Browser Support
+
+BroadcastChannel is supported in all modern browsers (Chrome, Firefox, Safari, Edge). The library gracefully degrades if not available.
+
 ## Roadmap
 
 - [ ] PostgreSQL support (LISTEN/NOTIFY)
 - [ ] CRDT integration (Automerge)
-- [ ] Field-level sync (not just entity-level)
-- [ ] WebSocket option (alternative to SSE)
-- [ ] Multi-tab sync (BroadcastChannel)
+- [x] Field-level sync (not just entity-level) ✅
+- [x] WebSocket option (alternative to SSE) ✅
+- [x] Multi-tab sync (BroadcastChannel) ✅
 - [ ] Compression for large payloads
 - [ ] Batch sync optimization
 
