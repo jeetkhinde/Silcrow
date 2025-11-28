@@ -87,7 +87,7 @@ static BLOCKED_DOMAINS: &[&str] = &[
 /// # Example
 ///
 /// ```rust,ignore
-/// use rhtmx_form_types::EmailAddress;
+/// use rusty_forms_types::EmailAddress;
 ///
 /// // Valid - any real domain
 /// let personal = EmailAddress::try_new("user@gmail.com".to_string())?;  // ✓
@@ -132,7 +132,7 @@ pub type AnyEmailAddress = EmailAddress;
 /// # Example
 ///
 /// ```rust,ignore
-/// use rhtmx_form_types::WorkEmailAddress;
+/// use rusty_forms_types::WorkEmailAddress;
 ///
 /// // Valid - corporate domain
 /// let work = WorkEmailAddress::try_new("john@acme.com".to_string())?;  // ✓
@@ -170,7 +170,7 @@ pub struct WorkEmailAddress(String);
 /// # Example
 ///
 /// ```rust,ignore
-/// use rhtmx_form_types::BusinessEmailAddress;
+/// use rusty_forms_types::BusinessEmailAddress;
 ///
 /// let biz = BusinessEmailAddress::try_new("ceo@verified-corp.com".to_string())?;
 /// ```

@@ -7,7 +7,7 @@
 //!
 //! Run: cargo run --example route_specific_types
 
-use rhtmx_form_types::*;
+use rusty_forms_types::*;
 use nutype::nutype;
 use serde::{Serialize, Deserialize};
 
@@ -19,7 +19,7 @@ pub mod types {
     use super::*;
 
     // Re-export common types
-    pub use rhtmx_form_types::{
+    pub use rusty_forms_types::{
         EmailAddress,
         PasswordBasic,
         PasswordMedium,

@@ -13,8 +13,7 @@ path = "src/lib.rs"
 
 [dependencies]
 rhtmx-macro = { path = "../rhtmx-macro" }
-rhtmx-form = { path = "../RHTMX-Form" }
-rhtmx-validation-core = { path = "../rhtmx-validation/core" }
+rusty-forms = { path = "../rusty-forms", features = ["full"] }
 rhtmx-parser = { path = "../rhtmx-parser" }
 rhtmx-router = { path = "../rhtmx-router" }
 

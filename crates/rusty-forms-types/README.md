@@ -1,6 +1,6 @@
-# rhtmx-form-types
+# rusty-forms-types
 
-**Business rules embedded in types** - validated newtype wrappers for RHTMX forms using `nutype`.
+**Business rules embedded in types** - validated newtype wrappers for rusty-forms using `nutype`.
 
 ## 🎯 Philosophy: Types ARE Business Rules
 
@@ -81,7 +81,7 @@ let phrase = PasswordPhrase3::try_new("Correct-Horse-Battery-Staple".to_string()
 
 ```rust
 use rhtmx::{Validate, FormField};
-use rhtmx_form_types::{WorkEmailAddress, PasswordStrong};
+use rusty_forms_types::{WorkEmailAddress, PasswordStrong};
 
 #[derive(Validate, FormField, Deserialize)]
 struct B2BSignupForm {
@@ -100,7 +100,7 @@ struct B2BSignupForm {
 
 ```rust
 mod consumer {
-    use rhtmx_form_types::*;
+    use rusty_forms_types::*;
 
     struct LoginForm {
         email: EmailAddress,        // Accepts Gmail
@@ -109,7 +109,7 @@ mod consumer {
 }
 
 mod business {
-    use rhtmx_form_types::*;
+    use rusty_forms_types::*;
 
     struct LoginForm {
         email: WorkEmailAddress,    // No Gmail!
@@ -118,7 +118,7 @@ mod business {
 }
 
 mod admin {
-    use rhtmx_form_types::*;
+    use rusty_forms_types::*;
 
     struct LoginForm {
         email: BusinessEmailAddress,     // Verified only
@@ -152,7 +152,7 @@ Same types work in the browser!
 
 ### Server Code
 ```rust
-use rhtmx_form_types::WorkEmailAddress;
+use rusty_forms_types::WorkEmailAddress;
 
 #[derive(Validate, FormField)]
 struct SignupForm {
@@ -162,7 +162,7 @@ struct SignupForm {
 
 ### WASM Code (Same Types!)
 ```rust
-use rhtmx_form_types::WorkEmailAddress;
+use rusty_forms_types::WorkEmailAddress;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -296,7 +296,7 @@ rhtmx-form-types = { path = "crates/rhtmx-form-types" }
 ## 🚀 Quick Start
 
 ```rust
-use rhtmx_form_types::*;
+use rusty_forms_types::*;
 
 // Consumer app
 let email = EmailAddress::try_new("user@gmail.com".to_string())?;

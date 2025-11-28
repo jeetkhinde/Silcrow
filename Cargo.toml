@@ -8,9 +8,10 @@ members = [
   "crates/rhtmx-server",
   "crates/rhtmx-cli",
   "crates/rhtmx-isr",
-  "crates/RHTMX-Form",
-  "crates/rhtmx-form-types",
-  "crates/rhtmx-validation/core",
+  "crates/rusty-forms",
+  "crates/rusty-forms-derive",
+  "crates/rusty-forms-types",
+  "crates/rusty-forms-validation",
   "crates/rhtmx-validation/wasm",
 ]
 

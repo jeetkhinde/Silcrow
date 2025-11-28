@@ -19,7 +19,7 @@ impl PasswordPattern {
     ///
     /// # Examples
     /// ```
-    /// use rhtmx_validation_core::password::PasswordPattern;
+    /// use rusty_forms_validation::password::PasswordPattern;
     /// assert!(matches!(PasswordPattern::parse("basic"), PasswordPattern::Basic));
     /// assert!(matches!(PasswordPattern::parse("medium"), PasswordPattern::Medium));
     /// assert!(matches!(PasswordPattern::parse("strong"), PasswordPattern::Strong));

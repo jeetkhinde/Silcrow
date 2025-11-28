@@ -1,0 +1,38 @@
+[package]
+name = "rusty-forms"
+version = "0.1.0"
+edition = "2021"
+description = "A complete Rust form validation library with derive macros, type-safe validation, and client/server sync"
+license = "MIT"
+keywords = ["forms", "validation", "web", "htmx", "derive"]
+categories = ["web-programming", "wasm"]
+repository = "https://github.com/jeetkhinde/RHTMX"
+documentation = "https://docs.rs/rusty-forms"
+
+[dependencies]
+# Core derive macros (always included)
+rusty-forms-derive = { path = "../rusty-forms-derive", version = "0.1.0" }
+
+# Optional: Core validation functions
+rusty-forms-validation = { path = "../rusty-forms-validation", version = "0.1.0", optional = true }
+
+# Optional: Nutype validated types
+rusty-forms-types = { path = "../rusty-forms-types", version = "0.1.0", optional = true }
+
+# Required for the Validate trait
+serde = { version = "1.0", features = ["derive"] }
+
+[features]
+default = []
+
+# Include validation functions for custom validators
+validation = ["dep:rusty-forms-validation"]
+
+# Include nutype-based validated types
+nutype = ["dep:rusty-forms-types"]
+
+# Enable all features
+full = ["validation", "nutype"]
+
+[dev-dependencies]
+serde_json = "1.0"

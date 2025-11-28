@@ -1,8 +1,8 @@
 [package]
-name = "rhtmx-form-types"
+name = "rusty-forms-types"
 version = "0.1.0"
 edition = "2021"
-description = "Common validated types for RHTMX forms using nutype"
+description = "Common validated types for rusty-forms using nutype"
 license = "MIT"
 
 [dependencies]

@@ -17,8 +17,8 @@ pub mod actions;
 // Re-export the html! macro from rhtmx-macro
 pub use rhtmx_macro::{html, css, get, post, put, patch, delete};
 
-// Re-export the Validate and FormField derive macros from rhtmx-form
-pub use rhtmx_form::{Validate, FormField};
+// Re-export the Validate and FormField derive macros from rusty-forms
+pub use rusty_forms::{Validate, FormField};
 
 // Re-export core types and response builders
 pub use html::{

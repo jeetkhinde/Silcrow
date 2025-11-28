@@ -1,20 +1,20 @@
 // File: src/validation/validators.rs
-// Purpose: Re-export validators from rhtmx-validation-core + std-only validators
+// Purpose: Re-export validators from rusty-forms + std-only validators
 // This maintains backward compatibility while using the shared validation logic
 
 use regex::Regex;
 use once_cell::sync::Lazy;
 
-// Re-export from validation-core (no_std compatible validators)
-pub use rhtmx_validation_core::email::{
+// Re-export from rusty-forms validation module (no_std compatible validators)
+pub use rusty_forms::validation::email::{
     is_valid_email,
     is_public_domain,
     is_blocked_domain,
 };
 
-pub use rhtmx_validation_core::password::validate_password;
+pub use rusty_forms::validation::password::validate_password;
 
-pub use rhtmx_validation_core::string::is_valid_url;
+pub use rusty_forms::validation::string::is_valid_url;
 
 // Regex matching (requires std, so kept here)
 #[allow(dead_code)]

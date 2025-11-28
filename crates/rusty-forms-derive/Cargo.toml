@@ -1,8 +1,8 @@
 [package]
-name = "rhtmx-form"
+name = "rusty-forms-derive"
 version = "0.1.0"
 edition = "2021"
-description = "Form for RHTMX framework"
+description = "Procedural macros for rusty-forms - Rust form validation library"
 license = "MIT"
 
 [lib]
@@ -12,7 +12,7 @@ proc-macro = true
 syn = { version = "2.0", features = ["full", "extra-traits"] }
 quote = "1.0"
 proc-macro2 = "1.0"
-rhtmx-validation-core = { path = "../rhtmx-validation/core", default-features = false }
+rusty-forms-validation = { path = "../rusty-forms-validation", default-features = false }
 
 [features]
 nutype = []

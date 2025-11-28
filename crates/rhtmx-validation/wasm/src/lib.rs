@@ -5,7 +5,7 @@
 
 use wasm_bindgen::prelude::*;
 use serde::{Deserialize, Serialize};
-use rhtmx_validation_core as core;
+use rusty_forms_validation as core;
 
 /// Set panic hook for better error messages in the browser
 #[wasm_bindgen(start)]

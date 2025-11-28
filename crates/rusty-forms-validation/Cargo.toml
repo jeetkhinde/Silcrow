@@ -1,12 +1,12 @@
 [package]
-name = "rhtmx-validation-core"
+name = "rusty-forms-validation"
 version = "0.1.0"
 edition = "2021"
-description = "Core validation functions for RHTMX (no_std compatible)"
+description = "Core validation functions for rusty-forms (no_std compatible)"
 license = "MIT"
 
 [lib]
-name = "rhtmx_validation_core"
+name = "rusty_forms_validation"
 path = "src/lib.rs"
 
 [dependencies]

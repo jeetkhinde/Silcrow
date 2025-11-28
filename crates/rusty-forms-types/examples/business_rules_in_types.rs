@@ -6,7 +6,7 @@
 //!
 //! Run: cargo run --example business_rules_in_types
 
-use rhtmx_form_types::*;
+use rusty_forms_types::*;
 use serde::{Serialize, Deserialize};
 
 // =============================================================================
