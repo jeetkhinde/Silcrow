@@ -40,6 +40,9 @@ pub mod field_sync_api;
 pub mod conflict;
 pub mod engine;
 pub mod compression;
+pub mod schema;
+pub mod models;
+pub mod db;
 
 // Re-export main types
 pub use syncable::Syncable;
@@ -48,6 +51,7 @@ pub use conflict::{SyncStrategy, ConflictResolver};
 pub use change_tracker::{ChangeLog, ChangeAction};
 pub use field_tracker::{FieldTracker, FieldChange, FieldAction, FieldMergeStrategy, FieldConflict};
 pub use compression::CompressionConfig;
+pub use db::DbPool;
 
 // The Syncable derive macro is provided by rhtmx-macro
 

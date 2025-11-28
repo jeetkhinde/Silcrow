@@ -5,11 +5,11 @@ use axum::{
     routing::{get, post},
     Router, Extension,
 };
-use sqlx::SqlitePool;
 use std::sync::Arc;
 
 use crate::{
     change_tracker::ChangeTracker,
+    db::DbPool,
     field_tracker::{FieldTracker, FieldMergeStrategy},
     conflict::SyncStrategy,
     compression::CompressionConfig,
@@ -23,8 +23,8 @@ use crate::{
 /// Configuration for the sync engine
 #[derive(Clone)]
 pub struct SyncConfig {
-    /// Database connection pool
-    pub db_pool: SqlitePool,
+    /// Database connection pool (PostgreSQL primary, SQLite optional)
+    pub db_pool: DbPool,
 
     /// Entities to sync (table names)
     pub entities: Vec<String>,
@@ -46,7 +46,7 @@ pub struct SyncConfig {
 }
 
 impl SyncConfig {
-    pub fn new(db_pool: SqlitePool, entities: Vec<String>) -> Self {
+    pub fn new(db_pool: DbPool, entities: Vec<String>) -> Self {
         Self {
             db_pool,
             entities,
