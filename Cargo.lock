@@ -2268,20 +2268,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rhtmx-validation-wasm"
-version = "0.1.0"
-dependencies = [
- "console_error_panic_hook",
- "garde",
- "rusty-forms-validation",
- "serde",
- "serde-wasm-bindgen",
- "wasm-bindgen",
- "wasm-bindgen-test",
- "web-sys",
-]
-
-[[package]]
 name = "ring"
 version = "0.17.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2451,6 +2437,20 @@ dependencies = [
 [[package]]
 name = "rusty-forms-validation"
 version = "0.1.0"
+
+[[package]]
+name = "rusty-forms-wasm"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "garde",
+ "rusty-forms-validation",
+ "serde",
+ "serde-wasm-bindgen",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+ "web-sys",
+]
 
 [[package]]
 name = "ryu"

@@ -1,6 +1,6 @@
-//! RHTMX Validation WASM
+//! rusty-forms-wasm
 //!
-//! WebAssembly bindings for RHTMX validation system.
+//! WebAssembly bindings for rusty-forms validation.
 //! Provides real-time client-side validation using the same logic as server-side.
 
 use wasm_bindgen::prelude::*;

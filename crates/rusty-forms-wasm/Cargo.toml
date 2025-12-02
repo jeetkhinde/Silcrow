@@ -1,9 +1,12 @@
 [package]
-name = "rhtmx-validation-wasm"
+name = "rusty-forms-wasm"
 version = "0.1.0"
 edition = "2021"
-description = "WASM bindings for RHTMX validation (client-side validation)"
+description = "WebAssembly client-side validation for rusty-forms"
 license = "MIT"
+repository = "https://github.com/yourusername/rusty-forms"
+keywords = ["forms", "validation", "wasm", "webassembly", "browser"]
+categories = ["wasm", "web-programming"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -12,7 +15,7 @@ crate-type = ["cdylib", "rlib"]
 wasm-bindgen = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
-rusty-forms-validation = { path = "../../rusty-forms-validation", default-features = false }
+rusty-forms-validation = { path = "../rusty-forms-validation", default-features = false }
 console_error_panic_hook = { version = "0.1", optional = true }
 garde = { version = "0.22.0", default-features = false, features = ["email", "url"] }
 

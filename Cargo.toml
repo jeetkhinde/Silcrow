@@ -12,7 +12,7 @@ members = [
   "crates/rusty-forms-derive",
   "crates/rusty-forms-types",
   "crates/rusty-forms-validation",
-  "crates/rhtmx-validation/wasm",
+  "crates/rusty-forms-wasm",
 ]
 
 resolver = "2"

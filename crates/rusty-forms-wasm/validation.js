@@ -1,11 +1,11 @@
 /**
- * RHTMX Validation - JavaScript Wrapper
+ * rusty-forms-wasm - JavaScript Wrapper
  *
- * High-level API for using RHTMX validation in the browser.
+ * High-level API for using rusty-forms validation in the browser.
  * Provides real-time validation with debouncing, DOM manipulation, and error display.
  */
 
-import init, { validateField, isValidEmail, validatePassword, isValidUrl } from './pkg/rhtmx_validation_wasm.js';
+import init, { validateField, isValidEmail, validatePassword, isValidUrl } from './pkg/rusty_forms_wasm.js';
 
 let wasmInitialized = false;
 

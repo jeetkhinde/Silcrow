@@ -1,11 +1,11 @@
-# RHTMX Validation WASM
+# rusty-forms-wasm
 
 Real-time form validation for the browser using WebAssembly. Same validation logic as server-side, zero network latency.
 
 ## 🚀 Features
 
 - **Instant Validation** - Validate as users type, no server round-trips
-- **Same Logic** - Uses identical validators as server-side RHTMX
+- **Same Logic** - Uses identical validators as server-side rusty-forms
 - **Tiny Bundle** - Optimized WASM binary (~50KB gzipped)
 - **Type-Safe** - Full TypeScript support
 - **Zero Dependencies** - Pure Rust compiled to WASM
