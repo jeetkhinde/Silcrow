@@ -43,6 +43,7 @@ pub mod compression;
 pub mod schema;
 pub mod models;
 pub mod db;
+pub mod postgres_notify;
 
 // Re-export main types
 pub use syncable::Syncable;
@@ -52,6 +53,7 @@ pub use change_tracker::{ChangeLog, ChangeAction};
 pub use field_tracker::{FieldTracker, FieldChange, FieldAction, FieldMergeStrategy, FieldConflict};
 pub use compression::CompressionConfig;
 pub use db::DbPool;
+pub use postgres_notify::{PostgresNotifyListener, PostgresNotification};
 
 // The Syncable derive macro is provided by rhtmx-macro
 
