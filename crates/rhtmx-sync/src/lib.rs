@@ -1,14 +1,14 @@
-// File: rhtmx-sync/src/lib.rs
-// Purpose: Main entry point for rhtmx-sync library
+// File: rusty-sync/src/lib.rs
+// Purpose: Main entry point for rusty-sync library
 
-//! # rhtmx-sync
+//! # rusty-sync
 //!
-//! Automatic IndexedDB synchronization for RHTMX applications.
+//! Automatic IndexedDB synchronization for Rust web applications.
 //!
 //! ## Quick Start
 //!
 //! ```rust,ignore
-//! use rhtmx_sync::{Syncable, SyncEngine, SyncConfig};
+//! use rusty_sync::{Syncable, SyncEngine, SyncConfig};
 //!
 //! // 1. Add #[derive(Syncable)] to your models
 //! #[derive(Debug, Serialize, Deserialize, sqlx::FromRow, Syncable)]

@@ -1,4 +1,4 @@
-// File: rhtmx-sync/src/field_tracker.rs
+// File: rusty-sync/src/field_tracker.rs
 // Purpose: Track field-level changes for fine-grained synchronization
 // Similar to Yjs/Automerge - supports CRDT-like field-level sync
 // PostgreSQL uses Diesel (PRIMARY), SQLite uses sqlx (OPTIONAL)

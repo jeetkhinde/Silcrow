@@ -1,4 +1,4 @@
-// File: rhtmx-sync/src/sse.rs
+// File: rusty-sync/src/sse.rs
 // Purpose: Server-Sent Events for real-time sync updates
 
 use axum::{

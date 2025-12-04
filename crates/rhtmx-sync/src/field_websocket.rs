@@ -1,4 +1,4 @@
-// File: rhtmx-sync/src/field_websocket.rs
+// File: rusty-sync/src/field_websocket.rs
 // Purpose: WebSocket-based field-level sync
 
 use crate::field_tracker::{FieldAction, FieldChange, FieldTracker};

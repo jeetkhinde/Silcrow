@@ -1,6 +1,6 @@
 # PostgreSQL Setup Guide
 
-rhtmx-sync now supports PostgreSQL as the **primary database** with Diesel ORM, while maintaining optional SQLite support for development.
+rusty-sync now supports PostgreSQL as the **primary database** with Diesel ORM, while maintaining optional SQLite support for development.
 
 ## Why PostgreSQL?
 
@@ -26,18 +26,18 @@ export DATABASE_URL="postgresql://user:password@localhost/mydb"
 ### 3. Run Migrations
 
 ```bash
-cd crates/rhtmx-sync
+cd crates/rusty-sync
 diesel migration run
 ```
 
 This creates the necessary tables:
-- `_rhtmx_sync_log` - Entity-level change tracking
+- `_rusty_sync_log` - Entity-level change tracking
 - `_rhtmx_field_sync_log` - Field-level change tracking
 
 ### 4. Update Your Code
 
 ```rust
-use rhtmx_sync::{DbPool, SyncEngine, SyncConfig};
+use rusty_sync::{DbPool, SyncEngine, SyncConfig};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -117,7 +117,7 @@ PostgreSQL migrations automatically create triggers for real-time notifications:
 ```sql
 -- Automatically created by migrations
 CREATE TRIGGER sync_change_notify
-AFTER INSERT ON _rhtmx_sync_log
+AFTER INSERT ON _rusty_sync_log
 FOR EACH ROW
 EXECUTE FUNCTION notify_sync_change();
 ```
@@ -125,7 +125,7 @@ EXECUTE FUNCTION notify_sync_change();
 ### Using LISTEN/NOTIFY in Rust
 
 ```rust
-use rhtmx_sync::postgres_notify::{start_entity_sync_listener, start_field_sync_listener};
+use rusty_sync::postgres_notify::{start_entity_sync_listener, start_field_sync_listener};
 
 // Start listening for entity-level changes
 let entity_listener = start_entity_sync_listener(
@@ -177,7 +177,7 @@ let db_pool = DbPool::Postgres(pool);
 The migrations create necessary indexes, but you may want to add custom ones:
 
 ```sql
-CREATE INDEX idx_custom_query ON _rhtmx_sync_log(entity, created_at)
+CREATE INDEX idx_custom_query ON _rusty_sync_log(entity, created_at)
 WHERE action = 'create';
 ```
 
@@ -215,7 +215,7 @@ services:
     environment:
       POSTGRES_USER: rhtmx
       POSTGRES_PASSWORD: rhtmx_dev
-      POSTGRES_DB: rhtmx_sync
+      POSTGRES_DB: rusty_sync
     ports:
       - "5432:5432"
     volumes:
@@ -229,7 +229,7 @@ Run with:
 
 ```bash
 docker-compose up -d
-export DATABASE_URL="postgresql://rhtmx:rhtmx_dev@localhost/rhtmx_sync"
+export DATABASE_URL="postgresql://rhtmx:rhtmx_dev@localhost/rusty_sync"
 diesel migration run
 ```
 
@@ -242,7 +242,7 @@ Run integration tests:
 docker-compose up -d
 
 # Run tests
-DATABASE_URL="postgresql://rhtmx:rhtmx_dev@localhost/rhtmx_sync" \
+DATABASE_URL="postgresql://rhtmx:rhtmx_dev@localhost/rusty_sync" \
   cargo test --test postgres_integration
 ```
 
@@ -266,14 +266,14 @@ Error: Migrations not found
 ```
 
 **Solutions:**
-1. Ensure you're in the correct directory: `cd crates/rhtmx-sync`
+1. Ensure you're in the correct directory: `cd crates/rusty-sync`
 2. Check `diesel.toml` exists
 3. Run: `diesel setup`
 
 ### Permission Errors
 
 ```
-Error: permission denied for table _rhtmx_sync_log
+Error: permission denied for table _rusty_sync_log
 ```
 
 **Solutions:**

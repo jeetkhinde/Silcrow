@@ -1,4 +1,4 @@
-// File: rhtmx-sync/src/postgres_notify.rs
+// File: rusty-sync/src/postgres_notify.rs
 // Purpose: PostgreSQL LISTEN/NOTIFY support framework for real-time synchronization
 //
 // NOTE: This is a framework module. Full LISTEN/NOTIFY implementation requires

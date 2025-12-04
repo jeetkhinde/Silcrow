@@ -1,4 +1,4 @@
-// File: rhtmx-sync/src/syncable.rs
+// File: rusty-sync/src/syncable.rs
 // Purpose: Syncable trait definition
 
 use chrono::{DateTime, Utc};

@@ -1,4 +1,4 @@
-// File: rhtmx-sync/src/change_tracker.rs
+// File: rusty-sync/src/change_tracker.rs
 // Purpose: Track database changes for synchronization
 // PostgreSQL uses Diesel (PRIMARY), SQLite uses sqlx (OPTIONAL)
 

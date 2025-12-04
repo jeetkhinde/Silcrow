@@ -1,6 +1,6 @@
 # Supabase Integration Guide
 
-Deploy rhtmx-sync with Supabase for a fully managed PostgreSQL database with real-time capabilities.
+Deploy rusty-sync with Supabase for a fully managed PostgreSQL database with real-time capabilities.
 
 ## Why Supabase?
 
@@ -40,18 +40,18 @@ export DATABASE_URL="postgresql://postgres:your_password@db.abcdefghij.supabase.
 ### 4. Run Migrations
 
 ```bash
-cd crates/rhtmx-sync
+cd crates/rusty-sync
 diesel migration run
 ```
 
 This will create the necessary tables in your Supabase database:
-- `_rhtmx_sync_log`
+- `_rusty_sync_log`
 - `_rhtmx_field_sync_log`
 
 ### 5. Deploy Your Application
 
 ```rust
-use rhtmx_sync::{DbPool, SyncEngine, SyncConfig};
+use rusty_sync::{DbPool, SyncEngine, SyncConfig};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -121,12 +121,12 @@ Enable RLS for sync tables:
 
 ```sql
 -- Enable RLS
-ALTER TABLE _rhtmx_sync_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE _rusty_sync_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE _rhtmx_field_sync_log ENABLE ROW LEVEL SECURITY;
 
 -- Allow authenticated users to read/write
 CREATE POLICY "Allow authenticated access"
-ON _rhtmx_sync_log
+ON _rusty_sync_log
 FOR ALL
 TO authenticated
 USING (true)
@@ -145,7 +145,7 @@ WITH CHECK (true);
 Supabase can notify your app of changes:
 
 ```rust
-use rhtmx_sync::postgres_notify::start_entity_sync_listener;
+use rusty_sync::postgres_notify::start_entity_sync_listener;
 
 // Subscribe to Supabase real-time events
 let listener = start_entity_sync_listener(
@@ -172,11 +172,11 @@ CREATE OR REPLACE FUNCTION get_entity_changes(
     p_entity VARCHAR,
     p_since_version BIGINT
 )
-RETURNS SETOF _rhtmx_sync_log AS $$
+RETURNS SETOF _rusty_sync_log AS $$
 BEGIN
     RETURN QUERY
     SELECT *
-    FROM _rhtmx_sync_log
+    FROM _rusty_sync_log
     WHERE entity = p_entity
       AND version > p_since_version
     ORDER BY version ASC;
@@ -249,7 +249,7 @@ Create `render.yaml`:
 ```yaml
 services:
   - type: web
-    name: rhtmx-sync-api
+    name: rusty-sync-api
     env: rust
     buildCommand: cargo build --release
     startCommand: ./target/release/your-app
@@ -461,7 +461,7 @@ Error: query timeout
 ### Migration Failures
 
 ```
-Error: relation "_rhtmx_sync_log" already exists
+Error: relation "_rusty_sync_log" already exists
 ```
 
 **Solutions:**

@@ -1,4 +1,4 @@
-// File: rhtmx-sync/src/compression.rs
+// File: rusty-sync/src/compression.rs
 // Purpose: WebSocket message compression utilities
 
 use flate2::read::GzDecoder;

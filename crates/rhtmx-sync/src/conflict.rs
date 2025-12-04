@@ -1,4 +1,4 @@
-// File: rhtmx-sync/src/conflict.rs
+// File: rusty-sync/src/conflict.rs
 // Purpose: Conflict resolution strategies for sync
 
 use chrono::{DateTime, Utc};

@@ -1,4 +1,4 @@
-// File: rhtmx-sync/src/field_sync_api.rs
+// File: rusty-sync/src/field_sync_api.rs
 // Purpose: HTTP API endpoints for field-level synchronization
 
 use crate::field_tracker::{FieldAction, FieldChange, FieldConflict, FieldTracker};

@@ -1,4 +1,4 @@
-// File: rhtmx-sync/src/models.rs
+// File: rusty-sync/src/models.rs
 // Purpose: Diesel models for database tables
 
 use chrono::{DateTime, Utc};

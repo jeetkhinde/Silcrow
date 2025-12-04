@@ -1,7 +1,7 @@
 // Integration tests for PostgreSQL support
 // Run with: DATABASE_URL=postgresql://user:pass@localhost/test cargo test --test postgres_integration
 
-use rhtmx_sync::{
+use rusty_sync::{
     ChangeAction, ChangeTracker, DbPool, FieldAction, FieldMergeStrategy, FieldTracker,
 };
 use std::sync::Arc;

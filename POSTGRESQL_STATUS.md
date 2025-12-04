@@ -28,7 +28,7 @@ The `DbPool` enum provides:
 
 - **PostgreSQL**: Diesel migrations in `migrations/`
 - **SQLite**: Legacy migrations in `migrations_sqlite/`
-- Both maintain the same `_rhtmx_sync_log` schema
+- Both maintain the same `_rusty_sync_log` schema
 
 ---
 
@@ -41,27 +41,27 @@ The `DbPool` enum provides:
 - [x] Created `diesel.toml` configuration
 
 **Files:**
-- `crates/rhtmx-sync/Cargo.toml:37-40`
-- `crates/rhtmx-sync/diesel.toml`
+- `crates/rusty-sync/Cargo.toml:37-40`
+- `crates/rusty-sync/diesel.toml`
 
 ### 2. Database Migrations
 - [x] Created PostgreSQL migration: `2024-11-28-000001_create_sync_log`
-  - Creates `_rhtmx_sync_log` table with proper PostgreSQL types
+  - Creates `_rusty_sync_log` table with proper PostgreSQL types
   - Adds indexes for efficient querying
   - **PostgreSQL-specific:** LISTEN/NOTIFY trigger function
 - [x] Created corresponding SQLite migration for backward compatibility
 
 **Files:**
-- `crates/rhtmx-sync/migrations/2024-11-28-000001_create_sync_log/up.sql`
-- `crates/rhtmx-sync/migrations/2024-11-28-000001_create_sync_log/down.sql`
-- `crates/rhtmx-sync/migrations_sqlite/2024-11-28-000001_create_sync_log/`
+- `crates/rusty-sync/migrations/2024-11-28-000001_create_sync_log/up.sql`
+- `crates/rusty-sync/migrations/2024-11-28-000001_create_sync_log/down.sql`
+- `crates/rusty-sync/migrations_sqlite/2024-11-28-000001_create_sync_log/`
 
 **PostgreSQL Features:**
 ```sql
 -- Real-time notifications
 CREATE OR REPLACE FUNCTION notify_sync_change() RETURNS TRIGGER AS $$
 BEGIN
-    PERFORM pg_notify('_rhtmx_sync_' || NEW.entity, ...);
+    PERFORM pg_notify('_rusty_sync_' || NEW.entity, ...);
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -74,8 +74,8 @@ $$ LANGUAGE plpgsql;
 - [x] Conversion methods between Diesel models and public API types
 
 **Files:**
-- `crates/rhtmx-sync/src/schema.rs`
-- `crates/rhtmx-sync/src/models.rs`
+- `crates/rusty-sync/src/schema.rs`
+- `crates/rusty-sync/src/models.rs`
 
 ### 4. Database Pool Abstraction
 - [x] Created `DbPool` enum supporting both PostgreSQL and SQLite
@@ -85,7 +85,7 @@ $$ LANGUAGE plpgsql;
 - [x] Type-safe connection retrieval methods
 
 **Files:**
-- `crates/rhtmx-sync/src/db.rs`
+- `crates/rusty-sync/src/db.rs`
 
 ### 5. ChangeTracker Migration
 - [x] Updated `ChangeTracker` to accept `DbPool`
@@ -98,21 +98,21 @@ $$ LANGUAGE plpgsql;
 - [x] Added tests for both database backends
 
 **Files:**
-- `crates/rhtmx-sync/src/change_tracker.rs:45-416`
+- `crates/rusty-sync/src/change_tracker.rs:45-416`
 
 ### 6. SyncEngine Updates
 - [x] Updated `SyncConfig` to use `DbPool` instead of `SqlitePool`
 - [x] `ChangeTracker` initialization uses `DbPool`
 
 **Files:**
-- `crates/rhtmx-sync/src/engine.rs:24-58`
+- `crates/rusty-sync/src/engine.rs:24-58`
 
 ### 7. Public API Exports
 - [x] Exported `DbPool` from main library
 - [x] All schema and model types available
 
 **Files:**
-- `crates/rhtmx-sync/src/lib.rs:45,54`
+- `crates/rusty-sync/src/lib.rs:45,54`
 
 ---
 
@@ -123,7 +123,7 @@ $$ LANGUAGE plpgsql;
 #### 1. Update FieldTracker to Use DbPool
 **Current Issue:** `FieldTracker` still uses `SqlitePool` directly, causing compilation error with `SyncEngine`.
 
-**Location:** `crates/rhtmx-sync/src/field_tracker.rs:88-98`
+**Location:** `crates/rusty-sync/src/field_tracker.rs:88-98`
 
 **Required Changes:**
 ```rust
@@ -166,15 +166,15 @@ impl FieldTracker {
 - [ ] Update all method signatures and implementations
 
 **Files to Modify:**
-- `crates/rhtmx-sync/src/field_tracker.rs`
-- `crates/rhtmx-sync/migrations/` (new migration for field sync table)
-- `crates/rhtmx-sync/src/schema.rs` (add field sync table schema)
-- `crates/rhtmx-sync/src/models.rs` (add field sync models)
+- `crates/rusty-sync/src/field_tracker.rs`
+- `crates/rusty-sync/migrations/` (new migration for field sync table)
+- `crates/rusty-sync/src/schema.rs` (add field sync table schema)
+- `crates/rusty-sync/src/models.rs` (add field sync models)
 
 #### 2. Fix SyncEngine Compilation
 **Current Issue:** `SyncEngine` tries to pass `DbPool` to `FieldTracker::new()`, but it expects `SqlitePool`.
 
-**Location:** `crates/rhtmx-sync/src/engine.rs:96-98`
+**Location:** `crates/rusty-sync/src/engine.rs:96-98`
 
 **Status:** Will be fixed once FieldTracker is updated.
 
@@ -185,7 +185,7 @@ impl FieldTracker {
 
 **Required Implementation:**
 ```rust
-// New module: crates/rhtmx-sync/src/postgres_notify.rs
+// New module: crates/rusty-sync/src/postgres_notify.rs
 use diesel_async::AsyncPgConnection;
 use tokio::sync::broadcast;
 
@@ -208,17 +208,17 @@ impl PostgresNotifyListener {
 - `FieldWebSocketState`: Subscribe to field-level notifications
 
 **Files to Create/Modify:**
-- Create: `crates/rhtmx-sync/src/postgres_notify.rs`
-- Modify: `crates/rhtmx-sync/src/change_tracker.rs`
-- Modify: `crates/rhtmx-sync/src/websocket.rs`
-- Modify: `crates/rhtmx-sync/src/field_websocket.rs`
+- Create: `crates/rusty-sync/src/postgres_notify.rs`
+- Modify: `crates/rusty-sync/src/change_tracker.rs`
+- Modify: `crates/rusty-sync/src/websocket.rs`
+- Modify: `crates/rusty-sync/src/field_websocket.rs`
 
 #### 4. Update WebSocket Handlers
 **Current State:** WebSocket handlers may still have SQLite-specific code.
 
 **Files to Review:**
-- `crates/rhtmx-sync/src/websocket.rs`
-- `crates/rhtmx-sync/src/field_websocket.rs`
+- `crates/rusty-sync/src/websocket.rs`
+- `crates/rusty-sync/src/field_websocket.rs`
 
 **Required Changes:**
 - [ ] Verify all database operations use `DbPool`
@@ -227,8 +227,8 @@ impl PostgresNotifyListener {
 
 #### 5. Update API Handlers
 **Files to Review:**
-- `crates/rhtmx-sync/src/sync_api.rs`
-- `crates/rhtmx-sync/src/field_sync_api.rs`
+- `crates/rusty-sync/src/sync_api.rs`
+- `crates/rusty-sync/src/field_sync_api.rs`
 
 **Required Changes:**
 - [ ] Verify all handlers work with `DbPool`
@@ -247,9 +247,9 @@ impl PostgresNotifyListener {
 - [ ] Performance comparison tests (PostgreSQL vs SQLite)
 
 **Files:**
-- Enhance: `crates/rhtmx-sync/src/change_tracker.rs:418-486` (existing tests)
-- Add: `crates/rhtmx-sync/tests/integration_postgres.rs`
-- Add: `crates/rhtmx-sync/tests/field_sync_postgres.rs`
+- Enhance: `crates/rusty-sync/src/change_tracker.rs:418-486` (existing tests)
+- Add: `crates/rusty-sync/tests/integration_postgres.rs`
+- Add: `crates/rusty-sync/tests/field_sync_postgres.rs`
 
 #### 7. Documentation & Examples
 **Required Documentation:**
@@ -261,7 +261,7 @@ impl PostgresNotifyListener {
 - [ ] Document LISTEN/NOTIFY usage
 
 **Files to Create/Update:**
-- `crates/rhtmx-sync/README.md`
+- `crates/rusty-sync/README.md`
 - `docs/postgresql-setup.md`
 - `docs/supabase-integration.md`
 - `examples/postgres_sync/`
@@ -279,7 +279,7 @@ export DATABASE_URL="postgresql://user:password@localhost/rhtmx_db"
 cargo install diesel_cli --no-default-features --features postgres
 
 # Run migrations
-cd crates/rhtmx-sync
+cd crates/rusty-sync
 diesel migration run
 ```
 
@@ -292,7 +292,7 @@ export DATABASE_URL="sqlite://./dev.db"
 cargo install diesel_cli --no-default-features --features sqlite
 
 # Run migrations (from migrations_sqlite directory)
-cd crates/rhtmx-sync
+cd crates/rusty-sync
 diesel migration run --migration-dir migrations_sqlite
 ```
 
@@ -310,13 +310,13 @@ docker run -d \
 
 # Run tests
 export DATABASE_URL="postgresql://postgres:postgres@localhost/postgres"
-cargo test --package rhtmx-sync
+cargo test --package rusty-sync
 ```
 
 ### With SQLite
 ```bash
 # Run tests
-cargo test --package rhtmx-sync -- test_change_tracker_sqlite
+cargo test --package rusty-sync -- test_change_tracker_sqlite
 ```
 
 ---
@@ -325,7 +325,7 @@ cargo test --package rhtmx-sync -- test_change_tracker_sqlite
 
 ### PostgreSQL (Primary)
 ```rust
-use rhtmx_sync::{DbPool, SyncEngine, SyncConfig};
+use rusty_sync::{DbPool, SyncEngine, SyncConfig};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

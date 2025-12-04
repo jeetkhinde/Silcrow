@@ -1,4 +1,4 @@
-// File: rhtmx-sync/src/websocket.rs
+// File: rusty-sync/src/websocket.rs
 // Purpose: WebSocket-based real-time sync (better than SSE for bidirectional sync)
 
 use crate::change_tracker::{ChangeAction, ChangeLog, ChangeTracker};
