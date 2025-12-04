@@ -4,7 +4,7 @@ members = [
   "crates/rhtmx-macro",
   "crates/rhtmx-parser",
   "crates/rhtmx-router",
-  "crates/rhtmx-sync",
+  "crates/rusty-sync",
   "crates/rhtmx-server",
   "crates/rhtmx-cli",
   "crates/rhtmx-isr",

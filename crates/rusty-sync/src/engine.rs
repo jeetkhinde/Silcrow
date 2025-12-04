@@ -1,4 +1,4 @@
-// File: rhtmx-sync/src/engine.rs
+// File: rusty-sync/src/engine.rs
 // Purpose: Main sync engine orchestration
 
 use axum::{

@@ -1,4 +1,4 @@
-// File: rhtmx-sync/src/field_sync_api.rs
+// File: rusty-sync/src/field_sync_api.rs
 // Purpose: HTTP API endpoints for field-level synchronization
 
 use crate::field_tracker::{FieldAction, FieldChange, FieldConflict, FieldTracker};
@@ -156,18 +156,17 @@ mod tests {
     use axum::http::Request;
     use axum::routing::{get, post};
     use axum::Router;
-    use sqlx::sqlite::SqlitePoolOptions;
+    use crate::db::DbPool;
     use std::sync::Arc;
     use tower::ServiceExt;
 
     async fn create_test_app() -> Router {
-        let pool = SqlitePoolOptions::new()
-            .connect("sqlite::memory:")
+        let db_pool = DbPool::from_url("sqlite::memory:")
             .await
             .unwrap();
 
         let tracker = Arc::new(
-            FieldTracker::new(Arc::new(pool), FieldMergeStrategy::LastWriteWins)
+            FieldTracker::new(Arc::new(db_pool), FieldMergeStrategy::LastWriteWins)
                 .await
                 .unwrap(),
         );

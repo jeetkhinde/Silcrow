@@ -1,4 +1,4 @@
-// File: rhtmx-sync/src/change_tracker.rs
+// File: rusty-sync/src/change_tracker.rs
 // Purpose: Track database changes for synchronization
 // PostgreSQL uses Diesel (PRIMARY), SQLite uses sqlx (OPTIONAL)
 
@@ -155,7 +155,7 @@ impl ChangeTracker {
             data.clone(),
             version,
             client_id.clone(),
-        )?;
+        );
 
         // Insert and return the created record
         let mut conn = self.db_pool.get_postgres().await?;

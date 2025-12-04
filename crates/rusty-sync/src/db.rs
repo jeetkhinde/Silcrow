@@ -1,4 +1,4 @@
-// File: rhtmx-sync/src/db.rs
+// File: rusty-sync/src/db.rs
 // Purpose: Database pool abstraction supporting PostgreSQL (diesel-async) and SQLite (sqlx)
 
 use anyhow::{Context, Result};

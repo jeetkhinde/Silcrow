@@ -1,4 +1,4 @@
-// File: rhtmx-sync/src/sync_api.rs
+// File: rusty-sync/src/sync_api.rs
 // Purpose: HTTP API endpoints for sync operations
 
 use axum::{

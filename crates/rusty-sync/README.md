@@ -1,4 +1,4 @@
-# rhtmx-sync
+# rusty-sync
 
 Automatic IndexedDB synchronization for RHTMX applications with **minimal developer code**.
 
@@ -20,13 +20,13 @@ Automatic IndexedDB synchronization for RHTMX applications with **minimal develo
 
 ```toml
 [dependencies]
-rhtmx-sync = { path = "../rhtmx-sync" }
+rusty-sync = { path = "../rusty-sync" }
 ```
 
 ### 2. Add `#[derive(Syncable)]` to your models
 
 ```rust
-use rhtmx_sync::Syncable;
+use rusty_sync::Syncable;
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow, Syncable)]
 pub struct User {
@@ -39,7 +39,7 @@ pub struct User {
 ### 3. Initialize SyncEngine in main.rs
 
 ```rust
-use rhtmx_sync::{SyncEngine, SyncConfig};
+use rusty_sync::{SyncEngine, SyncConfig};
 
 #[tokio::main]
 async fn main() {
@@ -67,7 +67,7 @@ async fn main() {
 <html>
 <head>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <!-- Add rhtmx-sync script -->
+    <!-- Add rusty-sync script -->
     <script src="/api/sync/client.js"
             data-sync-entities="users"
             data-debug="true">
@@ -287,14 +287,14 @@ Requires:
 
 ## Field-Level Sync (New!)
 
-rhtmx-sync now supports **field-level synchronization** similar to Yjs and Automerge. This allows fine-grained conflict resolution at the field level instead of syncing entire entities.
+rusty-sync now supports **field-level synchronization** similar to Yjs and Automerge. This allows fine-grained conflict resolution at the field level instead of syncing entire entities.
 
 ### Quick Start with Field-Level Sync
 
 #### 1. Enable field-level sync in your config
 
 ```rust
-use rhtmx_sync::{SyncEngine, SyncConfig, FieldMergeStrategy};
+use rusty_sync::{SyncEngine, SyncConfig, FieldMergeStrategy};
 
 let sync_engine = SyncEngine::new(
     SyncConfig::new(db_pool.clone(), vec!["users".to_string()])
@@ -353,7 +353,7 @@ When field-level sync is enabled, these additional endpoints are available:
 
 ## WebSocket Support (New!)
 
-rhtmx-sync now supports **WebSocket** for bidirectional real-time sync, which is more efficient than SSE.
+rusty-sync now supports **WebSocket** for bidirectional real-time sync, which is more efficient than SSE.
 
 ### Benefits of WebSocket over SSE
 
@@ -413,7 +413,7 @@ When you add sync routes, both WebSocket and SSE endpoints are available:
 
 ## Multi-Tab Sync (New!)
 
-rhtmx-sync now supports **multi-tab synchronization** using the BroadcastChannel API. This allows tabs in the same browser to share sync state instantly without server round-trips.
+rusty-sync now supports **multi-tab synchronization** using the BroadcastChannel API. This allows tabs in the same browser to share sync state instantly without server round-trips.
 
 ### How It Works
 
@@ -437,12 +437,12 @@ BroadcastChannel is supported in all modern browsers (Chrome, Firefox, Safari, E
 
 ## Compression
 
-rhtmx-sync now supports **automatic message compression** to reduce bandwidth usage for large payloads. See [COMPRESSION.md](./COMPRESSION.md) for full details.
+rusty-sync now supports **automatic message compression** to reduce bandwidth usage for large payloads. See [COMPRESSION.md](./COMPRESSION.md) for full details.
 
 ### Server Configuration
 
 ```rust
-use rhtmx_sync::CompressionConfig;
+use rusty_sync::CompressionConfig;
 
 let config = SyncConfig::new(db_pool, entities)
     .with_compression(CompressionConfig::default()); // Enable with defaults (1KB threshold)

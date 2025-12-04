@@ -1,13 +1,15 @@
-// File: rhtmx-sync/src/field_tracker.rs
+// File: rusty-sync/src/field_tracker.rs
 // Purpose: Track field-level changes for fine-grained synchronization
 // Similar to Yjs/Automerge - supports CRDT-like field-level sync
+// PostgreSQL uses Diesel (PRIMARY), SQLite uses sqlx (OPTIONAL)
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast;
+
+use crate::db::DbPool;
 
 /// Action performed on a field
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -85,7 +87,7 @@ pub struct FieldConflict {
 
 /// Manages field-level change tracking
 pub struct FieldTracker {
-    db_pool: Arc<SqlitePool>,
+    db_pool: Arc<DbPool>,
     broadcast_tx: broadcast::Sender<FieldChange>,
     merge_strategy: FieldMergeStrategy,
 }
@@ -93,10 +95,11 @@ pub struct FieldTracker {
 impl FieldTracker {
     /// Create a new field tracker
     pub async fn new(
-        db_pool: Arc<SqlitePool>,
+        db_pool: Arc<DbPool>,
         merge_strategy: FieldMergeStrategy,
     ) -> anyhow::Result<Self> {
-        Self::init_field_sync_table(&db_pool).await?;
+        // Initialize database tables based on type
+        Self::init_tables(&db_pool).await?;
 
         let (broadcast_tx, _) = broadcast::channel(1000);
 
@@ -107,8 +110,24 @@ impl FieldTracker {
         })
     }
 
-    /// Initialize the field sync log table
-    async fn init_field_sync_table(pool: &SqlitePool) -> anyhow::Result<()> {
+    /// Initialize database tables
+    async fn init_tables(pool: &DbPool) -> anyhow::Result<()> {
+        match pool {
+            DbPool::Postgres(_) => {
+                // PostgreSQL tables are created via Diesel migrations
+                // Run: diesel migration run --database-url=<postgres_url>
+                tracing::info!("PostgreSQL field sync tables managed via Diesel migrations");
+                Ok(())
+            }
+            DbPool::Sqlite(sqlite_pool) => {
+                // SQLite uses sqlx for backward compatibility
+                Self::init_sqlite_table(sqlite_pool).await
+            }
+        }
+    }
+
+    /// Initialize SQLite table using sqlx (backward compatibility)
+    async fn init_sqlite_table(pool: &sqlx::SqlitePool) -> anyhow::Result<()> {
         sqlx::query(
             r#"
             CREATE TABLE IF NOT EXISTS _rhtmx_field_sync_log (
@@ -160,7 +179,76 @@ impl FieldTracker {
         action: FieldAction,
         client_id: Option<String>,
     ) -> anyhow::Result<FieldChange> {
+        match self.db_pool.as_ref() {
+            DbPool::Postgres(_) => {
+                self.record_field_change_postgres(entity, entity_id, field, value, action, client_id)
+                    .await
+            }
+            DbPool::Sqlite(_) => {
+                self.record_field_change_sqlite(entity, entity_id, field, value, action, client_id)
+                    .await
+            }
+        }
+    }
+
+    /// Record a field change using PostgreSQL with Diesel
+    async fn record_field_change_postgres(
+        &self,
+        entity: &str,
+        entity_id: &str,
+        field: &str,
+        value: Option<serde_json::Value>,
+        action: FieldAction,
+        client_id: Option<String>,
+    ) -> anyhow::Result<FieldChange> {
+        use diesel::prelude::*;
+        use diesel_async::RunQueryDsl;
+
+        use crate::models::{NewFieldSyncLog, FieldSyncLog};
+        use crate::schema::_rhtmx_field_sync_log;
+
+        // Get next version
+        let version = self.next_version(entity).await?;
+
+        // Create new field sync log entry
+        let new_log = NewFieldSyncLog::new(
+            entity.to_string(),
+            entity_id.to_string(),
+            field.to_string(),
+            value.clone(),
+            action.clone(),
+            version,
+            client_id.clone(),
+        );
+
+        // Insert and return the created record
+        let mut conn = self.db_pool.get_postgres().await?;
+
+        let field_sync_log = diesel::insert_into(_rhtmx_field_sync_log::table)
+            .values(&new_log)
+            .get_result::<FieldSyncLog>(&mut conn)
+            .await?;
+
+        // Convert to FieldChange and broadcast
+        let change = field_sync_log.to_field_change();
+        let _ = self.broadcast_tx.send(change.clone());
+
+        Ok(change)
+    }
+
+    /// Record a field change using SQLite with sqlx
+    async fn record_field_change_sqlite(
+        &self,
+        entity: &str,
+        entity_id: &str,
+        field: &str,
+        value: Option<serde_json::Value>,
+        action: FieldAction,
+        client_id: Option<String>,
+    ) -> anyhow::Result<FieldChange> {
         use sqlx::Row;
+
+        let pool = self.db_pool.get_sqlite()?;
 
         // Get next version number for this entity
         let version = self.next_version(entity).await?;
@@ -184,7 +272,7 @@ impl FieldTracker {
         .bind(action.to_string())
         .bind(version)
         .bind(&client_id)
-        .fetch_one(&*self.db_pool)
+        .fetch_one(pool.as_ref())
         .await?;
 
         // Parse row into FieldChange
@@ -242,7 +330,45 @@ impl FieldTracker {
         entity: &str,
         since_version: i64,
     ) -> anyhow::Result<Vec<FieldChange>> {
+        match self.db_pool.as_ref() {
+            DbPool::Postgres(_) => self.get_field_changes_since_postgres(entity, since_version).await,
+            DbPool::Sqlite(_) => self.get_field_changes_since_sqlite(entity, since_version).await,
+        }
+    }
+
+    /// Get field changes using PostgreSQL with Diesel
+    async fn get_field_changes_since_postgres(
+        &self,
+        entity_name: &str,
+        since_version: i64,
+    ) -> anyhow::Result<Vec<FieldChange>> {
+        use diesel::prelude::*;
+        use diesel_async::RunQueryDsl;
+
+        use crate::models::FieldSyncLog;
+        use crate::schema::_rhtmx_field_sync_log::dsl::*;
+
+        let mut conn = self.db_pool.get_postgres().await?;
+
+        let results = _rhtmx_field_sync_log
+            .filter(entity.eq(entity_name))
+            .filter(version.gt(since_version))
+            .order((version.asc(), id.asc()))
+            .load::<FieldSyncLog>(&mut conn)
+            .await?;
+
+        Ok(results.into_iter().map(|r| r.to_field_change()).collect())
+    }
+
+    /// Get field changes using SQLite with sqlx
+    async fn get_field_changes_since_sqlite(
+        &self,
+        entity: &str,
+        since_version: i64,
+    ) -> anyhow::Result<Vec<FieldChange>> {
         use sqlx::Row;
+
+        let pool = self.db_pool.get_sqlite()?;
 
         let rows = sqlx::query(
             r#"
@@ -254,7 +380,7 @@ impl FieldTracker {
         )
         .bind(entity)
         .bind(since_version)
-        .fetch_all(&*self.db_pool)
+        .fetch_all(pool.as_ref())
         .await?;
 
         let changes = rows
@@ -293,7 +419,70 @@ impl FieldTracker {
         entity: &str,
         entity_id: &str,
     ) -> anyhow::Result<HashMap<String, serde_json::Value>> {
+        match self.db_pool.as_ref() {
+            DbPool::Postgres(_) => self.get_latest_fields_postgres(entity, entity_id).await,
+            DbPool::Sqlite(_) => self.get_latest_fields_sqlite(entity, entity_id).await,
+        }
+    }
+
+    /// Get latest fields using PostgreSQL with Diesel
+    async fn get_latest_fields_postgres(
+        &self,
+        entity_name: &str,
+        entity_id_value: &str,
+    ) -> anyhow::Result<HashMap<String, serde_json::Value>> {
+        use diesel::prelude::*;
+        use diesel_async::RunQueryDsl;
+        use diesel::dsl::max;
+
+        use crate::schema::_rhtmx_field_sync_log::dsl::*;
+
+        let mut conn = self.db_pool.get_postgres().await?;
+
+        // Get max id for each field
+        let max_ids: Vec<i64> = _rhtmx_field_sync_log
+            .filter(entity.eq(entity_name))
+            .filter(entity_id.eq(entity_id_value))
+            .group_by(field)
+            .select(max(id))
+            .load::<Option<i64>>(&mut conn)
+            .await?
+            .into_iter()
+            .flatten()
+            .collect();
+
+        // Get the rows with those ids
+        let rows: Vec<(String, Option<String>, String)> = _rhtmx_field_sync_log
+            .filter(id.eq_any(max_ids))
+            .select((field, value, action))
+            .load(&mut conn)
+            .await?;
+
+        let mut fields = HashMap::new();
+
+        for (field_name, value_str, action_str) in rows {
+            // Skip deleted fields
+            if action_str == "delete" {
+                continue;
+            }
+
+            if let Some(v) = value_str.and_then(|s| serde_json::from_str(&s).ok()) {
+                fields.insert(field_name, v);
+            }
+        }
+
+        Ok(fields)
+    }
+
+    /// Get latest fields using SQLite with sqlx
+    async fn get_latest_fields_sqlite(
+        &self,
+        entity: &str,
+        entity_id: &str,
+    ) -> anyhow::Result<HashMap<String, serde_json::Value>> {
         use sqlx::Row;
+
+        let pool = self.db_pool.get_sqlite()?;
 
         // Get the latest change for each field
         let rows = sqlx::query(
@@ -313,7 +502,7 @@ impl FieldTracker {
         .bind(entity_id)
         .bind(entity)
         .bind(entity_id)
-        .fetch_all(&*self.db_pool)
+        .fetch_all(pool.as_ref())
         .await?;
 
         let mut fields = HashMap::new();
@@ -405,7 +594,67 @@ impl FieldTracker {
         entity_id: &str,
         field: &str,
     ) -> anyhow::Result<Option<(serde_json::Value, DateTime<Utc>)>> {
+        match self.db_pool.as_ref() {
+            DbPool::Postgres(_) => {
+                self.get_latest_field_value_postgres(entity, entity_id, field)
+                    .await
+            }
+            DbPool::Sqlite(_) => {
+                self.get_latest_field_value_sqlite(entity, entity_id, field)
+                    .await
+            }
+        }
+    }
+
+    /// Get latest field value using PostgreSQL with Diesel
+    async fn get_latest_field_value_postgres(
+        &self,
+        entity_name: &str,
+        entity_id_value: &str,
+        field_name: &str,
+    ) -> anyhow::Result<Option<(serde_json::Value, DateTime<Utc>)>> {
+        use diesel::prelude::*;
+        use diesel_async::RunQueryDsl;
+
+        use crate::schema::_rhtmx_field_sync_log::dsl::*;
+
+        let mut conn = self.db_pool.get_postgres().await?;
+
+        let result: Option<(Option<String>, chrono::NaiveDateTime, String)> = _rhtmx_field_sync_log
+            .filter(entity.eq(entity_name))
+            .filter(entity_id.eq(entity_id_value))
+            .filter(field.eq(field_name))
+            .order(id.desc())
+            .select((value, timestamp, action))
+            .first(&mut conn)
+            .await
+            .optional()?;
+
+        if let Some((value_str, ts, action_str)) = result {
+            if action_str == "delete" {
+                return Ok(None);
+            }
+
+            let timestamp_utc = DateTime::<Utc>::from_naive_utc_and_offset(ts, Utc);
+
+            if let Some(v) = value_str.and_then(|s| serde_json::from_str(&s).ok()) {
+                return Ok(Some((v, timestamp_utc)));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Get latest field value using SQLite with sqlx
+    async fn get_latest_field_value_sqlite(
+        &self,
+        entity: &str,
+        entity_id: &str,
+        field: &str,
+    ) -> anyhow::Result<Option<(serde_json::Value, DateTime<Utc>)>> {
         use sqlx::Row;
+
+        let pool = self.db_pool.get_sqlite()?;
 
         let row = sqlx::query(
             r#"
@@ -419,7 +668,7 @@ impl FieldTracker {
         .bind(entity)
         .bind(entity_id)
         .bind(field)
-        .fetch_optional(&*self.db_pool)
+        .fetch_optional(pool.as_ref())
         .await?;
 
         if let Some(row) = row {
@@ -441,11 +690,42 @@ impl FieldTracker {
 
     /// Get the latest version for an entity
     pub async fn latest_version(&self, entity: &str) -> anyhow::Result<i64> {
+        match self.db_pool.as_ref() {
+            DbPool::Postgres(_) => self.latest_version_postgres(entity).await,
+            DbPool::Sqlite(_) => self.latest_version_sqlite(entity).await,
+        }
+    }
+
+    /// Get latest version using PostgreSQL with Diesel
+    async fn latest_version_postgres(&self, entity_name: &str) -> anyhow::Result<i64> {
+        use diesel::dsl::max;
+        use diesel::prelude::*;
+        use diesel_async::RunQueryDsl;
+
+        use crate::schema::_rhtmx_field_sync_log::dsl::*;
+
+        let mut conn = self.db_pool.get_postgres().await?;
+
+        let result: Option<i64> = _rhtmx_field_sync_log
+            .filter(entity.eq(entity_name))
+            .select(max(version))
+            .first::<Option<i64>>(&mut conn)
+            .await
+            .optional()?
+            .flatten();
+
+        Ok(result.unwrap_or(0))
+    }
+
+    /// Get latest version using SQLite with sqlx
+    async fn latest_version_sqlite(&self, entity: &str) -> anyhow::Result<i64> {
+        let pool = self.db_pool.get_sqlite()?;
+
         let result: Option<i64> = sqlx::query_scalar(
             "SELECT COALESCE(MAX(version), 0) FROM _rhtmx_field_sync_log WHERE entity = ?"
         )
         .bind(entity)
-        .fetch_one(&*self.db_pool)
+        .fetch_one(pool.as_ref())
         .await?;
 
         Ok(result.unwrap_or(0))
@@ -464,12 +744,42 @@ impl FieldTracker {
 
     /// Clean up old field sync log entries
     pub async fn cleanup_old_entries(&self, days: i64) -> anyhow::Result<u64> {
+        match self.db_pool.as_ref() {
+            DbPool::Postgres(_) => self.cleanup_old_entries_postgres(days).await,
+            DbPool::Sqlite(_) => self.cleanup_old_entries_sqlite(days).await,
+        }
+    }
+
+    /// Cleanup old entries using PostgreSQL with Diesel
+    async fn cleanup_old_entries_postgres(&self, days: i64) -> anyhow::Result<u64> {
+        use chrono::{Duration, Utc};
+        use diesel::prelude::*;
+        use diesel_async::RunQueryDsl;
+
+        use crate::schema::_rhtmx_field_sync_log::dsl::*;
+
+        let cutoff = Utc::now() - Duration::days(days);
+        let cutoff_naive = cutoff.naive_utc();
+
+        let mut conn = self.db_pool.get_postgres().await?;
+
+        let deleted = diesel::delete(_rhtmx_field_sync_log.filter(timestamp.lt(cutoff_naive)))
+            .execute(&mut conn)
+            .await?;
+
+        Ok(deleted as u64)
+    }
+
+    /// Cleanup old entries using SQLite with sqlx
+    async fn cleanup_old_entries_sqlite(&self, days: i64) -> anyhow::Result<u64> {
+        let pool = self.db_pool.get_sqlite()?;
         let days_param = format!("-{} days", days);
+
         let result = sqlx::query(
             "DELETE FROM _rhtmx_field_sync_log WHERE timestamp < datetime('now', ?)"
         )
         .bind(days_param)
-        .execute(&*self.db_pool)
+        .execute(pool.as_ref())
         .await?;
 
         Ok(result.rows_affected())
@@ -479,16 +789,15 @@ impl FieldTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::sqlite::SqlitePoolOptions;
+    use crate::db::DbPool;
 
     #[tokio::test]
     async fn test_field_tracker() {
-        let pool = SqlitePoolOptions::new()
-            .connect("sqlite::memory:")
+        let db_pool = DbPool::from_url("sqlite::memory:")
             .await
             .unwrap();
 
-        let tracker = FieldTracker::new(Arc::new(pool), FieldMergeStrategy::LastWriteWins)
+        let tracker = FieldTracker::new(Arc::new(db_pool), FieldMergeStrategy::LastWriteWins)
             .await
             .unwrap();
 
@@ -530,12 +839,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_field_changes_since() {
-        let pool = SqlitePoolOptions::new()
-            .connect("sqlite::memory:")
+        let db_pool = DbPool::from_url("sqlite::memory:")
             .await
             .unwrap();
 
-        let tracker = FieldTracker::new(Arc::new(pool), FieldMergeStrategy::LastWriteWins)
+        let tracker = FieldTracker::new(Arc::new(db_pool), FieldMergeStrategy::LastWriteWins)
             .await
             .unwrap();
 
@@ -571,12 +879,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_field_merge_conflict() {
-        let pool = SqlitePoolOptions::new()
-            .connect("sqlite::memory:")
+        let db_pool = DbPool::from_url("sqlite::memory:")
             .await
             .unwrap();
 
-        let tracker = FieldTracker::new(Arc::new(pool), FieldMergeStrategy::LastWriteWins)
+        let tracker = FieldTracker::new(Arc::new(db_pool), FieldMergeStrategy::LastWriteWins)
             .await
             .unwrap();
 

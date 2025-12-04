@@ -2238,36 +2238,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rhtmx-sync"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-stream",
- "axum",
- "axum-test",
- "chrono",
- "diesel",
- "diesel-async",
- "diesel_migrations",
- "flate2",
- "futures",
- "pretty_assertions",
- "rhtmx-macro",
- "rstest",
- "serde",
- "serde_json",
- "sqlx",
- "thiserror 1.0.69",
- "tokio",
- "tokio-stream",
- "tower 0.4.13",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
 name = "ring"
 version = "0.17.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2450,6 +2420,37 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-test",
  "web-sys",
+]
+
+[[package]]
+name = "rusty-sync"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "axum",
+ "axum-test",
+ "chrono",
+ "diesel",
+ "diesel-async",
+ "diesel_migrations",
+ "flate2",
+ "futures",
+ "pretty_assertions",
+ "rhtmx-macro",
+ "rstest",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-postgres",
+ "tokio-stream",
+ "tower 0.4.13",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
