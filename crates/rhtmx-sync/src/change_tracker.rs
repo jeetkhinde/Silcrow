@@ -155,7 +155,7 @@ impl ChangeTracker {
             data.clone(),
             version,
             client_id.clone(),
-        );
+        )?;
 
         // Insert and return the created record
         let mut conn = self.db_pool.get_postgres().await?;
@@ -192,7 +192,7 @@ impl ChangeTracker {
             INSERT INTO _rhtmx_sync_log (entity, entity_id, action, data, version, client_id)
             VALUES (?, ?, ?, ?, ?, ?)
             RETURNING id, entity, entity_id, action, data, version, client_id, created_at
-            "#
+            "#,
         )
         .bind(entity)
         .bind(entity_id)
@@ -281,7 +281,7 @@ impl ChangeTracker {
             FROM _rhtmx_sync_log
             WHERE entity = ? AND version > ?
             ORDER BY version ASC
-            "#
+            "#,
         )
         .bind(entity)
         .bind(since_version)
@@ -300,7 +300,8 @@ impl ChangeTracker {
                 };
 
                 let data_str: Option<String> = row.get("data");
-                let data = data_str.and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+                let data =
+                    data_str.and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
 
                 ChangeLog {
                     id: row.get("id"),
@@ -351,7 +352,7 @@ impl ChangeTracker {
         let pool = self.db_pool.get_sqlite()?;
 
         let result: Option<i64> = sqlx::query_scalar(
-            "SELECT COALESCE(MAX(version), 0) FROM _rhtmx_sync_log WHERE entity = ?"
+            "SELECT COALESCE(MAX(version), 0) FROM _rhtmx_sync_log WHERE entity = ?",
         )
         .bind(entity)
         .fetch_one(pool.as_ref())
@@ -404,12 +405,11 @@ impl ChangeTracker {
         let pool = self.db_pool.get_sqlite()?;
         let days_param = format!("-{} days", days);
 
-        let result = sqlx::query(
-            "DELETE FROM _rhtmx_sync_log WHERE created_at < datetime('now', ?)"
-        )
-        .bind(days_param)
-        .execute(pool.as_ref())
-        .await?;
+        let result =
+            sqlx::query("DELETE FROM _rhtmx_sync_log WHERE created_at < datetime('now', ?)")
+                .bind(days_param)
+                .execute(pool.as_ref())
+                .await?;
 
         Ok(result.rows_affected())
     }

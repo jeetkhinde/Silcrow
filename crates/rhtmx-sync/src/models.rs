@@ -1,9 +1,9 @@
 // File: rhtmx-sync/src/models.rs
 // Purpose: Diesel models for database tables
 
+use anyhow::anyhow;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use serde::{Deserialize, Serialize};
 
 use crate::change_tracker::ChangeAction;
 use crate::schema::_rhtmx_sync_log;
@@ -42,17 +42,20 @@ impl NewSyncLog {
         data: Option<serde_json::Value>,
         version: i64,
         client_id: Option<String>,
-    ) -> Self {
-        let data_json = data.map(|d| serde_json::to_string(&d).unwrap());
+    ) -> anyhow::Result<Self> {
+        let data_json = data
+            .map(|d| serde_json::to_string(&d))
+            .transpose()
+            .map_err(|e| anyhow!("Failed to serialize data to JSON: {}", e))?;
 
-        Self {
+        Ok(Self {
             entity,
             entity_id,
             action: action.to_string(),
             data: data_json,
             version,
             client_id,
-        }
+        })
     }
 }
 
@@ -66,7 +69,9 @@ impl SyncLog {
             _ => ChangeAction::Update,
         };
 
-        let data = self.data.as_ref()
+        let data = self
+            .data
+            .as_ref()
             .and_then(|s| serde_json::from_str(s).ok());
 
         crate::change_tracker::ChangeLog {
