@@ -1,0 +1,223 @@
+================================================================================
+RHTMX ROUTER - lib.rs REFACTORING BREAKDOWN (5127 lines)
+================================================================================
+
+1. PUBLIC ENUMS, STRUCTS & TRAITS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PUBLIC ENUMS (3):
+  ├─ ParameterConstraint (L56-126)      [Constraints: Any, Int, UInt, Alpha, AlphaNum, Slug, Uuid, Regex]
+  ├─ LayoutOption (L135-152)             [Layout: Inherit, None, Root, Named, Pattern]
+  └─ InterceptLevel (L156-165)           [Interception: SameLevel, OneLevelUp, FromRoot, TwoLevelsUp]
+
+PUBLIC STRUCTS (3):
+  ├─ Route (L169-1383, ~1215 lines)
+  │  └─ 30+ public methods: from_path(), matches(), layout builders, metadata, aliases, URL generation, redirects
+  ├─ RouteMatch (L226-289, ~65 lines)
+  │  └─ 3 public methods: is_redirect(), redirect_target(), redirect_status()
+  └─ Router (L1507-2191, ~685 lines)
+     └─ 40+ public methods: add_route(), match_route(), layout/page/parallel/intercepting getters, URL generation
+
+
+2. PRIVATE HELPER FUNCTIONS & ENUMS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PRIVATE ENUMS/STRUCTS:
+  ├─ PatternSegmentType (L293-304)      [Segment types: CatchAll, OptionalCatchAll, Optional, Required, Static]
+  └─ PathHierarchy<'a> (L1452-1486)     [Iterator for lazy path traversal, zero-copy]
+
+PRIVATE STANDALONE FUNCTIONS:
+  ├─ classify_segment() (L318-348)               [Classifies route segments]
+  ├─ parse_param_with_constraint() (L353-363)   [Parses "name" or "name:constraint"]
+  ├─ is_valid_path() (L1384-1420)                [Validates path format]
+  └─ normalize_path() (L1421-1450)               [Normalizes paths, zero-copy for valid paths]
+
+PRIVATE ROUTE METHODS:
+  ├─ extract_layout_name() (L465-470)
+  ├─ detect_parallel_route() (L478-487)
+  ├─ detect_intercepting_route() (L496-520)
+  ├─ parse_pattern() (L525-654)                  [~130 lines, core parsing logic]
+  └─ calculate_priority() (L664-685)
+
+PRIVATE ROUTER METHODS:
+  ├─ get_scoped_resource() (L1694-1723)          [Generic hierarchical resource lookup]
+  └─ is_under_nolayout_marker() (L1872-1892)
+
+
+3. TEST MODULE LOCATION & SIZE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TESTS: Lines 2197-5127 (~2930 lines = 57% of file!)
+
+Breakdown by category:
+  ├─ Route Parsing & Matching (~50 tests)          [L2202-2302]
+  ├─ Path Normalization (~10 tests)                [L2575-2608]
+  ├─ Layout Options (~15 tests)                    [L2626-2807]
+  ├─ No-Layout Markers (~8 tests)                  [L2842-2939]
+  ├─ Metadata (~8 tests)                           [L2939-3054]
+  ├─ Parameter Constraints (~15 tests)             [L3054-3266]
+  ├─ Route Aliases (~20 tests)                     [L3266-3529]
+  ├─ Named Routes & URL Generation (~30 tests)     [L3529-4155]
+  ├─ Redirects (~25 tests)                         [L3842-4155]
+  ├─ Optional Catch-All (~20 tests)                [L4155-4420]
+  ├─ Route Groups Phase 4.2 (~15 tests)            [L4418-4629]
+  ├─ Special Files Phases 4.3-4.5 (~15 tests)      [L4629-4795]
+  ├─ Parallel Routes Phase 5.1 (~12 tests)         [L4816-4937]
+  ├─ Intercepting Routes Phase 5.2 (~10 tests)     [L4937-5065]
+  └─ Integration Tests (~5 tests)                  [L5065-5127]
+
+Total test functions: 100+ tests
+
+
+4. LOGICAL REFACTORING GROUPINGS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A. CORE TYPE SYSTEM (~100 lines)
+   ├─ constraint.rs (70 lines)        [ParameterConstraint enum]
+   ├─ layout.rs (20 lines)            [LayoutOption enum]
+   └─ intercept.rs (10 lines)         [InterceptLevel enum]
+
+B. ROUTING CORE (~1220 lines)
+   ├─ route/mod.rs (1200 lines)       [Route struct + impl]
+   │  ├─ Parsing logic (L389-654)
+   │  ├─ Matching logic (L688-844)
+   │  ├─ Layout builders (L845-957)
+   │  ├─ Metadata (L958-1040)
+   │  ├─ Aliases (L1042-1106)
+   │  ├─ Named routes (L1143-1259)
+   │  └─ Redirects (L1260-1383)
+   ├─ route/pattern.rs (150 lines)    [Pattern parsing + classification]
+   └─ route/match_result.rs (65 lines)[RouteMatch wrapper]
+
+C. PATH UTILITIES (~105 lines)
+   ├─ path/mod.rs (70 lines)          [is_valid_path(), normalize_path()]
+   └─ path/hierarchy.rs (35 lines)    [PathHierarchy iterator]
+
+D. ROUTER CORE (~685 lines)
+   ├─ router/mod.rs
+   │  ├─ Construction (L1524-1570)
+   │  ├─ Route management (L1593-1693)
+   │  ├─ Matching (L1724-1789)
+   │  ├─ Layout resolution (L1790-1905)
+   │  ├─ Specialized pages (L1932-2011)
+   │  ├─ Parallel routes (L2035-2075)
+   │  ├─ Intercepting routes (L2076-2083)
+   │  └─ URL generation (L2125-2186)
+
+E. TESTS (~2930 lines)
+   ├─ tests/routing.rs (~300 lines)
+   ├─ tests/layout.rs (~250 lines)
+   ├─ tests/named_routes.rs (~300 lines)
+   ├─ tests/redirects.rs (~250 lines)
+   ├─ tests/aliases.rs (~250 lines)
+   ├─ tests/constraints.rs (~200 lines)
+   ├─ tests/optional_catchall.rs (~250 lines)
+   ├─ tests/special_files.rs (~150 lines)
+   ├─ tests/route_groups.rs (~150 lines)
+   ├─ tests/parallel_routes.rs (~120 lines)
+   ├─ tests/intercepting_routes.rs (~100 lines)
+   ├─ tests/metadata.rs (~100 lines)
+   └─ tests/integration.rs (~50 lines)
+
+
+5. RECOMMENDED REFACTORING ORDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PHASE 1 (Core types - zero dependencies):
+  1. constraint.rs ✓
+  2. layout.rs ✓
+  3. intercept.rs ✓
+
+PHASE 2 (Path utilities - standalone):
+  1. path/hierarchy.rs
+  2. path/mod.rs
+
+PHASE 3 (Pattern parsing - pure functions):
+  1. route/pattern.rs
+
+PHASE 4 (Main routing logic):
+  1. route/match_result.rs
+  2. route/mod.rs
+
+PHASE 5 (Router core - most complex):
+  1. router/mod.rs (can further split into construction.rs, matching.rs, etc.)
+
+PHASE 6 (Tests - split by feature):
+  1. Organize tests/ directory with separate files per feature
+
+
+6. DEPENDENCY GRAPH
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+lib.rs (re-exports only)
+  ├─ constraint.rs (no deps)
+  ├─ layout.rs (no deps)
+  ├─ intercept.rs (no deps)
+  ├─ path/hierarchy.rs (no deps)
+  ├─ path/mod.rs (deps: hierarchy)
+  ├─ route/pattern.rs (deps: constraint, intercept)
+  ├─ route/match_result.rs (deps: route/mod)
+  ├─ route/mod.rs (deps: constraint, layout, intercept, pattern)
+  ├─ router/mod.rs (deps: route/*, path/*, constraint, layout, intercept)
+  └─ tests/** (deps: all modules)
+
+
+7. KEY STATISTICS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Public API:
+  • 3 Public Enums
+  • 3 Public Structs
+  • 70+ Public Methods
+  • Focused, composable API
+
+Internal Implementation:
+  • 1 Private Enum (PatternSegmentType)
+  • 1 Private Struct (PathHierarchy)
+  • 4 Standalone Private Functions
+  • 8+ Private Methods (Route + Router)
+
+Testing:
+  • 100+ Test Functions
+  • 2930 Lines of Tests (57% of file)
+  • 15 Feature Categories
+  • Coverage across all Phases 1-5.2
+
+Performance Considerations:
+  • Zero-copy path normalization (Cow<'_, str>)
+  • Lazy path hierarchy iteration
+  • HashMap lookups for special pages
+  • Priority-based route ordering
+
+
+8. RECOMMENDATIONS FOR REFACTORING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+EASY WINS (Low risk, high clarity):
+  ✓ Extract constraint.rs (70 lines, no deps)
+  ✓ Extract path/hierarchy.rs (35 lines, core abstraction)
+  ✓ Extract layout.rs (20 lines, minimal enum)
+  ✓ Extract intercept.rs (10 lines, minimal enum)
+  ✓ Extract path/mod.rs (70 lines, pure functions)
+
+MEDIUM EFFORT (Good separation of concerns):
+  ✓ Extract route/pattern.rs (150 lines, pure functions)
+  ✓ Extract route/match_result.rs (65 lines, wrapper)
+  ✓ Extract route/mod.rs (1200 lines, but coherent)
+
+HIGHER COMPLEXITY (Largest refactoring):
+  ✓ Extract router/mod.rs (680 lines, can further split into sub-modules)
+
+TESTS ORGANIZATION (Lower priority):
+  ✓ Split tests/ into 13 feature-based files
+  ✓ Preserve existing test module structure
+  ✓ Use mod declarations to organize
+
+KEY PRINCIPLES:
+  • Maintain public API surface (no breaking changes)
+  • Preserve internal impl details access if needed
+  • Move tests alongside functionality
+  • Update imports/use statements consistently
+  • Run full test suite after each phase
+
+================================================================================
