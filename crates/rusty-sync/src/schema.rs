@@ -1,7 +1,7 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    _rhtmx_sync_log (id) {
+    _rusty_sync_log (id) {
         id -> Int8,
         entity -> Varchar,
         entity_id -> Varchar,
@@ -14,7 +14,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    _rhtmx_field_sync_log (id) {
+    _rusty_field_sync_log (id) {
         id -> Int8,
         entity -> Varchar,
         entity_id -> Varchar,
@@ -28,6 +28,6 @@ diesel::table! {
 }
 
 diesel::allow_tables_to_appear_in_same_query!(
-    _rhtmx_sync_log,
-    _rhtmx_field_sync_log,
+    _rusty_sync_log,
+    _rusty_field_sync_log,
 );

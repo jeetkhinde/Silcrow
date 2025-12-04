@@ -7,11 +7,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::change_tracker::ChangeAction;
 use crate::field_tracker::FieldAction;
-use crate::schema::{_rhtmx_sync_log, _rhtmx_field_sync_log};
+use crate::schema::{_rusty_sync_log, _rusty_field_sync_log};
 
-/// Queryable model for reading from _rhtmx_sync_log table
+/// Queryable model for reading from _rusty_sync_log table
 #[derive(Debug, Clone, Queryable, Selectable)]
-#[diesel(table_name = _rhtmx_sync_log)]
+#[diesel(table_name = _rusty_sync_log)]
 pub struct SyncLog {
     pub id: i64,
     pub entity: String,
@@ -23,9 +23,9 @@ pub struct SyncLog {
     pub created_at: chrono::NaiveDateTime,
 }
 
-/// Insertable model for inserting into _rhtmx_sync_log table
+/// Insertable model for inserting into _rusty_sync_log table
 #[derive(Debug, Clone, Insertable)]
-#[diesel(table_name = _rhtmx_sync_log)]
+#[diesel(table_name = _rusty_sync_log)]
 pub struct NewSyncLog {
     pub entity: String,
     pub entity_id: String,
@@ -83,9 +83,9 @@ impl SyncLog {
     }
 }
 
-/// Queryable model for reading from _rhtmx_field_sync_log table
+/// Queryable model for reading from _rusty_field_sync_log table
 #[derive(Debug, Clone, Queryable, Selectable)]
-#[diesel(table_name = _rhtmx_field_sync_log)]
+#[diesel(table_name = _rusty_field_sync_log)]
 pub struct FieldSyncLog {
     pub id: i64,
     pub entity: String,
@@ -98,9 +98,9 @@ pub struct FieldSyncLog {
     pub timestamp: chrono::NaiveDateTime,
 }
 
-/// Insertable model for inserting into _rhtmx_field_sync_log table
+/// Insertable model for inserting into _rusty_field_sync_log table
 #[derive(Debug, Clone, Insertable)]
-#[diesel(table_name = _rhtmx_field_sync_log)]
+#[diesel(table_name = _rusty_field_sync_log)]
 pub struct NewFieldSyncLog {
     pub entity: String,
     pub entity_id: String,

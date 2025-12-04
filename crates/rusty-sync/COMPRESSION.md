@@ -1,6 +1,6 @@
 # WebSocket Message Compression
 
-The RHTMX sync system now supports transparent compression of WebSocket messages for both entity-level and field-level synchronization.
+The Rusty sync system now supports transparent compression of WebSocket messages for both entity-level and field-level synchronization.
 
 ## Overview
 
@@ -35,7 +35,7 @@ Messages are only compressed if:
 ### Basic Setup
 
 ```rust
-use rhtmx_sync::{SyncEngine, SyncConfig, CompressionConfig};
+use rusty_sync::{SyncEngine, SyncConfig, CompressionConfig};
 
 let config = SyncConfig::new(db_pool, vec!["users".to_string(), "posts".to_string()])
     .with_compression(CompressionConfig::default()); // Enable with default settings
@@ -46,7 +46,7 @@ let engine = SyncEngine::new(config).await?;
 ### Custom Configuration
 
 ```rust
-use rhtmx_sync::CompressionConfig;
+use rusty_sync::CompressionConfig;
 
 // Custom threshold and compression level
 let compression = CompressionConfig::new(
@@ -181,8 +181,8 @@ Enable debug logging to see compression statistics:
 
 **Console output:**
 ```
-[RHTMX Sync] Sent compressed message (892B from 5234B)
-[RHTMX Sync] Received binary message, decompressing...
+[Rusty Sync] Sent compressed message (892B from 5234B)
+[Rusty Sync] Received binary message, decompressing...
 ```
 
 ## Backward Compatibility
@@ -225,12 +225,12 @@ Enable debug logging to see compression statistics:
 
 Run compression tests:
 ```bash
-cargo test --package rhtmx-sync compression
+cargo test --package rusty-sync compression
 ```
 
 All tests:
 ```bash
-cargo test --package rhtmx-sync
+cargo test --package rusty-sync
 ```
 
 ## Future Enhancements

@@ -1,12 +1,12 @@
-# crates/rhtmx-sync/Cargo.toml
+# crates/rusty-sync/Cargo.toml
 [package]
 name = "rusty-sync"
 version = "0.1.0"
 edition = "2021"
-authors = ["RHTMX Contributors"]
+authors = ["Rusty Contributors"]
 license = "MIT"
 description = "Automatic IndexedDB synchronization for Rust web applications with minimal code."
-repository = "https://github.com/jeetkhinde/RHTMX"
+repository = "https://github.com/jeetkhinde/Rusty"
 keywords = ["sync", "indexeddb", "offline", "htmx", "web"]
 categories = ["web-programming"]
 readme = "README.md"
@@ -17,7 +17,7 @@ path = "src/lib.rs"
 
 [dependencies]
 # Local macro crate
-rhtmx-macro = { path = "../rhtmx-macro" }
+rusty-macro = { path = "../rusty-macro" }
 
 # Web framework & async runtime
 axum = { workspace = true }

@@ -1,6 +1,6 @@
 /**
- * rhtmx-field-sync.js - WebSocket-based Field-Level Sync
- * Client-side field-level synchronization for RHTMX with WebSocket/SSE support
+ * rusty-sync.js - WebSocket-based Entity Sync
+ * Client-side IndexedDB synchronization for Rusty with WebSocket/SSE support
  *
  * Features:
  * - WebSocket primary, SSE fallback
@@ -8,14 +8,13 @@
  * - Offline queue with automatic sync
  * - Heartbeat/ping-pong
  * - Connection state management
- * - Optimistic field updates
- * - CRDT-like field-level conflict resolution
+ * - Optimistic UI updates
  * - Multi-tab sync via BroadcastChannel
  *
  * Usage:
- * <script src="/api/sync/field-client.js"
+ * <script src="/api/sync/client.js"
  *         data-sync-entities="users,posts"
- *         data-field-strategy="last-write-wins"
+ *         data-conflict-strategy="last-write-wins"
  *         data-use-websocket="true"
  *         data-debug="false">
  * </script>
@@ -33,10 +32,10 @@
         FALLBACK_SSE: 'fallback_sse'
     };
 
-    class RHTMXFieldSync {
+    class RustySync {
         constructor(config) {
             this.entities = config.entities || [];
-            this.fieldStrategy = config.fieldStrategy || 'last-write-wins';
+            this.conflictStrategy = config.conflictStrategy || 'last-write-wins';
             this.useWebSocket = config.useWebSocket !== false; // Default true
             this.debug = config.debug || false;
 
@@ -56,15 +55,15 @@
             this.eventSource = null;
             this.reconnectAttempts = 0;
             this.maxReconnectAttempts = 10;
-            this.reconnectDelay = 1000;
-            this.maxReconnectDelay = 30000;
+            this.reconnectDelay = 1000; // Start at 1 second
+            this.maxReconnectDelay = 30000; // Max 30 seconds
             this.heartbeatInterval = null;
             this.heartbeatTimeout = null;
 
             // Sync state
             this.db = null;
             this.syncInProgress = false;
-            this.pendingChanges = new Map();
+            this.offlineQueue = [];
             this.isOnline = navigator.onLine;
 
             // Multi-tab sync
@@ -72,7 +71,7 @@
             this.tabId = this.generateTabId();
             this.processingBroadcast = false;
 
-            this.log('Initializing RHTMX Field Sync', {
+            this.log('Initializing Rusty Sync', {
                 entities: this.entities,
                 useWebSocket: this.useWebSocket,
                 compression: this.compressionEnabled ? `enabled (${this.compressionThreshold}B threshold)` : 'disabled',
@@ -82,12 +81,12 @@
 
         log(...args) {
             if (this.debug) {
-                console.log('[RHTMX Field Sync]', ...args);
+                console.log('[Rusty Sync]', ...args);
             }
         }
 
         error(...args) {
-            console.error('[RHTMX Field Sync]', ...args);
+            console.error('[Rusty Sync]', ...args);
         }
 
         /**
@@ -142,11 +141,11 @@
         }
 
         /**
-         * Initialize IndexedDB for field-level storage
+         * Initialize IndexedDB
          */
         async initIndexedDB() {
             return new Promise((resolve, reject) => {
-                const request = indexedDB.open('rhtmx-field-cache', 2);
+                const request = indexedDB.open('rusty-cache', 2); // Version 2 for schema updates
 
                 request.onerror = () => {
                     this.error('Failed to open IndexedDB', request.error);
@@ -170,28 +169,20 @@
                         }
                     }
 
-                    // Create field metadata store
-                    if (!db.objectStoreNames.contains('_field_meta')) {
-                        const metaStore = db.createObjectStore('_field_meta', { keyPath: 'key' });
-                        metaStore.createIndex('entity_field', ['entity', 'entity_id', 'field']);
+                    // Create metadata store
+                    if (!db.objectStoreNames.contains('_meta')) {
+                        db.createObjectStore('_meta', { keyPath: 'key' });
                     }
 
-                    // Create pending field changes store
-                    if (!db.objectStoreNames.contains('_pending_fields')) {
-                        const pendingStore = db.createObjectStore('_pending_fields', { autoIncrement: true });
+                    // Create pending mutations store with timestamp index
+                    if (!db.objectStoreNames.contains('_pending')) {
+                        const pendingStore = db.createObjectStore('_pending', { autoIncrement: true });
                         pendingStore.createIndex('timestamp', 'timestamp');
                     }
 
-                    // Create entity version store
-                    if (!db.objectStoreNames.contains('_versions')) {
-                        db.createObjectStore('_versions', { keyPath: 'entity' });
-                    }
-
-                    // Create optimistic field updates store
-                    if (!db.objectStoreNames.contains('_optimistic_fields')) {
-                        db.createObjectStore('_optimistic_fields', {
-                            keyPath: ['entity', 'entity_id', 'field']
-                        });
+                    // Create optimistic updates store
+                    if (!db.objectStoreNames.contains('_optimistic')) {
+                        db.createObjectStore('_optimistic', { keyPath: ['entity', 'entity_id'] });
                     }
 
                     this.log('IndexedDB schema created');
@@ -200,35 +191,35 @@
         }
 
         /**
-         * Perform initial field sync for all entities
+         * Perform initial sync for all entities
          */
         async initialSync() {
-            this.log('Starting initial field sync');
+            this.log('Starting initial sync');
 
             for (const entity of this.entities) {
                 await this.syncEntity(entity);
             }
 
-            this.log('Initial field sync complete');
+            this.log('Initial sync complete');
         }
 
         /**
-         * Sync field changes for a single entity via HTTP
+         * Sync a single entity via HTTP
          */
         async syncEntity(entity) {
             try {
                 const lastVersion = await this.getLastVersion(entity);
-                this.log(`Syncing ${entity} fields since version ${lastVersion}`);
+                this.log(`Syncing ${entity} since version ${lastVersion}`);
 
-                const response = await fetch(`/api/field-sync/${entity}?since=${lastVersion}`);
+                const response = await fetch(`/api/sync/${entity}?since=${lastVersion}`);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
                 const data = await response.json();
-                this.log(`Received ${data.changes.length} field changes for ${entity}`);
+                this.log(`Received ${data.changes.length} changes for ${entity}`);
 
-                await this.applyFieldChanges(entity, data.changes);
+                await this.applyChanges(entity, data.changes);
                 await this.setLastVersion(entity, data.version);
 
                 this.triggerRefresh(entity);
@@ -245,7 +236,7 @@
             if (this.useWebSocket && 'WebSocket' in window) {
                 this.connectWebSocket();
             } else {
-                this.log('WebSocket not available, feature limited');
+                this.connectSSE();
             }
         }
 
@@ -259,16 +250,16 @@
             }
 
             this.updateConnectionState(ConnectionState.CONNECTING);
-            this.log('Connecting to Field Sync WebSocket');
+            this.log('Connecting to WebSocket');
 
             const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${location.host}/api/field-sync/ws`;
+            const wsUrl = `${protocol}//${location.host}/api/sync/ws`;
 
             try {
                 this.ws = new WebSocket(wsUrl);
 
                 this.ws.onopen = () => {
-                    this.log('Field Sync WebSocket connected');
+                    this.log('WebSocket connected');
                     this.updateConnectionState(ConnectionState.CONNECTED);
                     this.reconnectAttempts = 0;
                     this.reconnectDelay = 1000;
@@ -283,7 +274,7 @@
                     this.startHeartbeat();
 
                     // Sync pending offline mutations
-                    this.syncPendingChanges();
+                    this.syncPendingMutations();
                 };
 
                 this.ws.onmessage = async (event) => {
@@ -317,14 +308,14 @@
                 };
 
                 this.ws.onclose = () => {
-                    this.log('Field Sync WebSocket closed');
+                    this.log('WebSocket closed');
                     this.stopHeartbeat();
                     this.handleDisconnect();
                 };
 
             } catch (error) {
                 this.error('Failed to create WebSocket:', error);
-                this.updateConnectionState(ConnectionState.DISCONNECTED);
+                this.fallbackToSSE();
             }
         }
 
@@ -332,29 +323,24 @@
          * Handle WebSocket messages
          */
         async handleWebSocketMessage(message) {
-            this.log('Received Field Sync message:', message.type);
+            this.log('Received WebSocket message:', message.type);
 
             switch (message.type) {
-                case 'field_change':
-                    await this.applyFieldChanges(message.change.entity, [message.change]);
+                case 'change':
+                    await this.applyChanges(message.change.entity, [message.change]);
                     this.triggerRefresh(message.change.entity);
 
                     // Broadcast to other tabs
-                    this.broadcastChange('field_change', {
+                    this.broadcastChange('change', {
+                        entity: message.change.entity,
                         change: message.change
                     });
                     break;
 
                 case 'push_ack':
-                    this.log('Field push acknowledged:', message);
-                    // Clear optimistic updates
-                    if (message.applied > 0) {
-                        await this.clearPendingForEntity(message.entity, message.entity_id);
-                    }
-                    break;
-
-                case 'conflict':
-                    this.handleConflict(message);
+                    this.log('Push acknowledged:', message);
+                    // Remove from optimistic updates
+                    await this.clearOptimistic(message.entity, message.entity_id);
                     break;
 
                 case 'error':
@@ -413,8 +399,10 @@
         startHeartbeat() {
             this.stopHeartbeat();
 
+            // Send ping every 30 seconds
             this.heartbeatInterval = setInterval(() => {
                 if (this.sendMessageSync({ type: 'ping' })) {
+                    // Expect pong within 5 seconds
                     this.heartbeatTimeout = setTimeout(() => {
                         this.error('Heartbeat timeout, reconnecting');
                         this.ws.close();
@@ -456,7 +444,8 @@
             if (this.reconnectAttempts < this.maxReconnectAttempts) {
                 this.reconnect();
             } else {
-                this.log('Max reconnect attempts reached');
+                this.log('Max reconnect attempts reached, falling back to SSE');
+                this.fallbackToSSE();
             }
         }
 
@@ -482,6 +471,48 @@
         }
 
         /**
+         * Fallback to SSE
+         */
+        fallbackToSSE() {
+            this.log('Falling back to SSE');
+            this.useWebSocket = false;
+            this.connectSSE();
+        }
+
+        /**
+         * Connect via SSE
+         */
+        connectSSE() {
+            this.updateConnectionState(ConnectionState.FALLBACK_SSE);
+            this.log('Connecting to SSE');
+
+            this.eventSource = new EventSource('/api/sync/events');
+
+            this.eventSource.addEventListener('sync', async (event) => {
+                try {
+                    const change = JSON.parse(event.data);
+                    this.log('Received SSE update', change);
+
+                    await this.applyChanges(change.entity, [change]);
+                    this.triggerRefresh(change.entity);
+
+                    // Broadcast to other tabs
+                    this.broadcastChange('change', {
+                        entity: change.entity,
+                        change: change
+                    });
+                } catch (error) {
+                    this.error('Failed to process SSE event:', error);
+                }
+            });
+
+            this.eventSource.onerror = (error) => {
+                this.error('SSE error:', error);
+                // SSE will auto-reconnect
+            };
+        }
+
+        /**
          * Update connection state and emit event
          */
         updateConnectionState(newState) {
@@ -490,62 +521,32 @@
 
             if (oldState !== newState) {
                 this.log(`Connection state: ${oldState} -> ${newState}`);
-                window.dispatchEvent(new CustomEvent('rhtmx:field:connection:state', {
+                window.dispatchEvent(new CustomEvent('rusty:connection:state', {
                     detail: { state: newState, oldState }
                 }));
             }
         }
 
         /**
-         * Apply field changes to IndexedDB
+         * Apply changes to IndexedDB
          */
-        async applyFieldChanges(entity, changes) {
+        async applyChanges(entity, changes) {
             if (changes.length === 0) return;
 
             return new Promise((resolve, reject) => {
-                const tx = this.db.transaction([entity, '_field_meta'], 'readwrite');
-                const entityStore = tx.objectStore(entity);
-                const metaStore = tx.objectStore('_field_meta');
+                const tx = this.db.transaction(entity, 'readwrite');
+                const store = tx.objectStore(entity);
 
-                // Group changes by entity_id
-                const changesByEntity = new Map();
                 for (const change of changes) {
-                    if (!changesByEntity.has(change.entity_id)) {
-                        changesByEntity.set(change.entity_id, []);
-                    }
-                    changesByEntity.get(change.entity_id).push(change);
-                }
-
-                // Process each entity instance
-                for (const [entityId, entityChanges] of changesByEntity) {
-                    const getRequest = entityStore.get(entityId);
-
-                    getRequest.onsuccess = () => {
-                        let entityData = getRequest.result || { id: entityId };
-
-                        // Apply each field change
-                        for (const change of entityChanges) {
-                            if (change.action === 'update') {
-                                entityData[change.field] = change.value;
-                            } else if (change.action === 'delete') {
-                                delete entityData[change.field];
-                            }
-
-                            // Store field metadata
-                            const metaKey = `${entity}:${entityId}:${change.field}`;
-                            metaStore.put({
-                                key: metaKey,
-                                entity: entity,
-                                entity_id: entityId,
-                                field: change.field,
-                                version: change.version,
-                                timestamp: change.timestamp
-                            });
+                    try {
+                        if (change.action === 'delete') {
+                            store.delete(change.entity_id);
+                        } else if (change.data) {
+                            store.put(change.data);
                         }
-
-                        entityStore.put(entityData);
-                        this.log(`Applied ${entityChanges.length} field changes to ${entity}:${entityId}`);
-                    };
+                    } catch (error) {
+                        this.error(`Failed to apply change to ${entity}:`, error);
+                    }
                 }
 
                 tx.oncomplete = () => resolve();
@@ -554,81 +555,53 @@
         }
 
         /**
-         * Record a local field change (with optimistic update)
+         * Push change (with optimistic update)
          */
-        async recordFieldChange(entity, entityId, field, value) {
-            const timestamp = new Date().toISOString();
-
+        async pushChange(entity, entityId, action, data) {
             // Apply optimistically
-            await this.applyOptimisticFieldChange(entity, entityId, field, value, timestamp);
+            await this.applyOptimistic(entity, entityId, data);
             this.triggerRefresh(entity);
 
             // Broadcast optimistic update to other tabs
-            this.broadcastChange('optimistic_field', {
+            this.broadcastChange('optimistic', {
                 entity,
                 entityId,
-                field,
-                value,
-                timestamp
+                data
             });
 
             if (this.connectionState === ConnectionState.CONNECTED) {
                 // Send via WebSocket
                 this.sendMessage({
-                    type: 'push_fields',
+                    type: 'push',
                     entity,
                     entity_id: entityId,
-                    fields: [{
-                        field,
-                        value,
-                        action: 'update',
-                        timestamp
-                    }]
+                    action,
+                    data
                 });
             } else {
                 // Queue for later
-                await this.queueFieldChange(entity, entityId, field, value, timestamp);
+                await this.queueMutation(entity, entityId, action, data);
             }
         }
 
         /**
-         * Apply optimistic field change
+         * Apply optimistic update
          */
-        async applyOptimisticFieldChange(entity, entityId, field, value, timestamp) {
+        async applyOptimistic(entity, entityId, data) {
             return new Promise((resolve, reject) => {
-                const tx = this.db.transaction(['_optimistic_fields', entity, '_field_meta'], 'readwrite');
+                const tx = this.db.transaction(['_optimistic', entity], 'readwrite');
 
                 // Store in optimistic
-                const optStore = tx.objectStore('_optimistic_fields');
-                optStore.put({
-                    entity,
-                    entity_id: entityId,
-                    field,
-                    value,
-                    timestamp: Date.now()
-                });
+                const optStore = tx.objectStore('_optimistic');
+                optStore.put({ entity, entity_id: entityId, data, timestamp: Date.now() });
 
-                // Apply to entity
+                // Apply to entity store
                 const entityStore = tx.objectStore(entity);
-                const getRequest = entityStore.get(entityId);
-
-                getRequest.onsuccess = () => {
-                    const entityData = getRequest.result || { id: entityId };
-                    entityData[field] = value;
-                    entityStore.put(entityData);
-
-                    // Update field metadata
-                    const metaStore = tx.objectStore('_field_meta');
-                    const metaKey = `${entity}:${entityId}:${field}`;
-                    metaStore.put({
-                        key: metaKey,
-                        entity: entity,
-                        entity_id: entityId,
-                        field: field,
-                        timestamp: timestamp,
-                        local: true
-                    });
-                };
+                if (data) {
+                    entityStore.put(data);
+                } else {
+                    entityStore.delete(entityId);
+                }
 
                 tx.oncomplete = () => resolve();
                 tx.onerror = () => reject(tx.error);
@@ -636,25 +609,37 @@
         }
 
         /**
-         * Queue field change for server sync
+         * Clear optimistic update
          */
-        async queueFieldChange(entity, entityId, field, value, timestamp) {
+        async clearOptimistic(entity, entityId) {
             return new Promise((resolve, reject) => {
-                const tx = this.db.transaction(['_pending_fields'], 'readwrite');
-                const store = tx.objectStore('_pending_fields');
+                const tx = this.db.transaction('_optimistic', 'readwrite');
+                const store = tx.objectStore('_optimistic');
+                store.delete([entity, entityId]);
+
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        /**
+         * Queue mutation for offline sync
+         */
+        async queueMutation(entity, entityId, action, data) {
+            return new Promise((resolve, reject) => {
+                const tx = this.db.transaction('_pending', 'readwrite');
+                const store = tx.objectStore('_pending');
 
                 store.add({
-                    entity: entity,
+                    entity,
                     entity_id: entityId,
-                    field: field,
-                    value: value,
-                    action: 'update',
-                    timestamp: timestamp,
-                    queued_at: Date.now()
+                    action,
+                    data,
+                    timestamp: Date.now()
                 });
 
                 tx.oncomplete = () => {
-                    this.log(`Queued field change: ${entity}:${entityId}.${field}`);
+                    this.log(`Queued mutation: ${entity}:${entityId}`);
                     resolve();
                 };
                 tx.onerror = () => reject(tx.error);
@@ -662,81 +647,55 @@
         }
 
         /**
-         * Sync pending field changes
+         * Sync pending mutations
          */
-        async syncPendingChanges() {
+        async syncPendingMutations() {
             if (this.syncInProgress) return;
             this.syncInProgress = true;
 
             try {
-                const pending = await this.getPendingFieldChanges();
-                this.log(`Syncing ${pending.length} pending field changes`);
+                const pending = await this.getPendingMutations();
+                this.log(`Syncing ${pending.length} pending mutations`);
 
-                if (pending.length === 0) {
-                    this.syncInProgress = false;
-                    return;
-                }
-
-                // Group by entity and entity_id
-                const grouped = new Map();
-                for (const change of pending) {
-                    const key = `${change.entity}:${change.entity_id}`;
-                    if (!grouped.has(key)) {
-                        grouped.set(key, {
-                            entity: change.entity,
-                            entity_id: change.entity_id,
-                            fields: []
-                        });
-                    }
-                    grouped.get(key).fields.push({
-                        field: change.field,
-                        value: change.value,
-                        action: change.action,
-                        timestamp: change.timestamp
-                    });
-                }
-
-                // Send each group
-                for (const [key, group] of grouped) {
+                for (const mutation of pending) {
                     if (this.connectionState === ConnectionState.CONNECTED) {
                         this.sendMessage({
-                            type: 'push_fields',
-                            entity: group.entity,
-                            entity_id: group.entity_id,
-                            fields: group.fields
+                            type: 'push',
+                            entity: mutation.entity,
+                            entity_id: mutation.entity_id,
+                            action: mutation.action,
+                            data: mutation.data
                         });
                     } else {
                         // Use HTTP fallback
-                        await this.pushFieldsViaHTTP(group);
+                        await this.pushViaHTTP(mutation);
                     }
                 }
 
                 // Clear pending
-                await this.clearPendingFieldChanges();
+                await this.clearPendingMutations();
 
             } catch (error) {
-                this.error('Failed to sync pending field changes:', error);
+                this.error('Failed to sync pending mutations:', error);
             } finally {
                 this.syncInProgress = false;
             }
         }
 
         /**
-         * Push fields via HTTP (fallback)
+         * Push via HTTP (fallback)
          */
-        async pushFieldsViaHTTP(group) {
+        async pushViaHTTP(mutation) {
             try {
-                const response = await fetch(`/api/field-sync/${group.entity}`, {
+                const response = await fetch(`/api/sync/${mutation.entity}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        changes: group.fields.map(f => ({
-                            entity_id: group.entity_id,
-                            field: f.field,
-                            value: f.value,
-                            action: f.action,
-                            timestamp: f.timestamp
-                        }))
+                        changes: [{
+                            id: mutation.entity_id,
+                            action: mutation.action,
+                            data: mutation.data
+                        }]
                     })
                 });
 
@@ -744,51 +703,20 @@
                     throw new Error(`HTTP ${response.status}`);
                 }
 
-                const result = await response.json();
-                this.log('Fields pushed via HTTP:', result);
-
-                // Handle conflicts
-                if (result.conflicts && result.conflicts.length > 0) {
-                    for (const conflict of result.conflicts) {
-                        this.handleConflict(conflict);
-                    }
-                }
+                this.log('Mutation pushed via HTTP:', mutation);
             } catch (error) {
-                this.error('Failed to push fields via HTTP:', error);
+                this.error('Failed to push via HTTP:', error);
                 throw error;
             }
         }
 
         /**
-         * Handle field conflict
+         * Get pending mutations
          */
-        handleConflict(conflict) {
-            this.log('Field conflict detected:', conflict);
-
-            // Emit custom event
-            window.dispatchEvent(new CustomEvent('rhtmx:field:conflict', {
-                detail: conflict
-            }));
-
-            // Apply resolution based on strategy
-            if (this.fieldStrategy === 'server-wins' && conflict.server_value !== undefined) {
-                this.applyFieldChanges(conflict.entity, [{
-                    entity_id: conflict.entity_id,
-                    field: conflict.field,
-                    value: conflict.server_value,
-                    action: 'update',
-                    timestamp: conflict.server_timestamp
-                }]);
-            }
-        }
-
-        /**
-         * Get pending field changes
-         */
-        async getPendingFieldChanges() {
+        async getPendingMutations() {
             return new Promise((resolve, reject) => {
-                const tx = this.db.transaction(['_pending_fields'], 'readonly');
-                const store = tx.objectStore('_pending_fields');
+                const tx = this.db.transaction('_pending', 'readonly');
+                const store = tx.objectStore('_pending');
                 const request = store.getAll();
 
                 request.onsuccess = () => resolve(request.result || []);
@@ -797,41 +725,13 @@
         }
 
         /**
-         * Clear pending field changes
+         * Clear pending mutations
          */
-        async clearPendingFieldChanges() {
+        async clearPendingMutations() {
             return new Promise((resolve, reject) => {
-                const tx = this.db.transaction(['_pending_fields'], 'readwrite');
-                const store = tx.objectStore('_pending_fields');
+                const tx = this.db.transaction('_pending', 'readwrite');
+                const store = tx.objectStore('_pending');
                 store.clear();
-
-                tx.oncomplete = () => resolve();
-                tx.onerror = () => reject(tx.error);
-            });
-        }
-
-        /**
-         * Clear pending for specific entity
-         */
-        async clearPendingForEntity(entity, entityId) {
-            return new Promise((resolve, reject) => {
-                const tx = this.db.transaction(['_optimistic_fields'], 'readwrite');
-                const store = tx.objectStore('_optimistic_fields');
-
-                // Clear all optimistic updates for this entity instance
-                const range = IDBKeyRange.bound(
-                    [entity, entityId, ''],
-                    [entity, entityId, '\uffff']
-                );
-
-                const request = store.openCursor(range);
-                request.onsuccess = (event) => {
-                    const cursor = event.target.result;
-                    if (cursor) {
-                        cursor.delete();
-                        cursor.continue();
-                    }
-                };
 
                 tx.oncomplete = () => resolve();
                 tx.onerror = () => reject(tx.error);
@@ -843,13 +743,13 @@
          */
         async getLastVersion(entity) {
             return new Promise((resolve) => {
-                const tx = this.db.transaction(['_versions'], 'readonly');
-                const store = tx.objectStore('_versions');
-                const request = store.get(entity);
+                const tx = this.db.transaction('_meta', 'readonly');
+                const store = tx.objectStore('_meta');
+                const request = store.get(`${entity}_version`);
 
                 request.onsuccess = () => {
                     const result = request.result;
-                    resolve(result ? result.version : 0);
+                    resolve(result ? result.value : 0);
                 };
                 request.onerror = () => resolve(0);
             });
@@ -860,9 +760,9 @@
          */
         async setLastVersion(entity, version) {
             return new Promise((resolve, reject) => {
-                const tx = this.db.transaction(['_versions'], 'readwrite');
-                const store = tx.objectStore('_versions');
-                store.put({ entity: entity, version: version });
+                const tx = this.db.transaction('_meta', 'readwrite');
+                const store = tx.objectStore('_meta');
+                store.put({ key: `${entity}_version`, value: version });
 
                 tx.oncomplete = () => resolve();
                 tx.onerror = () => reject(tx.error);
@@ -873,12 +773,12 @@
          * Trigger HTMX refresh
          */
         triggerRefresh(entity) {
-            const event = new CustomEvent(`rhtmx:${entity}:field-changed`, {
-                detail: { entity: entity },
+            const event = new CustomEvent(`rusty:${entity}:changed`, {
+                detail: { entity },
                 bubbles: true
             });
             document.body.dispatchEvent(event);
-            this.log(`Triggered field refresh for ${entity}`);
+            this.log(`Triggered refresh for ${entity}`);
         }
 
         /**
@@ -889,10 +789,11 @@
                 this.log('Back online');
                 this.isOnline = true;
 
+                // Reconnect WebSocket or sync pending
                 if (this.useWebSocket) {
                     this.connectWebSocket();
                 } else {
-                    await this.syncPendingChanges();
+                    await this.syncPendingMutations();
                     for (const entity of this.entities) {
                         await this.syncEntity(entity);
                     }
@@ -915,7 +816,7 @@
             }
 
             try {
-                this.broadcastChannel = new BroadcastChannel('rhtmx-field-sync');
+                this.broadcastChannel = new BroadcastChannel('rusty-sync');
                 this.log('BroadcastChannel initialized');
 
                 this.broadcastChannel.onmessage = (event) => {
@@ -951,26 +852,20 @@
                 this.processingBroadcast = true;
 
                 switch (message.type) {
-                    case 'field_change':
-                        // Apply field change from another tab
-                        await this.applyFieldChange(message.change);
-                        this.triggerFieldRefresh(message.change.entity, message.change.entity_id, message.change.field);
+                    case 'change':
+                        // Apply change from another tab
+                        await this.applyChanges(message.entity, [message.change]);
+                        this.triggerRefresh(message.entity);
                         break;
 
-                    case 'optimistic_field':
-                        // Apply optimistic field update from another tab
-                        await this.applyOptimisticFieldChange(
-                            message.entity,
-                            message.entityId,
-                            message.field,
-                            message.value,
-                            message.timestamp
-                        );
-                        this.triggerFieldRefresh(message.entity, message.entityId, message.field);
+                    case 'optimistic':
+                        // Apply optimistic update from another tab
+                        await this.applyOptimistic(message.entity, message.entityId, message.data);
+                        this.triggerRefresh(message.entity);
                         break;
 
                     case 'connection_state':
-                        // Sync connection state info (optional)
+                        // Sync connection state info (optional, for UI consistency)
                         this.log(`Tab ${message.tabId} connection state: ${message.state}`);
                         break;
                 }
@@ -1010,6 +905,9 @@
             if (this.ws) {
                 this.ws.close();
             }
+            if (this.eventSource) {
+                this.eventSource.close();
+            }
             if (this.broadcastChannel) {
                 this.broadcastChannel.close();
             }
@@ -1021,7 +919,7 @@
         static async init() {
             const scriptTag = document.currentScript;
             const entities = scriptTag.getAttribute('data-sync-entities');
-            const fieldStrategy = scriptTag.getAttribute('data-field-strategy') || 'last-write-wins';
+            const conflictStrategy = scriptTag.getAttribute('data-conflict-strategy') || 'last-write-wins';
             const useWebSocket = scriptTag.getAttribute('data-use-websocket') !== 'false';
             const debug = scriptTag.getAttribute('data-debug') === 'true';
 
@@ -1030,20 +928,20 @@
             const compressionThreshold = parseInt(scriptTag.getAttribute('data-compression-threshold') || '1024', 10);
 
             if (!entities) {
-                console.error('[RHTMX Field Sync] No entities specified in data-sync-entities');
+                console.error('[Rusty Sync] No entities specified in data-sync-entities');
                 return;
             }
 
             const config = {
                 entities: entities.split(',').map(e => e.trim()),
-                fieldStrategy,
+                conflictStrategy,
                 useWebSocket,
                 compressionEnabled,
                 compressionThreshold,
                 debug
             };
 
-            const sync = new RHTMXFieldSync(config);
+            const sync = new RustySync(config);
 
             try {
                 await sync.initIndexedDB();
@@ -1056,13 +954,13 @@
                 window.addEventListener('beforeunload', () => sync.cleanup());
 
                 // Make available globally
-                window.RHTMXFieldSync = sync;
+                window.rustySync = sync;
 
-                console.log('[RHTMX Field Sync] Initialization complete');
-                window.dispatchEvent(new CustomEvent('rhtmx:field:sync:ready'));
+                console.log('[Rusty Sync] Initialization complete');
+                window.dispatchEvent(new CustomEvent('rusty:sync:ready'));
 
             } catch (error) {
-                console.error('[RHTMX Field Sync] Initialization failed:', error);
+                console.error('[Rusty Sync] Initialization failed:', error);
             }
         }
     }
@@ -1070,12 +968,12 @@
     // Auto-initialize
     if (document.currentScript && document.currentScript.hasAttribute('data-sync-entities')) {
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => RHTMXFieldSync.init());
+            document.addEventListener('DOMContentLoaded', () => RustySync.init());
         } else {
-            RHTMXFieldSync.init();
+            RustySync.init();
         }
     }
 
     // Export for manual initialization
-    window.RHTMXFieldSync = RHTMXFieldSync;
+    window.RustySync = RustySync;
 })();

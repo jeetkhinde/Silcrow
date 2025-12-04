@@ -1,5 +1,5 @@
 -- Create the sync log table for tracking changes (SQLite version)
-CREATE TABLE _rhtmx_sync_log (
+CREATE TABLE _rusty_sync_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     entity TEXT NOT NULL,
     entity_id TEXT NOT NULL,
@@ -11,7 +11,7 @@ CREATE TABLE _rhtmx_sync_log (
 );
 
 -- Create index for efficient querying by entity and version
-CREATE INDEX idx_sync_entity_version ON _rhtmx_sync_log(entity, version);
+CREATE INDEX idx_sync_entity_version ON _rusty_sync_log(entity, version);
 
 -- Create index for querying by entity_id
-CREATE INDEX idx_sync_entity_id ON _rhtmx_sync_log(entity, entity_id);
+CREATE INDEX idx_sync_entity_id ON _rusty_sync_log(entity, entity_id);

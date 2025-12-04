@@ -81,7 +81,7 @@ impl ChangeTracker {
     async fn init_sqlite_table(pool: &sqlx::SqlitePool) -> anyhow::Result<()> {
         sqlx::query(
             r#"
-            CREATE TABLE IF NOT EXISTS _rhtmx_sync_log (
+            CREATE TABLE IF NOT EXISTS _rusty_sync_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 entity TEXT NOT NULL,
                 entity_id TEXT NOT NULL,
@@ -99,7 +99,7 @@ impl ChangeTracker {
         sqlx::query(
             r#"
             CREATE INDEX IF NOT EXISTS idx_sync_entity_version
-            ON _rhtmx_sync_log(entity, version)
+            ON _rusty_sync_log(entity, version)
             "#,
         )
         .execute(pool)
@@ -142,7 +142,7 @@ impl ChangeTracker {
         use diesel_async::RunQueryDsl;
 
         use crate::models::{NewSyncLog, SyncLog};
-        use crate::schema::_rhtmx_sync_log;
+        use crate::schema::_rusty_sync_log;
 
         // Get next version
         let version = self.next_version(entity).await?;
@@ -160,7 +160,7 @@ impl ChangeTracker {
         // Insert and return the created record
         let mut conn = self.db_pool.get_postgres().await?;
 
-        let sync_log = diesel::insert_into(_rhtmx_sync_log::table)
+        let sync_log = diesel::insert_into(_rusty_sync_log::table)
             .values(&new_log)
             .get_result::<SyncLog>(&mut conn)
             .await?;
@@ -189,7 +189,7 @@ impl ChangeTracker {
 
         let row = sqlx::query(
             r#"
-            INSERT INTO _rhtmx_sync_log (entity, entity_id, action, data, version, client_id)
+            INSERT INTO _rusty_sync_log (entity, entity_id, action, data, version, client_id)
             VALUES (?, ?, ?, ?, ?, ?)
             RETURNING id, entity, entity_id, action, data, version, client_id, created_at
             "#,
@@ -251,11 +251,11 @@ impl ChangeTracker {
         use diesel_async::RunQueryDsl;
 
         use crate::models::SyncLog;
-        use crate::schema::_rhtmx_sync_log::dsl::*;
+        use crate::schema::_rusty_sync_log::dsl::*;
 
         let mut conn = self.db_pool.get_postgres().await?;
 
-        let results = _rhtmx_sync_log
+        let results = _rusty_sync_log
             .filter(entity.eq(entity_name))
             .filter(version.gt(since_version))
             .order(version.asc())
@@ -278,7 +278,7 @@ impl ChangeTracker {
         let rows = sqlx::query(
             r#"
             SELECT id, entity, entity_id, action, data, version, client_id, created_at
-            FROM _rhtmx_sync_log
+            FROM _rusty_sync_log
             WHERE entity = ? AND version > ?
             ORDER BY version ASC
             "#,
@@ -333,11 +333,11 @@ impl ChangeTracker {
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
 
-        use crate::schema::_rhtmx_sync_log::dsl::*;
+        use crate::schema::_rusty_sync_log::dsl::*;
 
         let mut conn = self.db_pool.get_postgres().await?;
 
-        let result: Option<i64> = _rhtmx_sync_log
+        let result: Option<i64> = _rusty_sync_log
             .filter(entity.eq(entity_name))
             .select(max(version))
             .first::<Option<i64>>(&mut conn)
@@ -352,7 +352,7 @@ impl ChangeTracker {
         let pool = self.db_pool.get_sqlite()?;
 
         let result: Option<i64> = sqlx::query_scalar(
-            "SELECT COALESCE(MAX(version), 0) FROM _rhtmx_sync_log WHERE entity = ?",
+            "SELECT COALESCE(MAX(version), 0) FROM _rusty_sync_log WHERE entity = ?",
         )
         .bind(entity)
         .fetch_one(pool.as_ref())
@@ -386,14 +386,14 @@ impl ChangeTracker {
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
 
-        use crate::schema::_rhtmx_sync_log::dsl::*;
+        use crate::schema::_rusty_sync_log::dsl::*;
 
         let cutoff = Utc::now() - Duration::days(days);
         let cutoff_naive = cutoff.naive_utc();
 
         let mut conn = self.db_pool.get_postgres().await?;
 
-        let deleted = diesel::delete(_rhtmx_sync_log.filter(created_at.lt(cutoff_naive)))
+        let deleted = diesel::delete(_rusty_sync_log.filter(created_at.lt(cutoff_naive)))
             .execute(&mut conn)
             .await?;
 
@@ -406,7 +406,7 @@ impl ChangeTracker {
         let days_param = format!("-{} days", days);
 
         let result =
-            sqlx::query("DELETE FROM _rhtmx_sync_log WHERE created_at < datetime('now', ?)")
+            sqlx::query("DELETE FROM _rusty_sync_log WHERE created_at < datetime('now', ?)")
                 .bind(days_param)
                 .execute(pool.as_ref())
                 .await?;

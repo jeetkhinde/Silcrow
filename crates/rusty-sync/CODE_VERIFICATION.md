@@ -37,23 +37,23 @@ pub async fn get_field_changes_since(...)
 ```
 
 **Client-side:**
-- ✅ `rhtmx-sync.js` lines 177-234 - `connectWebSocket()` method
-- ✅ `rhtmx-field-sync.js` lines 186-243 - `connectWebSocket()` method
+- ✅ `rusty-sync.js` lines 177-234 - `connectWebSocket()` method
+- ✅ `rusty-field-sync.js` lines 186-243 - `connectWebSocket()` method
 
 ### 3. Offline Queue - REAL CODE ✅
 
 **Client IndexedDB Stores:**
-- ✅ `_pending` store created (rhtmx-sync.js:109-111)
-- ✅ `_pending_fields` store created (rhtmx-field-sync.js:111-113)
+- ✅ `_pending` store created (rusty-sync.js:109-111)
+- ✅ `_pending_fields` store created (rusty-field-sync.js:111-113)
 
 **Methods:**
 ```javascript
-// rhtmx-sync.js
+// rusty-sync.js
 async queueMutation()        // Line 494
 async syncPendingMutations() // Line 518
 async getPendingMutations()  // Line 582
 
-// rhtmx-field-sync.js
+// rusty-field-sync.js
 async queueFieldChange()     // Line 512
 async syncPendingChanges()   // Line 538
 ```
@@ -61,7 +61,7 @@ async syncPendingChanges()   // Line 538
 ### 4. Reconnection Logic - REAL CODE ✅
 
 **Client-side:**
-- ✅ Exponential backoff (rhtmx-sync.js:334-350)
+- ✅ Exponential backoff (rusty-sync.js:334-350)
 - ✅ Connection states (line 26-32)
 - ✅ Max attempts handling (line 323-328)
 
@@ -77,7 +77,7 @@ this.maxReconnectDelay = 30000;
 
 **Client-side:**
 ```javascript
-// rhtmx-sync.js
+// rusty-sync.js
 startHeartbeat()  // Line 278-290
 stopHeartbeat()   // Line 296-304
 resetHeartbeatTimeout() // Line 310-315
@@ -93,16 +93,16 @@ SyncMessage::Pong
 ### 6. Optimistic Updates - REAL CODE ✅
 
 **Client IndexedDB Stores:**
-- ✅ `_optimistic` (rhtmx-sync.js:115-116)
-- ✅ `_optimistic_fields` (rhtmx-field-sync.js:122-125)
+- ✅ `_optimistic` (rusty-sync.js:115-116)
+- ✅ `_optimistic_fields` (rusty-field-sync.js:122-125)
 
 **Methods:**
 ```javascript
-// rhtmx-sync.js
+// rusty-sync.js
 async applyOptimistic()    // Line 456
 async clearOptimistic()    // Line 480
 
-// rhtmx-field-sync.js
+// rusty-field-sync.js
 async applyOptimisticFieldChange() // Line 468
 ```
 
@@ -113,8 +113,8 @@ async applyOptimisticFieldChange() // Line 468
 ### 1. Multi-tab Sync (BroadcastChannel) ✅
 - **Status:** FULLY IMPLEMENTED
 - **Files:**
-  - `rhtmx-sync.js` - Lines 60-62 (fields), 692-778 (methods), 825 (init)
-  - `rhtmx-field-sync.js` - Lines 60-64 (fields), 796-888 (methods), 932 (init)
+  - `rusty-sync.js` - Lines 60-62 (fields), 692-778 (methods), 825 (init)
+  - `rusty-field-sync.js` - Lines 60-64 (fields), 796-888 (methods), 932 (init)
 - **Evidence:**
   - `setupBroadcastChannel()` method in both clients
   - `handleBroadcastMessage()` - Receives and processes tab messages
@@ -151,13 +151,13 @@ async applyOptimisticFieldChange() // Line 468
 
 ### Build Test ✅
 ```bash
-$ cargo build --package rhtmx-sync
+$ cargo build --package rusty-sync
 Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.74s
 ```
 
 ### Unit Tests ✅
 ```bash
-$ cargo test --package rhtmx-sync
+$ cargo test --package rusty-sync
 running 10 tests
 test result: ok. 10 passed; 0 failed; 0 ignored
 ```
@@ -192,8 +192,8 @@ Total Rust:               54,761 bytes of WORKING CODE
 
 ### JavaScript Implementation
 ```
-rhtmx-sync.js:           24,502 bytes (REAL)
-rhtmx-field-sync.js:     29,509 bytes (REAL)
+rusty-sync.js:           24,502 bytes (REAL)
+rusty-field-sync.js:     29,509 bytes (REAL)
 --------------------------------
 Total JavaScript:        54,011 bytes of WORKING CODE
 ```
@@ -213,11 +213,11 @@ Total Lines:              ~2,700 lines of REAL CODE
 | **Field-level sync** | ✅ YES | field_tracker.rs | Full file |
 | **WebSocket entity** | ✅ YES | websocket.rs | Line 58+ |
 | **WebSocket field** | ✅ YES | field_websocket.rs | Line 77+ |
-| **Offline queue** | ✅ YES | rhtmx-sync.js | Lines 109, 494, 518 |
-| **Reconnection** | ✅ YES | rhtmx-sync.js | Lines 334-350 |
-| **Heartbeat** | ✅ YES | rhtmx-sync.js | Lines 278-315 |
-| **Optimistic UI** | ✅ YES | rhtmx-sync.js | Lines 115, 456, 480 |
-| **Multi-tab sync** | ✅ YES | rhtmx-sync.js, rhtmx-field-sync.js | Lines 692-778, 796-888 |
+| **Offline queue** | ✅ YES | rusty-sync.js | Lines 109, 494, 518 |
+| **Reconnection** | ✅ YES | rusty-sync.js | Lines 334-350 |
+| **Heartbeat** | ✅ YES | rusty-sync.js | Lines 278-315 |
+| **Optimistic UI** | ✅ YES | rusty-sync.js | Lines 115, 456, 480 |
+| **Multi-tab sync** | ✅ YES | rusty-sync.js, rusty-field-sync.js | Lines 692-778, 796-888 |
 | **Compression** | ❌ NO | - | - |
 | **PostgreSQL** | ❌ NO | - | - |
 

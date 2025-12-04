@@ -1,6 +1,6 @@
 # rusty-sync
 
-Automatic IndexedDB synchronization for RHTMX applications with **minimal developer code**.
+Automatic IndexedDB synchronization for Rusty applications with **minimal developer code**.
 
 ## Features
 
@@ -77,7 +77,7 @@ async fn main() {
     <!-- Your normal HTMX code -->
     <div id="users"
          hx-get="/api/users"
-         hx-trigger="load, rhtmx:users:changed from:body">
+         hx-trigger="load, rusty:users:changed from:body">
         <!-- User list -->
     </div>
 </body>
@@ -160,15 +160,15 @@ engine.cleanup(7).await?;  // Clean up logs older than 7 days
 
 ```javascript
 // Access the sync instance
-window.rhtmxSync.syncEntity('users');  // Manual sync
-window.rhtmxSync.log('message');       // Debug logging
+window.rustySync.syncEntity('users');  // Manual sync
+window.rustySync.log('message');       // Debug logging
 
 // Listen for events
-document.addEventListener('rhtmx:sync:ready', () => {
+document.addEventListener('rusty:sync:ready', () => {
     console.log('Sync initialized');
 });
 
-document.addEventListener('rhtmx:users:changed', (e) => {
+document.addEventListener('rusty:users:changed', (e) => {
     console.log('User changed:', e.detail.id);
 });
 ```
@@ -316,10 +316,10 @@ let sync_engine = SyncEngine::new(
 
 ```javascript
 // Record a field change
-window.RHTMXFieldSync.recordFieldChange('users', '1', 'name', 'Alice');
+window.RustyFieldSync.recordFieldChange('users', '1', 'name', 'Alice');
 
 // Listen for field-level conflicts
-window.addEventListener('rhtmx:field:conflict', (e) => {
+window.addEventListener('rusty:field:conflict', (e) => {
     console.log('Field conflict:', e.detail);
 });
 ```

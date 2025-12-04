@@ -1,6 +1,6 @@
 # Field-Level Sync Example
 
-This example demonstrates how to use field-level synchronization in rhtmx-sync.
+This example demonstrates how to use field-level synchronization in rusty-sync.
 
 ## Overview
 
@@ -9,7 +9,7 @@ Field-level sync allows you to track and synchronize individual field changes in
 ## Server Setup
 
 ```rust
-use rhtmx_sync::{SyncEngine, SyncConfig, FieldMergeStrategy};
+use rusty_sync::{SyncEngine, SyncConfig, FieldMergeStrategy};
 use sqlx::SqlitePool;
 use axum::Router;
 
@@ -33,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
         "1",
         "name",
         Some(serde_json::json!("Alice")),
-        rhtmx_sync::FieldAction::Update,
+        rusty_sync::FieldAction::Update,
         None,
     ).await?;
 
@@ -81,11 +81,11 @@ async fn main() -> anyhow::Result<()> {
     <script>
         function updateField(field, value) {
             // Record field change for user with ID '1'
-            window.RHTMXFieldSync.recordFieldChange('users', '1', field, value);
+            window.RustyFieldSync.recordFieldChange('users', '1', field, value);
         }
 
         // Listen for field conflicts
-        window.addEventListener('rhtmx:field:conflict', (e) => {
+        window.addEventListener('rusty:field:conflict', (e) => {
             const conflict = e.detail;
             console.warn('Conflict detected:', conflict);
 
@@ -198,12 +198,12 @@ When two clients modify the same field simultaneously:
 
 **Client A** (timestamp: 12:00:00):
 ```javascript
-window.RHTMXFieldSync.recordFieldChange('users', '1', 'name', 'Alice');
+window.RustyFieldSync.recordFieldChange('users', '1', 'name', 'Alice');
 ```
 
 **Client B** (timestamp: 12:00:01):
 ```javascript
-window.RHTMXFieldSync.recordFieldChange('users', '1', 'name', 'Bob');
+window.RustyFieldSync.recordFieldChange('users', '1', 'name', 'Bob');
 ```
 
 With `LastWriteWins` strategy, the server will:

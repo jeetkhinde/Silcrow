@@ -55,7 +55,7 @@ pub use compression::CompressionConfig;
 pub use db::DbPool;
 pub use postgres_notify::{PostgresNotifyListener, PostgresNotification};
 
-// The Syncable derive macro is provided by rhtmx-macro
+// The Syncable derive macro is provided by rusty-macro
 
 /// Version of the sync protocol
 pub const SYNC_PROTOCOL_VERSION: &str = "1.0.0";

@@ -46,7 +46,7 @@ diesel migration run
 
 This will create the necessary tables in your Supabase database:
 - `_rusty_sync_log`
-- `_rhtmx_field_sync_log`
+- `_rusty_field_sync_log`
 
 ### 5. Deploy Your Application
 
@@ -122,7 +122,7 @@ Enable RLS for sync tables:
 ```sql
 -- Enable RLS
 ALTER TABLE _rusty_sync_log ENABLE ROW LEVEL SECURITY;
-ALTER TABLE _rhtmx_field_sync_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE _rusty_field_sync_log ENABLE ROW LEVEL SECURITY;
 
 -- Allow authenticated users to read/write
 CREATE POLICY "Allow authenticated access"
@@ -133,7 +133,7 @@ USING (true)
 WITH CHECK (true);
 
 CREATE POLICY "Allow authenticated access"
-ON _rhtmx_field_sync_log
+ON _rusty_field_sync_log
 FOR ALL
 TO authenticated
 USING (true)
@@ -474,8 +474,8 @@ Error: relation "_rusty_sync_log" already exists
 Complete example with Supabase integration:
 
 ```bash
-git clone https://github.com/jeetkhinde/RHTMX
-cd RHTMX/examples/supabase-sync
+git clone https://github.com/jeetkhinde/Rusty
+cd Rusty/examples/supabase-sync
 cp .env.example .env
 # Edit .env with your Supabase credentials
 diesel migration run

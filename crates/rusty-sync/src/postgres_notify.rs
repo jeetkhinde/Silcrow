@@ -81,7 +81,7 @@ impl PostgresNotifyListener {
 pub fn entity_sync_channels(entities: &[String]) -> Vec<String> {
     entities
         .iter()
-        .map(|entity| format!("_rhtmx_sync_{}", entity))
+        .map(|entity| format!("_rusty_sync_{}", entity))
         .collect()
 }
 
@@ -91,7 +91,7 @@ pub fn entity_sync_channels(entities: &[String]) -> Vec<String> {
 pub fn field_sync_channels(entities: &[String]) -> Vec<String> {
     entities
         .iter()
-        .map(|entity| format!("_rhtmx_field_sync_{}", entity))
+        .map(|entity| format!("_rusty_field_sync_{}", entity))
         .collect()
 }
 
@@ -105,13 +105,13 @@ mod tests {
 
         let entity_channels = entity_sync_channels(&entities);
         assert_eq!(entity_channels.len(), 2);
-        assert_eq!(entity_channels[0], "_rhtmx_sync_users");
-        assert_eq!(entity_channels[1], "_rhtmx_sync_posts");
+        assert_eq!(entity_channels[0], "_rusty_sync_users");
+        assert_eq!(entity_channels[1], "_rusty_sync_posts");
 
         let field_channels = field_sync_channels(&entities);
         assert_eq!(field_channels.len(), 2);
-        assert_eq!(field_channels[0], "_rhtmx_field_sync_users");
-        assert_eq!(field_channels[1], "_rhtmx_field_sync_posts");
+        assert_eq!(field_channels[0], "_rusty_field_sync_users");
+        assert_eq!(field_channels[1], "_rusty_field_sync_posts");
     }
 
     #[test]
@@ -122,14 +122,14 @@ mod tests {
         // Test notification broadcast
         listener
             .notify(
-                "_rhtmx_sync_test".to_string(),
+                "_rusty_sync_test".to_string(),
                 serde_json::json!({"id": 1}),
             )
             .unwrap();
 
         // Should receive the notification
         let notif = rx.try_recv().unwrap();
-        assert_eq!(notif.channel, "_rhtmx_sync_test");
+        assert_eq!(notif.channel, "_rusty_sync_test");
         assert_eq!(notif.payload, serde_json::json!({"id": 1}));
     }
 }

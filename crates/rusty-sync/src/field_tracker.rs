@@ -130,7 +130,7 @@ impl FieldTracker {
     async fn init_sqlite_table(pool: &sqlx::SqlitePool) -> anyhow::Result<()> {
         sqlx::query(
             r#"
-            CREATE TABLE IF NOT EXISTS _rhtmx_field_sync_log (
+            CREATE TABLE IF NOT EXISTS _rusty_field_sync_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 entity TEXT NOT NULL,
                 entity_id TEXT NOT NULL,
@@ -150,7 +150,7 @@ impl FieldTracker {
         sqlx::query(
             r#"
             CREATE INDEX IF NOT EXISTS idx_field_sync_entity_field
-            ON _rhtmx_field_sync_log(entity, entity_id, field, version)
+            ON _rusty_field_sync_log(entity, entity_id, field, version)
             "#,
         )
         .execute(pool)
@@ -160,7 +160,7 @@ impl FieldTracker {
         sqlx::query(
             r#"
             CREATE INDEX IF NOT EXISTS idx_field_sync_version
-            ON _rhtmx_field_sync_log(entity, version)
+            ON _rusty_field_sync_log(entity, version)
             "#,
         )
         .execute(pool)
@@ -205,7 +205,7 @@ impl FieldTracker {
         use diesel_async::RunQueryDsl;
 
         use crate::models::{NewFieldSyncLog, FieldSyncLog};
-        use crate::schema::_rhtmx_field_sync_log;
+        use crate::schema::_rusty_field_sync_log;
 
         // Get next version
         let version = self.next_version(entity).await?;
@@ -224,7 +224,7 @@ impl FieldTracker {
         // Insert and return the created record
         let mut conn = self.db_pool.get_postgres().await?;
 
-        let field_sync_log = diesel::insert_into(_rhtmx_field_sync_log::table)
+        let field_sync_log = diesel::insert_into(_rusty_field_sync_log::table)
             .values(&new_log)
             .get_result::<FieldSyncLog>(&mut conn)
             .await?;
@@ -259,7 +259,7 @@ impl FieldTracker {
         // Insert into field sync log
         let row = sqlx::query(
             r#"
-            INSERT INTO _rhtmx_field_sync_log
+            INSERT INTO _rusty_field_sync_log
             (entity, entity_id, field, value, action, version, client_id, timestamp)
             VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             RETURNING id, entity, entity_id, field, value, action, version, client_id, timestamp
@@ -346,11 +346,11 @@ impl FieldTracker {
         use diesel_async::RunQueryDsl;
 
         use crate::models::FieldSyncLog;
-        use crate::schema::_rhtmx_field_sync_log::dsl::*;
+        use crate::schema::_rusty_field_sync_log::dsl::*;
 
         let mut conn = self.db_pool.get_postgres().await?;
 
-        let results = _rhtmx_field_sync_log
+        let results = _rusty_field_sync_log
             .filter(entity.eq(entity_name))
             .filter(version.gt(since_version))
             .order((version.asc(), id.asc()))
@@ -373,7 +373,7 @@ impl FieldTracker {
         let rows = sqlx::query(
             r#"
             SELECT id, entity, entity_id, field, value, action, version, client_id, timestamp
-            FROM _rhtmx_field_sync_log
+            FROM _rusty_field_sync_log
             WHERE entity = ? AND version > ?
             ORDER BY version ASC, id ASC
             "#
@@ -435,12 +435,12 @@ impl FieldTracker {
         use diesel_async::RunQueryDsl;
         use diesel::dsl::max;
 
-        use crate::schema::_rhtmx_field_sync_log::dsl::*;
+        use crate::schema::_rusty_field_sync_log::dsl::*;
 
         let mut conn = self.db_pool.get_postgres().await?;
 
         // Get max id for each field
-        let max_ids: Vec<i64> = _rhtmx_field_sync_log
+        let max_ids: Vec<i64> = _rusty_field_sync_log
             .filter(entity.eq(entity_name))
             .filter(entity_id.eq(entity_id_value))
             .group_by(field)
@@ -452,7 +452,7 @@ impl FieldTracker {
             .collect();
 
         // Get the rows with those ids
-        let rows: Vec<(String, Option<String>, String)> = _rhtmx_field_sync_log
+        let rows: Vec<(String, Option<String>, String)> = _rusty_field_sync_log
             .filter(id.eq_any(max_ids))
             .select((field, value, action))
             .load(&mut conn)
@@ -488,11 +488,11 @@ impl FieldTracker {
         let rows = sqlx::query(
             r#"
             SELECT field, value, action
-            FROM _rhtmx_field_sync_log
+            FROM _rusty_field_sync_log
             WHERE entity = ? AND entity_id = ?
             AND id IN (
                 SELECT MAX(id)
-                FROM _rhtmx_field_sync_log
+                FROM _rusty_field_sync_log
                 WHERE entity = ? AND entity_id = ?
                 GROUP BY field
             )
@@ -616,11 +616,11 @@ impl FieldTracker {
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
 
-        use crate::schema::_rhtmx_field_sync_log::dsl::*;
+        use crate::schema::_rusty_field_sync_log::dsl::*;
 
         let mut conn = self.db_pool.get_postgres().await?;
 
-        let result: Option<(Option<String>, chrono::NaiveDateTime, String)> = _rhtmx_field_sync_log
+        let result: Option<(Option<String>, chrono::NaiveDateTime, String)> = _rusty_field_sync_log
             .filter(entity.eq(entity_name))
             .filter(entity_id.eq(entity_id_value))
             .filter(field.eq(field_name))
@@ -659,7 +659,7 @@ impl FieldTracker {
         let row = sqlx::query(
             r#"
             SELECT value, timestamp, action
-            FROM _rhtmx_field_sync_log
+            FROM _rusty_field_sync_log
             WHERE entity = ? AND entity_id = ? AND field = ?
             ORDER BY id DESC
             LIMIT 1
@@ -702,11 +702,11 @@ impl FieldTracker {
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
 
-        use crate::schema::_rhtmx_field_sync_log::dsl::*;
+        use crate::schema::_rusty_field_sync_log::dsl::*;
 
         let mut conn = self.db_pool.get_postgres().await?;
 
-        let result: Option<i64> = _rhtmx_field_sync_log
+        let result: Option<i64> = _rusty_field_sync_log
             .filter(entity.eq(entity_name))
             .select(max(version))
             .first::<Option<i64>>(&mut conn)
@@ -722,7 +722,7 @@ impl FieldTracker {
         let pool = self.db_pool.get_sqlite()?;
 
         let result: Option<i64> = sqlx::query_scalar(
-            "SELECT COALESCE(MAX(version), 0) FROM _rhtmx_field_sync_log WHERE entity = ?"
+            "SELECT COALESCE(MAX(version), 0) FROM _rusty_field_sync_log WHERE entity = ?"
         )
         .bind(entity)
         .fetch_one(pool.as_ref())
@@ -756,14 +756,14 @@ impl FieldTracker {
         use diesel::prelude::*;
         use diesel_async::RunQueryDsl;
 
-        use crate::schema::_rhtmx_field_sync_log::dsl::*;
+        use crate::schema::_rusty_field_sync_log::dsl::*;
 
         let cutoff = Utc::now() - Duration::days(days);
         let cutoff_naive = cutoff.naive_utc();
 
         let mut conn = self.db_pool.get_postgres().await?;
 
-        let deleted = diesel::delete(_rhtmx_field_sync_log.filter(timestamp.lt(cutoff_naive)))
+        let deleted = diesel::delete(_rusty_field_sync_log.filter(timestamp.lt(cutoff_naive)))
             .execute(&mut conn)
             .await?;
 
@@ -776,7 +776,7 @@ impl FieldTracker {
         let days_param = format!("-{} days", days);
 
         let result = sqlx::query(
-            "DELETE FROM _rhtmx_field_sync_log WHERE timestamp < datetime('now', ?)"
+            "DELETE FROM _rusty_field_sync_log WHERE timestamp < datetime('now', ?)"
         )
         .bind(days_param)
         .execute(pool.as_ref())

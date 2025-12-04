@@ -1,12 +1,12 @@
-// File: rhtmx-sync/examples/todo_sync.rs
-// Purpose: Example showing rhtmx-sync in action
+// File: rusty-sync/examples/todo_sync.rs
+// Purpose: Example showing rusty-sync in action
 
 use axum::{
     routing::get,
     Router,
 };
-use rhtmx_macro::Syncable;
-use rhtmx_sync::{Syncable as SyncableTrait, SyncEngine, SyncConfig};
+use rusty_macro::Syncable;
+use rusty_sync::{Syncable as SyncableTrait, SyncEngine, SyncConfig};
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::SqlitePoolOptions;
 use std::net::SocketAddr;
@@ -75,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Index page with HTMX and rhtmx-sync
+/// Index page with HTMX and rusty-sync
 async fn index() -> &'static str {
     r#"
 <!DOCTYPE html>
@@ -83,7 +83,7 @@ async fn index() -> &'static str {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RHTMX Sync - Todo Example</title>
+    <title>Rusty Sync - Todo Example</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="/api/sync/client.js"
             data-sync-entities="todos"
@@ -126,7 +126,7 @@ async fn index() -> &'static str {
     </style>
 </head>
 <body>
-    <h1>📝 RHTMX Sync - Todo Example</h1>
+    <h1>📝 Rusty Sync - Todo Example</h1>
 
     <div id="status" class="status">
         <span id="online-status">Online</span>
@@ -156,7 +156,7 @@ async fn index() -> &'static str {
         <h2>Todos</h2>
         <div id="todos"
              hx-get="/api/todos"
-             hx-trigger="load, rhtmx:todos:changed from:body">
+             hx-trigger="load, rusty:todos:changed from:body">
             Loading...
         </div>
     </div>
@@ -192,12 +192,12 @@ async fn index() -> &'static str {
         updateStatus();
 
         // Debug: show when sync is ready
-        document.addEventListener('rhtmx:sync:ready', () => {
-            debug('✅ RHTMX Sync initialized!');
+        document.addEventListener('rusty:sync:ready', () => {
+            debug('✅ Rusty Sync initialized!');
         });
 
         // Debug: show entity changes
-        document.addEventListener('rhtmx:todos:changed', (e) => {
+        document.addEventListener('rusty:todos:changed', (e) => {
             debug(`📡 Todo changed: ${e.detail.id}`);
         });
 
@@ -224,7 +224,7 @@ async fn index() -> &'static str {
                 body: JSON.stringify({ title, completed: false })
             }).then(() => {
                 debug(`➕ Added: ${title}`);
-                htmx.trigger('#todos', 'rhtmx:todos:changed');
+                htmx.trigger('#todos', 'rusty:todos:changed');
             });
         }
 
@@ -255,7 +255,7 @@ async fn index() -> &'static str {
 
         function openDB() {
             return new Promise((resolve, reject) => {
-                const request = indexedDB.open('rhtmx-cache', 1);
+                const request = indexedDB.open('rusty-cache', 1);
                 request.onsuccess = () => resolve(request.result);
                 request.onerror = () => reject(request.error);
             });

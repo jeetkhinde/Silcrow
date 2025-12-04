@@ -197,7 +197,7 @@ impl SyncEngine {
 async fn serve_client_js() -> ([(axum::http::HeaderName, &'static str); 1], &'static str) {
     (
         [(axum::http::header::CONTENT_TYPE, "application/javascript")],
-        include_str!("js/rhtmx-sync.js"),
+        include_str!("js/rusty-sync.js"),
     )
 }
 
@@ -205,6 +205,6 @@ async fn serve_client_js() -> ([(axum::http::HeaderName, &'static str); 1], &'st
 async fn serve_field_client_js() -> ([(axum::http::HeaderName, &'static str); 1], &'static str) {
     (
         [(axum::http::header::CONTENT_TYPE, "application/javascript")],
-        include_str!("js/rhtmx-field-sync.js"),
+        include_str!("js/rusty-field-sync.js"),
     )
 }

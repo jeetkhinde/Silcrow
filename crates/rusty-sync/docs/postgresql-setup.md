@@ -32,7 +32,7 @@ diesel migration run
 
 This creates the necessary tables:
 - `_rusty_sync_log` - Entity-level change tracking
-- `_rhtmx_field_sync_log` - Field-level change tracking
+- `_rusty_field_sync_log` - Field-level change tracking
 
 ### 4. Update Your Code
 
@@ -213,8 +213,8 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: rhtmx
-      POSTGRES_PASSWORD: rhtmx_dev
+      POSTGRES_USER: rusty
+      POSTGRES_PASSWORD: rusty_dev
       POSTGRES_DB: rusty_sync
     ports:
       - "5432:5432"
@@ -229,7 +229,7 @@ Run with:
 
 ```bash
 docker-compose up -d
-export DATABASE_URL="postgresql://rhtmx:rhtmx_dev@localhost/rusty_sync"
+export DATABASE_URL="postgresql://rusty:rusty_dev@localhost/rusty_sync"
 diesel migration run
 ```
 
@@ -242,7 +242,7 @@ Run integration tests:
 docker-compose up -d
 
 # Run tests
-DATABASE_URL="postgresql://rhtmx:rhtmx_dev@localhost/rusty_sync" \
+DATABASE_URL="postgresql://rusty:rusty_dev@localhost/rusty_sync" \
   cargo test --test postgres_integration
 ```
 

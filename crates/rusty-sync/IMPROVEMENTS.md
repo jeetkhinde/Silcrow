@@ -2,7 +2,7 @@
 
 ## ✅ 1. WebSocket Support with SSE Fallback
 
-### Entity-Level Sync (`rhtmx-sync.js`)
+### Entity-Level Sync (`rusty-sync.js`)
 - **WebSocket primary transport** - Bidirectional communication
 - **Automatic SSE fallback** - Falls back if WebSocket unavailable
 - **Connection state management** - 5 states tracked: disconnected, connecting, connected, reconnecting, fallback_sse
@@ -76,18 +76,18 @@ User action → Apply optimistic → Update UI → Send to server → Clear opti
 ### Custom Events Emitted:
 ```javascript
 // Connection state changes
-'rhtmx:connection:state' - { state, oldState }
+'rusty:connection:state' - { state, oldState }
 
 // Sync ready
-'rhtmx:sync:ready'
+'rusty:sync:ready'
 
 // Entity changed
-'rhtmx:users:changed' - { entity }
+'rusty:users:changed' - { entity }
 ```
 
 ### Usage:
 ```javascript
-window.addEventListener('rhtmx:connection:state', (e) => {
+window.addEventListener('rusty:connection:state', (e) => {
   console.log(`Connection: ${e.detail.oldState} → ${e.detail.state}`);
   // Update UI to show connection status
 });
@@ -145,21 +145,21 @@ window.addEventListener('rhtmx:connection:state', (e) => {
 ### JavaScript API:
 ```javascript
 // Push change with optimistic update
-await window.rhtmxSync.pushChange('users', '1', 'update', {
+await window.rustySync.pushChange('users', '1', 'update', {
   id: '1',
   name: 'Alice',
   email: 'alice@example.com'
 });
 
 // Listen for connection state
-window.addEventListener('rhtmx:connection:state', (e) => {
+window.addEventListener('rusty:connection:state', (e) => {
   if (e.detail.state === 'connected') {
     console.log('Connected via WebSocket');
   }
 });
 
 // Check offline status
-if (!window.rhtmxSync.isOnline) {
+if (!window.rustySync.isOnline) {
   console.log('Working offline, changes will sync later');
 }
 ```
@@ -198,7 +198,7 @@ Tab 3: Receives broadcast → Applies change → Updates UI
 
 ## 🔄 Consistency Across Clients
 
-Field-level sync client (`rhtmx-field-sync.js`) has received ALL the same improvements:
+Field-level sync client (`rusty-field-sync.js`) has received ALL the same improvements:
 - ✅ WebSocket support with SSE fallback
 - ✅ Automatic reconnection with exponential backoff
 - ✅ Complete offline queue support
