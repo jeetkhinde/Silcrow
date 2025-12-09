@@ -1,9 +1,10 @@
 // RHTMX - Rust + HTMX Framework
-// Compile-time HTML generation with type safety and zero runtime overhead
+// Type-safe web framework with Maud templates and zero runtime overhead
 
 pub mod html;
 pub mod validation;
 pub mod form_field;
+pub mod value;
 
 // Framework modules
 pub mod renderer;
@@ -14,11 +15,11 @@ pub mod database;
 pub mod action_executor;
 pub mod actions;
 
-// Re-export the html! macro from rhtmx-macro
-pub use rhtmx_macro::{html, css, get, post, put, patch, delete};
+// Re-export HTTP handler macros from rhtmx-macro
+pub use rhtmx_macro::{get, post, put, patch, delete};
 
-// Re-export the Validate and FormField derive macros from rusty-forms
-pub use rusty_forms::{Validate, FormField};
+// Re-export Maud for templates
+pub use maud::{html as maud, Markup, PreEscaped, DOCTYPE};
 
 // Re-export core types and response builders
 pub use html::{
@@ -34,8 +35,9 @@ pub use template_loader::TemplateLoader;
 pub use request_context::{RequestContext, QueryParams, FormData};
 pub use config::Config;
 pub use actions::ActionRegistry;
+pub use value::Value;
 
-// Re-export validation trait
+// Re-export validation trait (backwards compatibility)
 pub use validation::Validate as ValidateTrait;
 
 // Re-export form field types

@@ -1,5 +1,5 @@
 // RHTMX Procedural Macros
-// Provides compile-time HTML generation and HTTP routing macros
+// Provides HTTP routing macros and sync derive macro
 
 use proc_macro::TokenStream;
 use quote::quote;
@@ -224,7 +224,7 @@ pub fn derive_syncable(input: TokenStream) -> TokenStream {
     let has_metadata = has_version || has_modified_at;
 
     let expanded = quote! {
-        impl #impl_generics rhtmx_sync::Syncable for #name #ty_generics #where_clause {
+        impl #impl_generics rusty_sync::Syncable for #name #ty_generics #where_clause {
             fn entity_name() -> &'static str {
                 #table_name
             }

@@ -16,8 +16,8 @@ name = "rusty_sync"
 path = "src/lib.rs"
 
 [dependencies]
-# Local macro crate
-rusty-macro = { path = "../rusty-macro" }
+# Local macro crate (shared with rhtmx framework)
+rhtmx-macro = { path = "../rhtmx-macro" }
 
 # Web framework & async runtime
 axum = { workspace = true }

@@ -2,17 +2,11 @@
 members = [
   "crates/rhtmx",
   "crates/rhtmx-macro",
-  "crates/rhtmx-parser",
   "crates/rhtmx-router",
   "crates/rusty-sync",
   "crates/rhtmx-server",
   "crates/rhtmx-cli",
   "crates/rhtmx-isr",
-  "crates/rusty-forms",
-  "crates/rusty-forms-derive",
-  "crates/rusty-forms-types",
-  "crates/rusty-forms-validation",
-  "crates/rusty-forms-wasm",
 ]
 
 resolver = "2"

@@ -18,7 +18,6 @@ path = "src/main.rs"
 rhtmx = { path = "../rhtmx" }
 rhtmx-router = { path = "../rhtmx-router" }
 
-
 # CLI
 clap = { version = "4.5", features = ["derive", "cargo"] }
 
