@@ -14,7 +14,6 @@ path = "src/main.rs"
 [dependencies]
 # Local crates
 rhtmx = { path = "../rhtmx" }
-rhtmx-parser = { path = "../rhtmx-parser" }
 
 # Web framework & async runtime
 axum = { workspace = true }

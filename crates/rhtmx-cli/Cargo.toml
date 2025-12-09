@@ -17,7 +17,7 @@ path = "src/main.rs"
 # Workspace crates
 rhtmx = { path = "../rhtmx" }
 rhtmx-router = { path = "../rhtmx-router" }
-rhtmx-parser = { path = "../rhtmx-parser" }
+
 
 # CLI
 clap = { version = "4.5", features = ["derive", "cargo"] }
