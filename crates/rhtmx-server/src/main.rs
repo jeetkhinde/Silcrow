@@ -9,13 +9,13 @@ use axum::{
     routing::get,
     Router,
 };
-use rhtmx::{Config, FormData, QueryParams, Renderer, RequestContext, TemplateLoader, Value};
+use rhtmx::{Config, FormData, HandlerFn, QueryParams, RequestContext, TemplateLoader};
 use crate::hot_reload::{create_watcher, ChangeType};
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_livereload::LiveReloadLayer;
-use tracing::{error, info};
+use tracing::info;
 
 /// Application state shared across handlers
 #[derive(Clone)]
@@ -40,50 +40,42 @@ async fn main() {
         .map(|v| v.parse::<bool>().unwrap_or(config.dev.hot_reload))
         .unwrap_or(config.dev.hot_reload);
 
-    // Load templates
+    // Discover routes from .rs files in pages directory
     let mut loader = TemplateLoader::with_config(
         &config.routing.pages_dir,
         &config.routing.components_dir,
         config.routing.case_insensitive,
     );
-    match loader.load_all() {
-        Ok(_) => {
-            println!("Loaded {} templates", loader.count());
+    match loader.discover_routes() {
+        Result::Ok(_) => {
+            println!("Discovered {} routes", loader.count());
             for route in loader.list_routes() {
-                println!("  {} -> template", route);
+                println!("  {} -> page", route);
             }
         }
         Err(e) => {
-            eprintln!("Failed to load templates: {}", e);
-            std::process::exit(1);
+            eprintln!("Failed to discover routes: {}", e);
+            // Not fatal — routes can be registered programmatically
         }
     }
+
+    // Register compiled Maud handlers for routes
+    register_default_handlers(&mut loader);
 
     let template_loader = Arc::new(RwLock::new(loader));
 
     // Hot reload
     if hot_reload_enabled {
-        println!("Hot reload: enabled");
+        println!("Hot reload: enabled (recompile required for .rs page changes)");
         match create_watcher() {
             Ok(watcher) => {
-                let loader_clone = template_loader.clone();
                 let mut reload_rx = watcher.subscribe();
 
                 tokio::spawn(async move {
                     let _watcher = watcher;
                     while let Ok(file_change) = reload_rx.recv().await {
-                        match file_change.change_type {
-                            ChangeType::Template | ChangeType::Component => {
-                                info!("Reloading template: {:?}", file_change.path);
-                                let mut loader = loader_clone.write().await;
-                                if let Err(e) = loader.reload_template(&file_change.path) {
-                                    error!("Failed to reload template: {}", e);
-                                }
-                            }
-                            ChangeType::SourceCode => {
-                                info!("Source code changed - restart server for changes");
-                            }
-                        }
+                        let ChangeType::SourceCode = file_change.change_type;
+                        info!("Source code changed: {:?} - restart server for changes", file_change.path);
                     }
                 });
             }
@@ -93,19 +85,44 @@ async fn main() {
 
     let state = AppState { template_loader: template_loader.clone() };
 
-    let mut app = Router::new()
+    let app = Router::new()
         .route("/", get(index_handler).post(index_handler).put(index_handler).delete(index_handler))
         .route("/*path", get(template_handler).post(template_handler).put(template_handler).delete(template_handler))
         .with_state(state);
 
-    if hot_reload_enabled {
-        app = app.layer(LiveReloadLayer::new());
-    }
+    let app = if hot_reload_enabled {
+        app.layer(LiveReloadLayer::new())
+    } else {
+        app
+    };
 
     let addr = format!("{}:{}", config.server.host, config.server.port);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     println!("Server running at http://{}", addr);
     axum::serve(listener, app).await.unwrap();
+}
+
+/// Register default Maud-based handlers
+fn register_default_handlers(loader: &mut TemplateLoader) {
+    let index_handler: HandlerFn = Arc::new(|_ctx| {
+        Box::pin(async {
+            let markup = maud::html! {
+                (maud::DOCTYPE)
+                html lang="en" {
+                    head {
+                        meta charset="UTF-8";
+                        title { "RHTMX" }
+                    }
+                    body {
+                        h1 { "Welcome to RHTMX" }
+                        p { "Rust + HTMX with Maud compile-time templates." }
+                    }
+                }
+            };
+            Html(markup.into_string()).into_response()
+        })
+    });
+    loader.register_route("/", index_handler);
 }
 
 async fn index_handler(
@@ -116,7 +133,7 @@ async fn index_handler(
     body: Bytes,
 ) -> Response {
     let ctx = create_request_context(method, "/".to_string(), query.0, headers, body);
-    render_route(&state, "/", ctx).await
+    dispatch_route(&state, "/", ctx).await
 }
 
 async fn template_handler(
@@ -129,7 +146,7 @@ async fn template_handler(
 ) -> Response {
     let route = format!("/{}", path);
     let ctx = create_request_context(method, route.clone(), query.0, headers, body);
-    render_route(&state, &route, ctx).await
+    dispatch_route(&state, &route, ctx).await
 }
 
 fn create_request_context(
@@ -177,46 +194,11 @@ fn create_request_context(
     RequestContext::new(method, path, query, form, headers)
 }
 
-async fn render_route(state: &AppState, route: &str, ctx: RequestContext) -> Response {
+/// Dispatch a request to the appropriate compiled handler
+async fn dispatch_route(state: &AppState, route: &str, ctx: RequestContext) -> Response {
     let loader = state.template_loader.read().await;
 
-    // Match route
-    let route_match = match loader.router().match_route(route) {
-        Some(m) => m,
-        None => {
-            if loader.get(route).is_some() {
-                drop(loader);
-                return render_route_direct(state, route, ctx).await;
-            }
-            drop(loader);
-            return error_response(404, "Page Not Found", &format!("Route '{}' not found", route));
-        }
-    };
-
-    let page_template = loader.get(&route_match.route.pattern).or_else(|| loader.get(route));
-    let page_template = match page_template {
-        Some(t) => t.clone(),
-        None => return error_response(404, "Template Not Found", &format!("Template for '{}' not found", route)),
-    };
-
-    let layout_template = match loader.get_layout_for_route(&route_match.route.pattern) {
-        Some(t) => t.clone(),
-        None => return error_response(500, "Layout Not Found", "Missing _layout in pages directory"),
-    };
-
-    let loader_arc = Arc::new((*loader).clone());
-    drop(loader);
-
-    let mut renderer = Renderer::with_loader(loader_arc);
-
-    // Set route parameters
-    for (name, value) in &route_match.params {
-        renderer.set_var(name, Value::String(value.clone()));
-    }
-
-    setup_request_vars(&mut renderer, &ctx);
-
-    // Content negotiation
+    // Content negotiation: JSON response
     if ctx.accepts_json() {
         let data = serde_json::json!({
             "route": route,
@@ -227,81 +209,25 @@ async fn render_route(state: &AppState, route: &str, ctx: RequestContext) -> Res
         return Json(data).into_response();
     }
 
-    if ctx.wants_partial() {
-        match renderer.render_partial(&page_template.content) {
-            Ok(result) => Html(result.html).into_response(),
-            Err(e) => error_response(500, "Render Error", &format!("{}", e)),
-        }
-    } else {
-        match renderer.render_with_layout(&layout_template.content, &page_template.content) {
-            Ok(result) => Html(result.html).into_response(),
-            Err(e) => error_response(500, "Render Error", &format!("{}", e)),
-        }
-    }
-}
+    // Try to match route via the router
+    let matched_pattern = loader
+        .router()
+        .match_route(route)
+        .map(|m| m.route.pattern.clone());
 
-async fn render_route_direct(state: &AppState, route: &str, ctx: RequestContext) -> Response {
-    let loader = state.template_loader.read().await;
+    // Look up the handler: first try matched pattern, then direct route
+    let handler = matched_pattern
+        .as_deref()
+        .and_then(|pattern| loader.get_handler(pattern))
+        .or_else(|| loader.get_handler(route))
+        .cloned();
 
-    let page_template = match loader.get(route) {
-        Some(t) => t.clone(),
-        None => return error_response(404, "Page Not Found", &format!("Route '{}' not found", route)),
-    };
-
-    let layout_template = match loader.get_layout() {
-        Some(t) => t.clone(),
-        None => return error_response(500, "Layout Not Found", "Missing _layout in pages directory"),
-    };
-
-    let loader_arc = Arc::new((*loader).clone());
     drop(loader);
 
-    let mut renderer = Renderer::with_loader(loader_arc);
-    setup_request_vars(&mut renderer, &ctx);
-
-    if ctx.accepts_json() {
-        let data = serde_json::json!({
-            "route": route,
-            "method": ctx.method.as_str(),
-            "query": ctx.query.as_map(),
-            "form": ctx.form.as_map(),
-        });
-        return Json(data).into_response();
+    match handler {
+        Some(handler) => handler(ctx).await,
+        None => error_response(404, "Page Not Found", &format!("Route '{}' not found", route)),
     }
-
-    if ctx.wants_partial() {
-        match renderer.render_partial(&page_template.content) {
-            Ok(result) => Html(result.html).into_response(),
-            Err(e) => error_response(500, "Render Error", &format!("{}", e)),
-        }
-    } else {
-        match renderer.render_with_layout(&layout_template.content, &page_template.content) {
-            Ok(result) => Html(result.html).into_response(),
-            Err(e) => error_response(500, "Render Error", &format!("{}", e)),
-        }
-    }
-}
-
-fn setup_request_vars(renderer: &mut Renderer, ctx: &RequestContext) {
-    renderer.set_var("request_method", Value::String(ctx.method.as_str().to_string()));
-    renderer.set_var("request_path", Value::String(ctx.path.clone()));
-
-    let mut query_map = std::collections::HashMap::new();
-    for (key, value) in ctx.query.as_map() {
-        query_map.insert(key.clone(), Value::String(value.clone()));
-        renderer.set_var(format!("query_{}", key), Value::String(value.clone()));
-    }
-    renderer.set_var("query", Value::Object(query_map));
-
-    let mut form_map = std::collections::HashMap::new();
-    for (key, value) in ctx.form.as_map() {
-        form_map.insert(key.clone(), Value::String(value.clone()));
-        renderer.set_var(format!("form_{}", key), Value::String(value.clone()));
-    }
-    renderer.set_var("form", Value::Object(form_map));
-
-    renderer.set_var("is_htmx", Value::Bool(ctx.is_htmx()));
-    renderer.set_var("wants_partial", Value::Bool(ctx.wants_partial()));
 }
 
 fn error_response(status: u16, title: &str, message: &str) -> Response {

@@ -23,7 +23,7 @@ use std::collections::HashMap;
 
 #[test]
 fn test_route_from_path_static() {
-    let route = Route::from_path("pages/about.rsx", "pages");
+    let route = Route::from_path("pages/about.rs", "pages");
     assert_eq!(route.pattern, "/about");
     assert_eq!(route.params.len(), 0);
     assert_eq!(route.priority, 0);
@@ -31,7 +31,7 @@ fn test_route_from_path_static() {
 
 #[test]
 fn test_route_from_path_dynamic() {
-    let route = Route::from_path("pages/users/[id].rsx", "pages");
+    let route = Route::from_path("pages/users/[id].rs", "pages");
     assert_eq!(route.pattern, "/users/:id");
     assert_eq!(route.params, vec!["id"]);
     assert!(route.priority > 0);
@@ -39,19 +39,19 @@ fn test_route_from_path_dynamic() {
 
 #[test]
 fn test_route_from_path_index() {
-    let route = Route::from_path("pages/page.rsx", "pages");
+    let route = Route::from_path("pages/page.rs", "pages");
     assert_eq!(route.pattern, "/");
 }
 
 #[test]
 fn test_route_from_path_nested_index() {
-    let route = Route::from_path("pages/users/page.rsx", "pages");
+    let route = Route::from_path("pages/users/page.rs", "pages");
     assert_eq!(route.pattern, "/users");
 }
 
 #[test]
 fn test_route_matches_static() {
-    let route = Route::from_path("pages/about.rsx", "pages");
+    let route = Route::from_path("pages/about.rs", "pages");
     assert!(route.matches("/about").is_some());
     assert!(route.matches("/about/").is_some());
     assert!(route.matches("/other").is_none());
@@ -59,15 +59,15 @@ fn test_route_matches_static() {
 
 #[test]
 fn test_route_matches_dynamic() {
-    let route = Route::from_path("pages/users/[id].rsx", "pages");
+    let route = Route::from_path("pages/users/[id].rs", "pages");
     let params = route.matches("/users/123").unwrap();
     assert_eq!(params.get("id"), Some(&"123".to_string()));
 }
 
 #[test]
 fn test_route_priority() {
-    let static_route = Route::from_path("pages/users/new.rsx", "pages");
-    let dynamic_route = Route::from_path("pages/users/[id].rsx", "pages");
+    let static_route = Route::from_path("pages/users/new.rs", "pages");
+    let dynamic_route = Route::from_path("pages/users/[id].rs", "pages");
 
     assert!(static_route.priority < dynamic_route.priority);
 }
@@ -76,8 +76,8 @@ fn test_route_priority() {
 fn test_router_matching() {
     let mut router = Router::new();
 
-    router.add_route(Route::from_path("pages/users/new.rsx", "pages"));
-    router.add_route(Route::from_path("pages/users/[id].rsx", "pages"));
+    router.add_route(Route::from_path("pages/users/new.rs", "pages"));
+    router.add_route(Route::from_path("pages/users/[id].rs", "pages"));
 
     let m = router.match_route("/users/new").unwrap();
     assert_eq!(m.route.pattern, "/users/new");
@@ -90,14 +90,14 @@ fn test_router_matching() {
 
 #[test]
 fn test_layout_route() {
-    let route = Route::from_path("pages/users/_layout.rsx", "pages");
+    let route = Route::from_path("pages/users/_layout.rs", "pages");
     assert_eq!(route.pattern, "/users");
     assert!(route.is_layout);
 }
 
 #[test]
 fn test_catch_all_route() {
-    let route = Route::from_path("pages/docs/[...slug].rsx", "pages");
+    let route = Route::from_path("pages/docs/[...slug].rs", "pages");
     assert_eq!(route.pattern, "/docs/*slug");
     assert_eq!(route.params, vec!["slug"]);
     assert!(route.has_catch_all);
@@ -106,7 +106,7 @@ fn test_catch_all_route() {
 
 #[test]
 fn test_catch_all_matches() {
-    let route = Route::from_path("pages/docs/[...slug].rsx", "pages");
+    let route = Route::from_path("pages/docs/[...slug].rs", "pages");
 
     let params = route.matches("/docs/guide/getting-started").unwrap();
     assert_eq!(
@@ -123,7 +123,7 @@ fn test_catch_all_matches() {
 
 #[test]
 fn test_optional_param_route() {
-    let route = Route::from_path("pages/posts/[id?].rsx", "pages");
+    let route = Route::from_path("pages/posts/[id?].rs", "pages");
     assert_eq!(route.pattern, "/posts/:id?");
     assert_eq!(route.params, vec!["id"]);
     assert_eq!(route.optional_params, vec!["id"]);
@@ -132,7 +132,7 @@ fn test_optional_param_route() {
 
 #[test]
 fn test_optional_param_matches() {
-    let route = Route::from_path("pages/posts/[id?].rsx", "pages");
+    let route = Route::from_path("pages/posts/[id?].rs", "pages");
 
     let params = route.matches("/posts/123").unwrap();
     assert_eq!(params.get("id"), Some(&"123".to_string()));
@@ -143,7 +143,7 @@ fn test_optional_param_matches() {
 
 #[test]
 fn test_error_page_route() {
-    let route = Route::from_path("pages/_error.rsx", "pages");
+    let route = Route::from_path("pages/_error.rs", "pages");
     assert_eq!(route.pattern, "/");
     assert!(route.is_error_page);
     assert!(!route.is_layout);
@@ -151,17 +151,17 @@ fn test_error_page_route() {
 
 #[test]
 fn test_section_error_page() {
-    let route = Route::from_path("pages/api/_error.rsx", "pages");
+    let route = Route::from_path("pages/api/_error.rs", "pages");
     assert_eq!(route.pattern, "/api");
     assert!(route.is_error_page);
 }
 
 #[test]
 fn test_route_priority_ordering() {
-    let static_route = Route::from_path("pages/users/new.rsx", "pages");
-    let optional_route = Route::from_path("pages/users/[id?].rsx", "pages");
-    let dynamic_route = Route::from_path("pages/users/[id].rsx", "pages");
-    let catchall_route = Route::from_path("pages/users/[...rest].rsx", "pages");
+    let static_route = Route::from_path("pages/users/new.rs", "pages");
+    let optional_route = Route::from_path("pages/users/[id?].rs", "pages");
+    let dynamic_route = Route::from_path("pages/users/[id].rs", "pages");
+    let catchall_route = Route::from_path("pages/users/[...rest].rs", "pages");
 
     assert!(static_route.priority < optional_route.priority);
     assert!(optional_route.priority < dynamic_route.priority);
@@ -172,10 +172,10 @@ fn test_route_priority_ordering() {
 fn test_router_with_all_route_types() {
     let mut router = Router::new();
 
-    router.add_route(Route::from_path("pages/docs/[...slug].rsx", "pages"));
-    router.add_route(Route::from_path("pages/docs/api.rsx", "pages"));
-    router.add_route(Route::from_path("pages/posts/[id?].rsx", "pages"));
-    router.add_route(Route::from_path("pages/posts/new.rsx", "pages"));
+    router.add_route(Route::from_path("pages/docs/[...slug].rs", "pages"));
+    router.add_route(Route::from_path("pages/docs/api.rs", "pages"));
+    router.add_route(Route::from_path("pages/posts/[id?].rs", "pages"));
+    router.add_route(Route::from_path("pages/posts/new.rs", "pages"));
 
     let m = router.match_route("/docs/api").unwrap();
     assert_eq!(m.route.pattern, "/docs/api");
@@ -200,8 +200,8 @@ fn test_router_with_all_route_types() {
 fn test_error_page_lookup() {
     let mut router = Router::new();
 
-    router.add_route(Route::from_path("pages/_error.rsx", "pages"));
-    router.add_route(Route::from_path("pages/api/_error.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_error.rs", "pages"));
+    router.add_route(Route::from_path("pages/api/_error.rs", "pages"));
 
     let error_page = router.get_error_page("/").unwrap();
     assert_eq!(error_page.pattern, "/");
@@ -216,14 +216,14 @@ fn test_error_page_lookup() {
 #[test]
 fn test_nested_layout_three_levels() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_layout.rs", "pages"));
     router.add_route(Route::from_path(
-        "pages/dashboard/admin/_layout.rsx",
+        "pages/dashboard/admin/_layout.rs",
         "pages",
     ));
     router.add_route(Route::from_path(
-        "pages/dashboard/admin/settings.rsx",
+        "pages/dashboard/admin/settings.rs",
         "pages",
     ));
 
@@ -243,10 +243,10 @@ fn test_nested_layout_three_levels() {
 #[test]
 fn test_nested_error_page_three_levels() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_error.rsx", "pages"));
-    router.add_route(Route::from_path("pages/api/_error.rsx", "pages"));
-    router.add_route(Route::from_path("pages/api/v1/_error.rsx", "pages"));
-    router.add_route(Route::from_path("pages/api/v1/users.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_error.rs", "pages"));
+    router.add_route(Route::from_path("pages/api/_error.rs", "pages"));
+    router.add_route(Route::from_path("pages/api/v1/_error.rs", "pages"));
+    router.add_route(Route::from_path("pages/api/v1/users.rs", "pages"));
 
     let error = router.get_error_page("/api/v1/users").unwrap();
     assert_eq!(error.pattern, "/api/v1");
@@ -261,8 +261,8 @@ fn test_nested_error_page_three_levels() {
 #[test]
 fn test_case_insensitive_matching() {
     let mut router = Router::with_case_insensitive(true);
-    router.add_route(Route::from_path("pages/about.rsx", "pages"));
-    router.add_route(Route::from_path("pages/users/[id].rsx", "pages"));
+    router.add_route(Route::from_path("pages/about.rs", "pages"));
+    router.add_route(Route::from_path("pages/users/[id].rs", "pages"));
 
     assert!(router.match_route("/ABOUT").is_some());
     assert!(router.match_route("/About").is_some());
@@ -275,10 +275,10 @@ fn test_case_insensitive_matching() {
 #[test]
 fn test_layout_skips_missing_intermediate() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_layout.rs", "pages"));
     router.add_route(Route::from_path(
-        "pages/dashboard/admin/users/settings.rsx",
+        "pages/dashboard/admin/users/settings.rs",
         "pages",
     ));
 
@@ -295,10 +295,10 @@ fn test_layout_skips_missing_intermediate() {
 #[test]
 fn test_layout_with_trailing_slash() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_layout.rs", "pages"));
     router.add_route(Route::from_path(
-        "pages/dashboard/admin/_layout.rsx",
+        "pages/dashboard/admin/_layout.rs",
         "pages",
     ));
 
@@ -314,10 +314,10 @@ fn test_layout_with_trailing_slash() {
 #[test]
 fn test_layout_with_double_slashes() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_layout.rs", "pages"));
     router.add_route(Route::from_path(
-        "pages/dashboard/admin/_layout.rsx",
+        "pages/dashboard/admin/_layout.rs",
         "pages",
     ));
 
@@ -333,10 +333,10 @@ fn test_layout_with_double_slashes() {
 #[test]
 fn test_layout_with_backslashes() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_layout.rs", "pages"));
     router.add_route(Route::from_path(
-        "pages/dashboard/admin/_layout.rsx",
+        "pages/dashboard/admin/_layout.rs",
         "pages",
     ));
 
@@ -356,7 +356,7 @@ fn test_layout_with_backslashes() {
 #[test]
 fn test_layout_edge_cases() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.rs", "pages"));
 
     // Empty string → root
     let layout = router.get_layout("").unwrap();
@@ -374,8 +374,8 @@ fn test_layout_edge_cases() {
 #[test]
 fn test_error_page_with_malformed_paths() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_error.rsx", "pages"));
-    router.add_route(Route::from_path("pages/api/_error.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_error.rs", "pages"));
+    router.add_route(Route::from_path("pages/api/_error.rs", "pages"));
 
     // Trailing slash
     let error = router.get_error_page("/api/users/").unwrap();
@@ -448,10 +448,10 @@ fn test_path_hierarchy_iterator() {
 #[test]
 fn test_layout_option_none() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_layout.rs", "pages"));
 
-    let route = Route::from_path("pages/dashboard/print.rsx", "pages").with_no_layout();
+    let route = Route::from_path("pages/dashboard/print.rs", "pages").with_no_layout();
     router.add_route(route.clone());
 
     let route_match = router.match_route("/dashboard/print").unwrap();
@@ -463,15 +463,15 @@ fn test_layout_option_none() {
 #[test]
 fn test_layout_option_root() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_layout.rs", "pages"));
     router.add_route(Route::from_path(
-        "pages/dashboard/admin/_layout.rsx",
+        "pages/dashboard/admin/_layout.rs",
         "pages",
     ));
 
     let route =
-        Route::from_path("pages/dashboard/admin/print.rsx", "pages").with_root_layout();
+        Route::from_path("pages/dashboard/admin/print.rs", "pages").with_root_layout();
     router.add_route(route.clone());
 
     let route_match = router.match_route("/dashboard/admin/print").unwrap();
@@ -483,14 +483,14 @@ fn test_layout_option_root() {
 #[test]
 fn test_layout_option_pattern() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_layout.rs", "pages"));
     router.add_route(Route::from_path(
-        "pages/dashboard/admin/_layout.rsx",
+        "pages/dashboard/admin/_layout.rs",
         "pages",
     ));
 
-    let route = Route::from_path("pages/dashboard/admin/users/edit.rsx", "pages")
+    let route = Route::from_path("pages/dashboard/admin/users/edit.rs", "pages")
         .with_layout_pattern("/dashboard");
     router.add_route(route.clone());
 
@@ -505,26 +505,26 @@ fn test_layout_option_pattern() {
 
 #[test]
 fn test_named_layout_detection() {
-    let route = Route::from_path("pages/_layout.admin.rsx", "pages");
+    let route = Route::from_path("pages/_layout.admin.rs", "pages");
     assert_eq!(route.layout_name, Some("admin".to_string()));
     assert_eq!(route.pattern, "/");
 
-    let route = Route::from_path("pages/dashboard/_layout.marketing.rsx", "pages");
+    let route = Route::from_path("pages/dashboard/_layout.marketing.rs", "pages");
     assert_eq!(route.layout_name, Some("marketing".to_string()));
     assert_eq!(route.pattern, "/dashboard");
 
-    let route = Route::from_path("pages/_layout.rsx", "pages");
+    let route = Route::from_path("pages/_layout.rs", "pages");
     assert_eq!(route.layout_name, None);
 }
 
 #[test]
 fn test_layout_option_named() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/_layout.admin.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.rs", "pages"));
+    router.add_route(Route::from_path("pages/_layout.admin.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_layout.rs", "pages"));
 
-    let route = Route::from_path("pages/dashboard/settings.rsx", "pages")
+    let route = Route::from_path("pages/dashboard/settings.rs", "pages")
         .with_named_layout("admin");
     router.add_route(route.clone());
 
@@ -537,8 +537,8 @@ fn test_layout_option_named() {
 #[test]
 fn test_get_layout_by_name() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_layout.admin.rsx", "pages"));
-    router.add_route(Route::from_path("pages/_layout.marketing.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.admin.rs", "pages"));
+    router.add_route(Route::from_path("pages/_layout.marketing.rs", "pages"));
 
     let admin_layout = router.get_layout_by_name("admin").unwrap();
     assert_eq!(admin_layout.layout_name, Some("admin".to_string()));
@@ -551,16 +551,16 @@ fn test_get_layout_by_name() {
 
 #[test]
 fn test_functional_builder_chaining() {
-    let route = Route::from_path("pages/dashboard/print.rsx", "pages")
+    let route = Route::from_path("pages/dashboard/print.rs", "pages")
         .with_root_layout();
 
     assert_eq!(route.layout_option, LayoutOption::Root);
     assert_eq!(route.pattern, "/dashboard/print");
 
-    let route = Route::from_path("pages/login.rsx", "pages").with_no_layout();
+    let route = Route::from_path("pages/login.rs", "pages").with_no_layout();
     assert_eq!(route.layout_option, LayoutOption::None);
 
-    let route = Route::from_path("pages/admin/users.rsx", "pages")
+    let route = Route::from_path("pages/admin/users.rs", "pages")
         .with_named_layout("admin");
     assert_eq!(
         route.layout_option,
@@ -571,11 +571,11 @@ fn test_functional_builder_chaining() {
 #[test]
 fn test_layout_inherit_default() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_layout.rs", "pages"));
 
     // Default behavior - should inherit
-    let route = Route::from_path("pages/dashboard/settings.rsx", "pages");
+    let route = Route::from_path("pages/dashboard/settings.rs", "pages");
     router.add_route(route.clone());
 
     let route_match = router.match_route("/dashboard/settings").unwrap();
@@ -587,26 +587,26 @@ fn test_layout_inherit_default() {
 #[test]
 fn test_complex_layout_scenario() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/_layout.admin.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.rs", "pages"));
+    router.add_route(Route::from_path("pages/_layout.admin.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_layout.rs", "pages"));
 
     // Route 1: Use admin layout
     let route1 =
-        Route::from_path("pages/dashboard/users.rsx", "pages").with_named_layout("admin");
+        Route::from_path("pages/dashboard/users.rs", "pages").with_named_layout("admin");
     router.add_route(route1);
 
     // Route 2: No layout
-    let route2 = Route::from_path("pages/dashboard/print.rsx", "pages").with_no_layout();
+    let route2 = Route::from_path("pages/dashboard/print.rs", "pages").with_no_layout();
     router.add_route(route2);
 
     // Route 3: Root layout only
     let route3 =
-        Route::from_path("pages/dashboard/export.rsx", "pages").with_root_layout();
+        Route::from_path("pages/dashboard/export.rs", "pages").with_root_layout();
     router.add_route(route3);
 
     // Route 4: Default (inherit)
-    let route4 = Route::from_path("pages/dashboard/settings.rsx", "pages");
+    let route4 = Route::from_path("pages/dashboard/settings.rs", "pages");
     router.add_route(route4);
 
     // Test each route
@@ -637,20 +637,20 @@ fn test_layout_option_with_option() {
 
     // Root requires root layout to exist
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.rs", "pages"));
     assert!(router
         .get_layout_with_option("/any/path", &LayoutOption::Root)
         .is_some());
 
     // Named layout
-    router.add_route(Route::from_path("pages/_layout.admin.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.admin.rs", "pages"));
     let layout = router
         .get_layout_with_option("/any", &LayoutOption::Named("admin".to_string()))
         .unwrap();
     assert_eq!(layout.layout_name, Some("admin".to_string()));
 
     // Pattern
-    router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_layout.rs", "pages"));
     let layout = router
         .get_layout_with_option("/anywhere", &LayoutOption::Pattern("/dashboard".to_string()))
         .unwrap();
@@ -663,11 +663,11 @@ fn test_layout_option_with_option() {
 
 #[test]
 fn test_nolayout_marker_detection() {
-    let route = Route::from_path("pages/dashboard/_nolayout.rsx", "pages");
+    let route = Route::from_path("pages/dashboard/_nolayout.rs", "pages");
     assert!(route.is_nolayout_marker);
     assert_eq!(route.pattern, "/dashboard");
 
-    let route = Route::from_path("pages/_nolayout.rsx", "pages");
+    let route = Route::from_path("pages/_nolayout.rs", "pages");
     assert!(route.is_nolayout_marker);
     assert_eq!(route.pattern, "/");
 }
@@ -675,11 +675,11 @@ fn test_nolayout_marker_detection() {
 #[test]
 fn test_nolayout_marker_effect() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/print/_nolayout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_layout.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/print/_nolayout.rs", "pages"));
     router.add_route(Route::from_path(
-        "pages/dashboard/print/invoice.rsx",
+        "pages/dashboard/print/invoice.rs",
         "pages",
     ));
 
@@ -692,25 +692,25 @@ fn test_nolayout_marker_effect() {
 #[test]
 fn test_nolayout_marker_hierarchy() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_nolayout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_layout.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_nolayout.rs", "pages"));
 
     // Direct child - no layout
-    router.add_route(Route::from_path("pages/dashboard/print.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/print.rs", "pages"));
     let m = router.match_route("/dashboard/print").unwrap();
     assert!(router.get_layout_for_match(&m).is_none());
 
     // Nested child - also no layout
     router.add_route(Route::from_path(
-        "pages/dashboard/reports/monthly.rsx",
+        "pages/dashboard/reports/monthly.rs",
         "pages",
     ));
     let m = router.match_route("/dashboard/reports/monthly").unwrap();
     assert!(router.get_layout_for_match(&m).is_none());
 
     // Outside the nolayout directory - has layout
-    router.add_route(Route::from_path("pages/settings.rsx", "pages"));
+    router.add_route(Route::from_path("pages/settings.rs", "pages"));
     let m = router.match_route("/settings").unwrap();
     let layout = router.get_layout_for_match(&m).unwrap();
     assert_eq!(layout.pattern, "/");
@@ -719,12 +719,12 @@ fn test_nolayout_marker_hierarchy() {
 #[test]
 fn test_nolayout_marker_vs_explicit_option() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/_layout.admin.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_nolayout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.rs", "pages"));
+    router.add_route(Route::from_path("pages/_layout.admin.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_nolayout.rs", "pages"));
 
     // Explicit layout option should override nolayout marker
-    let route = Route::from_path("pages/dashboard/settings.rsx", "pages")
+    let route = Route::from_path("pages/dashboard/settings.rs", "pages")
         .with_named_layout("admin");
     router.add_route(route);
 
@@ -740,8 +740,8 @@ fn test_nolayout_marker_vs_explicit_option() {
 #[test]
 fn test_is_under_nolayout_marker() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/dashboard/_nolayout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/api/v1/_nolayout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_nolayout.rs", "pages"));
+    router.add_route(Route::from_path("pages/api/v1/_nolayout.rs", "pages"));
 
     assert!(router.is_under_nolayout_marker("/dashboard"));
     assert!(router.is_under_nolayout_marker("/dashboard/print"));
@@ -760,7 +760,7 @@ fn test_is_under_nolayout_marker() {
 
 #[test]
 fn test_route_with_meta() {
-    let route = Route::from_path("pages/users/[id].rsx", "pages")
+    let route = Route::from_path("pages/users/[id].rs", "pages")
         .with_meta("title", "User Profile")
         .with_meta("permission", "users.read")
         .with_meta("cache_ttl", "300");
@@ -782,7 +782,7 @@ fn test_route_with_metadata_batch() {
     meta.insert("description".to_string(), "Main admin page".to_string());
 
     let route =
-        Route::from_path("pages/admin/dashboard.rsx", "pages").with_metadata(meta.clone());
+        Route::from_path("pages/admin/dashboard.rs", "pages").with_metadata(meta.clone());
 
     assert_eq!(route.get_meta("title"), Some(&"Admin Dashboard".to_string()));
     assert_eq!(route.get_meta("permission"), Some(&"admin.read".to_string()));
@@ -794,7 +794,7 @@ fn test_route_with_metadata_batch() {
 
 #[test]
 fn test_route_has_meta() {
-    let route = Route::from_path("pages/admin/users.rsx", "pages")
+    let route = Route::from_path("pages/admin/users.rs", "pages")
         .with_meta("permission", "admin.read")
         .with_meta("title", "User Management");
 
@@ -806,7 +806,7 @@ fn test_route_has_meta() {
 
 #[test]
 fn test_metadata_chaining() {
-    let route = Route::from_path("pages/products/[id].rsx", "pages")
+    let route = Route::from_path("pages/products/[id].rs", "pages")
         .with_meta("title", "Product Details")
         .with_no_layout()
         .with_meta("permission", "products.read")
@@ -828,7 +828,7 @@ fn test_metadata_chaining() {
 fn test_metadata_in_route_match() {
     let mut router = Router::new();
 
-    let route = Route::from_path("pages/users/[id].rsx", "pages")
+    let route = Route::from_path("pages/users/[id].rs", "pages")
         .with_meta("title", "User Profile")
         .with_meta("permission", "users.read");
 
@@ -849,7 +849,7 @@ fn test_metadata_in_route_match() {
 
 #[test]
 fn test_metadata_override() {
-    let route = Route::from_path("pages/settings.rsx", "pages")
+    let route = Route::from_path("pages/settings.rs", "pages")
         .with_meta("title", "Settings")
         .with_meta("title", "User Settings"); // Override
 
@@ -862,7 +862,7 @@ fn test_metadata_override() {
 
 #[test]
 fn test_empty_metadata() {
-    let route = Route::from_path("pages/about.rsx", "pages");
+    let route = Route::from_path("pages/about.rs", "pages");
 
     assert_eq!(route.metadata.len(), 0);
     assert!(!route.has_meta("anything"));
@@ -876,7 +876,7 @@ fn test_empty_metadata() {
 #[test]
 fn test_constraint_parsing_from_filename() {
     // Integer constraint
-    let route = Route::from_path("pages/users/[id:int].rsx", "pages");
+    let route = Route::from_path("pages/users/[id:int].rs", "pages");
     assert_eq!(route.pattern, "/users/:id");
     assert_eq!(
         route.param_constraints.get("id"),
@@ -884,14 +884,14 @@ fn test_constraint_parsing_from_filename() {
     );
 
     // Alpha constraint
-    let route = Route::from_path("pages/tags/[name:alpha].rsx", "pages");
+    let route = Route::from_path("pages/tags/[name:alpha].rs", "pages");
     assert_eq!(
         route.param_constraints.get("name"),
         Some(&ParameterConstraint::Alpha)
     );
 
     // Slug constraint
-    let route = Route::from_path("pages/posts/[slug:slug].rsx", "pages");
+    let route = Route::from_path("pages/posts/[slug:slug].rs", "pages");
     assert_eq!(
         route.param_constraints.get("slug"),
         Some(&ParameterConstraint::Slug)
@@ -900,7 +900,7 @@ fn test_constraint_parsing_from_filename() {
 
 #[test]
 fn test_constraint_int_validation() {
-    let route = Route::from_path("pages/users/[id:int].rsx", "pages");
+    let route = Route::from_path("pages/users/[id:int].rs", "pages");
 
     // Valid integers
     assert!(route.matches("/users/123").is_some());
@@ -915,7 +915,7 @@ fn test_constraint_int_validation() {
 
 #[test]
 fn test_constraint_uint_validation() {
-    let route = Route::from_path("pages/products/[id:uint].rsx", "pages");
+    let route = Route::from_path("pages/products/[id:uint].rs", "pages");
 
     // Valid unsigned integers
     assert!(route.matches("/products/123").is_some());
@@ -928,7 +928,7 @@ fn test_constraint_uint_validation() {
 
 #[test]
 fn test_constraint_alpha_validation() {
-    let route = Route::from_path("pages/tags/[name:alpha].rsx", "pages");
+    let route = Route::from_path("pages/tags/[name:alpha].rs", "pages");
 
     // Valid alphabetic
     assert!(route.matches("/tags/hello").is_some());
@@ -941,7 +941,7 @@ fn test_constraint_alpha_validation() {
 
 #[test]
 fn test_constraint_alphanum_validation() {
-    let route = Route::from_path("pages/codes/[code:alphanum].rsx", "pages");
+    let route = Route::from_path("pages/codes/[code:alphanum].rs", "pages");
 
     // Valid alphanumeric
     assert!(route.matches("/codes/abc123").is_some());
@@ -954,7 +954,7 @@ fn test_constraint_alphanum_validation() {
 
 #[test]
 fn test_constraint_slug_validation() {
-    let route = Route::from_path("pages/posts/[slug:slug].rsx", "pages");
+    let route = Route::from_path("pages/posts/[slug:slug].rs", "pages");
 
     // Valid slugs
     assert!(route.matches("/posts/hello-world").is_some());
@@ -968,7 +968,7 @@ fn test_constraint_slug_validation() {
 
 #[test]
 fn test_constraint_uuid_validation() {
-    let route = Route::from_path("pages/items/[id:uuid].rsx", "pages");
+    let route = Route::from_path("pages/items/[id:uuid].rs", "pages");
 
     // Valid UUID
     assert!(route
@@ -982,7 +982,7 @@ fn test_constraint_uuid_validation() {
 
 #[test]
 fn test_constraint_optional_parameter() {
-    let route = Route::from_path("pages/posts/[id:int?].rsx", "pages");
+    let route = Route::from_path("pages/posts/[id:int?].rs", "pages");
 
     // Valid with integer
     assert!(route.matches("/posts/123").is_some());
@@ -996,8 +996,8 @@ fn test_constraint_optional_parameter() {
 
 #[test]
 fn test_constraint_catch_all() {
-    // App Router: pages/docs/[...slug]/page.rsx
-    let route = Route::from_path("pages/docs/[...slug]/page.rsx", "pages");
+    // App Router: pages/docs/[...slug]/page.rs
+    let route = Route::from_path("pages/docs/[...slug]/page.rs", "pages");
 
     // Valid slugs
     assert!(route.matches("/docs/hello-world").is_some());
@@ -1010,7 +1010,7 @@ fn test_constraint_catch_all() {
 
 #[test]
 fn test_multiple_constraints() {
-    let route = Route::from_path("pages/posts/[year:int]/[slug:slug].rsx", "pages");
+    let route = Route::from_path("pages/posts/[year:int]/[slug:slug].rs", "pages");
 
     // Valid: integer year + valid slug
     assert!(route.matches("/posts/2024/hello-world").is_some());
@@ -1026,26 +1026,26 @@ fn test_multiple_constraints() {
 fn test_constraint_with_router_matching() {
     let mut router = Router::new();
 
-    router.add_route(Route::from_path("pages/users/[id:int].rsx", "pages"));
-    router.add_route(Route::from_path("pages/users/[name:alpha].rsx", "pages"));
+    router.add_route(Route::from_path("pages/users/[id:int].rs", "pages"));
+    router.add_route(Route::from_path("pages/users/[name:alpha].rs", "pages"));
 
     // Should match integer route
     let m = router.match_route("/users/123");
     assert!(m.is_some());
-    assert_eq!(m.unwrap().route.template_path, "pages/users/[id:int].rsx");
+    assert_eq!(m.unwrap().route.template_path, "pages/users/[id:int].rs");
 
     // Should match alpha route
     let m = router.match_route("/users/john");
     assert!(m.is_some());
     assert_eq!(
         m.unwrap().route.template_path,
-        "pages/users/[name:alpha].rsx"
+        "pages/users/[name:alpha].rs"
     );
 }
 
 #[test]
 fn test_no_constraint_default_behavior() {
-    let route = Route::from_path("pages/users/[id].rsx", "pages");
+    let route = Route::from_path("pages/users/[id].rs", "pages");
 
     // No constraint = accepts anything
     assert!(route.matches("/users/123").is_some());
@@ -1088,7 +1088,7 @@ fn test_parameter_constraint_from_str() {
 
 #[test]
 fn test_route_with_single_alias() {
-    let route = Route::from_path("pages/about.rsx", "pages")
+    let route = Route::from_path("pages/about.rs", "pages")
         .with_alias("/about-us");
 
     assert_eq!(route.pattern, "/about");
@@ -1097,7 +1097,7 @@ fn test_route_with_single_alias() {
 
 #[test]
 fn test_route_with_multiple_aliases_chained() {
-    let route = Route::from_path("pages/about.rsx", "pages")
+    let route = Route::from_path("pages/about.rs", "pages")
         .with_alias("/about-us")
         .with_alias("/company")
         .with_alias("/über");
@@ -1108,7 +1108,7 @@ fn test_route_with_multiple_aliases_chained() {
 
 #[test]
 fn test_route_with_aliases_batch() {
-    let route = Route::from_path("pages/contact.rsx", "pages")
+    let route = Route::from_path("pages/contact.rs", "pages")
         .with_aliases(["/contact-us", "/get-in-touch", "/reach-us"]);
 
     assert_eq!(route.aliases.len(), 3);
@@ -1119,7 +1119,7 @@ fn test_route_with_aliases_batch() {
 
 #[test]
 fn test_route_matches_any_primary() {
-    let route = Route::from_path("pages/about.rsx", "pages")
+    let route = Route::from_path("pages/about.rs", "pages")
         .with_aliases(["/about-us", "/company"]);
 
     // Primary pattern should match
@@ -1128,7 +1128,7 @@ fn test_route_matches_any_primary() {
 
 #[test]
 fn test_route_matches_any_alias() {
-    let route = Route::from_path("pages/about.rsx", "pages")
+    let route = Route::from_path("pages/about.rs", "pages")
         .with_aliases(["/about-us", "/company"]);
 
     // Aliases should match
@@ -1138,7 +1138,7 @@ fn test_route_matches_any_alias() {
 
 #[test]
 fn test_route_matches_any_no_match() {
-    let route = Route::from_path("pages/about.rsx", "pages")
+    let route = Route::from_path("pages/about.rs", "pages")
         .with_aliases(["/about-us", "/company"]);
 
     // Non-matching path
@@ -1150,7 +1150,7 @@ fn test_route_matches_any_no_match() {
 fn test_router_match_route_with_alias() {
     let mut router = Router::new();
 
-    let route = Route::from_path("pages/about.rsx", "pages")
+    let route = Route::from_path("pages/about.rs", "pages")
         .with_aliases(["/about-us", "/company"]);
     router.add_route(route);
 
@@ -1179,12 +1179,12 @@ fn test_multiple_routes_with_aliases() {
     let mut router = Router::new();
 
     router.add_route(
-        Route::from_path("pages/about.rsx", "pages")
+        Route::from_path("pages/about.rs", "pages")
             .with_aliases(["/about-us", "/company"])
     );
 
     router.add_route(
-        Route::from_path("pages/contact.rsx", "pages")
+        Route::from_path("pages/contact.rs", "pages")
             .with_aliases(["/contact-us", "/reach-us"])
     );
 
@@ -1200,15 +1200,15 @@ fn test_multiple_routes_with_aliases() {
 
     // Verify correct route is matched
     let m = router.match_route("/about-us").unwrap();
-    assert_eq!(m.route.template_path, "pages/about.rsx");
+    assert_eq!(m.route.template_path, "pages/about.rs");
 
     let m = router.match_route("/contact-us").unwrap();
-    assert_eq!(m.route.template_path, "pages/contact.rsx");
+    assert_eq!(m.route.template_path, "pages/contact.rs");
 }
 
 #[test]
 fn test_alias_with_trailing_slash() {
-    let route = Route::from_path("pages/about.rsx", "pages")
+    let route = Route::from_path("pages/about.rs", "pages")
         .with_alias("/about-us");
 
     // Should match with and without trailing slash
@@ -1218,7 +1218,7 @@ fn test_alias_with_trailing_slash() {
 
 #[test]
 fn test_alias_internationalization() {
-    let route = Route::from_path("pages/about.rsx", "pages")
+    let route = Route::from_path("pages/about.rs", "pages")
         .with_aliases(["/über", "/acerca", "/à-propos"]);
 
     assert!(route.matches_any("/über").is_some());
@@ -1228,7 +1228,7 @@ fn test_alias_internationalization() {
 
 #[test]
 fn test_alias_legacy_url_support() {
-    let route = Route::from_path("pages/products/page.rsx", "pages")
+    let route = Route::from_path("pages/products/page.rs", "pages")
         .with_aliases(["/old-products", "/legacy/products", "/shop"]);
 
     let mut router = Router::new();
@@ -1245,7 +1245,7 @@ fn test_alias_legacy_url_support() {
 
 #[test]
 fn test_alias_with_metadata() {
-    let route = Route::from_path("pages/about.rsx", "pages")
+    let route = Route::from_path("pages/about.rs", "pages")
         .with_meta("title", "About Us")
         .with_aliases(["/about-us", "/company"])
         .with_meta("description", "Learn about our company");
@@ -1260,7 +1260,7 @@ fn test_alias_with_metadata() {
 
 #[test]
 fn test_alias_chaining_with_other_builders() {
-    let route = Route::from_path("pages/dashboard/print.rsx", "pages")
+    let route = Route::from_path("pages/dashboard/print.rs", "pages")
         .with_root_layout()
         .with_alias("/print-dashboard")
         .with_meta("title", "Print View")
@@ -1273,7 +1273,7 @@ fn test_alias_chaining_with_other_builders() {
 
 #[test]
 fn test_empty_aliases_default() {
-    let route = Route::from_path("pages/about.rsx", "pages");
+    let route = Route::from_path("pages/about.rs", "pages");
     assert_eq!(route.aliases.len(), 0);
     assert!(route.aliases.is_empty());
 }
@@ -1284,29 +1284,29 @@ fn test_alias_priority_order() {
 
     // Add static route with aliases
     router.add_route(
-        Route::from_path("pages/products/new.rsx", "pages")
+        Route::from_path("pages/products/new.rs", "pages")
             .with_alias("/create-product")
     );
 
     // Add dynamic route
-    router.add_route(Route::from_path("pages/products/[id].rsx", "pages"));
+    router.add_route(Route::from_path("pages/products/[id].rs", "pages"));
 
     // Static route should match first
     let m = router.match_route("/products/new").unwrap();
-    assert_eq!(m.route.template_path, "pages/products/new.rsx");
+    assert_eq!(m.route.template_path, "pages/products/new.rs");
 
     // Alias should also match
     let m = router.match_route("/create-product").unwrap();
-    assert_eq!(m.route.template_path, "pages/products/new.rsx");
+    assert_eq!(m.route.template_path, "pages/products/new.rs");
 
     // Dynamic route should match other paths
     let m = router.match_route("/products/123").unwrap();
-    assert_eq!(m.route.template_path, "pages/products/[id].rsx");
+    assert_eq!(m.route.template_path, "pages/products/[id].rs");
 }
 
 #[test]
 fn test_route_static_alias_matching() {
-    let route = Route::from_path("pages/about.rsx", "pages");
+    let route = Route::from_path("pages/about.rs", "pages");
 
     // Test static alias matching helper
     assert!(route.matches_static_alias("/about", "/about"));
@@ -1320,7 +1320,7 @@ fn test_alias_case_sensitivity() {
     let mut router = Router::new();
 
     router.add_route(
-        Route::from_path("pages/about.rsx", "pages")
+        Route::from_path("pages/about.rs", "pages")
             .with_alias("/About-Us")
     );
 
@@ -1332,7 +1332,7 @@ fn test_alias_case_sensitivity() {
 #[test]
 fn test_functional_alias_composition() {
     // Test functional builder pattern composition
-    let route = Route::from_path("pages/home.rsx", "pages")
+    let route = Route::from_path("pages/home.rs", "pages")
         .with_aliases(vec!["/index", "/start"])  // Vec
         .with_aliases(["/main", "/home"])        // Array
         .with_alias("/landing");                 // Single
@@ -1351,7 +1351,7 @@ fn test_functional_alias_composition() {
 
 #[test]
 fn test_route_with_name() {
-    let route = Route::from_path("pages/users/[id].rsx", "pages")
+    let route = Route::from_path("pages/users/[id].rs", "pages")
         .with_name("user.profile");
 
     assert_eq!(route.name, Some("user.profile".to_string()));
@@ -1360,13 +1360,13 @@ fn test_route_with_name() {
 
 #[test]
 fn test_route_without_name() {
-    let route = Route::from_path("pages/about.rsx", "pages");
+    let route = Route::from_path("pages/about.rs", "pages");
     assert_eq!(route.name, None);
 }
 
 #[test]
 fn test_generate_url_static_route() {
-    let route = Route::from_path("pages/about.rsx", "pages");
+    let route = Route::from_path("pages/about.rs", "pages");
     let params = HashMap::new();
 
     let url = route.generate_url(&params).unwrap();
@@ -1375,7 +1375,7 @@ fn test_generate_url_static_route() {
 
 #[test]
 fn test_generate_url_with_single_parameter() {
-    let route = Route::from_path("pages/users/[id].rsx", "pages");
+    let route = Route::from_path("pages/users/[id].rs", "pages");
 
     let mut params = HashMap::new();
     params.insert("id".to_string(), "123".to_string());
@@ -1386,7 +1386,7 @@ fn test_generate_url_with_single_parameter() {
 
 #[test]
 fn test_generate_url_with_multiple_parameters() {
-    let route = Route::from_path("pages/posts/[year]/[slug].rsx", "pages");
+    let route = Route::from_path("pages/posts/[year]/[slug].rs", "pages");
 
     let mut params = HashMap::new();
     params.insert("year".to_string(), "2024".to_string());
@@ -1398,7 +1398,7 @@ fn test_generate_url_with_multiple_parameters() {
 
 #[test]
 fn test_generate_url_missing_required_parameter() {
-    let route = Route::from_path("pages/users/[id].rsx", "pages");
+    let route = Route::from_path("pages/users/[id].rs", "pages");
 
     let params = HashMap::new(); // Missing "id"
 
@@ -1408,7 +1408,7 @@ fn test_generate_url_missing_required_parameter() {
 
 #[test]
 fn test_generate_url_optional_parameter_provided() {
-    let route = Route::from_path("pages/posts/[id?].rsx", "pages");
+    let route = Route::from_path("pages/posts/[id?].rs", "pages");
 
     let mut params = HashMap::new();
     params.insert("id".to_string(), "123".to_string());
@@ -1419,7 +1419,7 @@ fn test_generate_url_optional_parameter_provided() {
 
 #[test]
 fn test_generate_url_optional_parameter_missing() {
-    let route = Route::from_path("pages/posts/[id?].rsx", "pages");
+    let route = Route::from_path("pages/posts/[id?].rs", "pages");
 
     let params = HashMap::new(); // No "id" provided
 
@@ -1429,7 +1429,7 @@ fn test_generate_url_optional_parameter_missing() {
 
 #[test]
 fn test_generate_url_catch_all() {
-    let route = Route::from_path("pages/docs/[...slug].rsx", "pages");
+    let route = Route::from_path("pages/docs/[...slug].rs", "pages");
 
     let mut params = HashMap::new();
     params.insert("slug".to_string(), "guide/getting-started".to_string());
@@ -1443,7 +1443,7 @@ fn test_router_url_for() {
     let mut router = Router::new();
 
     router.add_route(
-        Route::from_path("pages/users/[id].rsx", "pages")
+        Route::from_path("pages/users/[id].rs", "pages")
             .with_name("user.profile")
     );
 
@@ -1469,7 +1469,7 @@ fn test_router_url_for_params() {
     let mut router = Router::new();
 
     router.add_route(
-        Route::from_path("pages/posts/[year]/[slug].rsx", "pages")
+        Route::from_path("pages/posts/[year]/[slug].rs", "pages")
             .with_name("post.show")
     );
 
@@ -1486,13 +1486,13 @@ fn test_router_get_route_by_name() {
     let mut router = Router::new();
 
     router.add_route(
-        Route::from_path("pages/about.rsx", "pages")
+        Route::from_path("pages/about.rs", "pages")
             .with_name("about")
     );
 
     let route = router.get_route_by_name("about").unwrap();
     assert_eq!(route.pattern, "/about");
-    assert_eq!(route.template_path, "pages/about.rsx");
+    assert_eq!(route.template_path, "pages/about.rs");
 }
 
 #[test]
@@ -1503,7 +1503,7 @@ fn test_router_get_route_by_name_nonexistent() {
 
 #[test]
 fn test_named_route_with_metadata() {
-    let route = Route::from_path("pages/users/[id].rsx", "pages")
+    let route = Route::from_path("pages/users/[id].rs", "pages")
         .with_name("user.profile")
         .with_meta("title", "User Profile")
         .with_meta("permission", "users.read");
@@ -1517,7 +1517,7 @@ fn test_named_route_with_alias() {
     let mut router = Router::new();
 
     router.add_route(
-        Route::from_path("pages/about.rsx", "pages")
+        Route::from_path("pages/about.rs", "pages")
             .with_name("about")
             .with_alias("/about-us")
     );
@@ -1535,17 +1535,17 @@ fn test_multiple_named_routes() {
     let mut router = Router::new();
 
     router.add_route(
-        Route::from_path("pages/page.rsx", "pages")
+        Route::from_path("pages/page.rs", "pages")
             .with_name("home")
     );
 
     router.add_route(
-        Route::from_path("pages/about.rsx", "pages")
+        Route::from_path("pages/about.rs", "pages")
             .with_name("about")
     );
 
     router.add_route(
-        Route::from_path("pages/users/[id].rsx", "pages")
+        Route::from_path("pages/users/[id].rs", "pages")
             .with_name("user.profile")
     );
 
@@ -1560,7 +1560,7 @@ fn test_multiple_named_routes() {
 
 #[test]
 fn test_url_generation_root_route() {
-    let route = Route::from_path("pages/page.rsx", "pages");
+    let route = Route::from_path("pages/page.rs", "pages");
     let url = route.generate_url(&HashMap::new()).unwrap();
     assert_eq!(url, "/");
 }
@@ -1570,7 +1570,7 @@ fn test_url_for_params_empty() {
     let mut router = Router::new();
 
     router.add_route(
-        Route::from_path("pages/about.rsx", "pages")
+        Route::from_path("pages/about.rs", "pages")
             .with_name("about")
     );
 
@@ -1580,7 +1580,7 @@ fn test_url_for_params_empty() {
 
 #[test]
 fn test_named_route_functional_chaining() {
-    let route = Route::from_path("pages/users/[id].rsx", "pages")
+    let route = Route::from_path("pages/users/[id].rs", "pages")
         .with_name("user.profile")
         .with_meta("title", "User Profile")
         .with_alias("/profile")
@@ -1594,7 +1594,7 @@ fn test_named_route_functional_chaining() {
 
 #[test]
 fn test_url_generation_preserves_order() {
-    let route = Route::from_path("pages/events/[year]/[month]/[day].rsx", "pages");
+    let route = Route::from_path("pages/events/[year]/[month]/[day].rs", "pages");
 
     let mut params = HashMap::new();
     params.insert("year".to_string(), "2024".to_string());
@@ -1610,7 +1610,7 @@ fn test_remove_route_removes_from_named_routes() {
     let mut router = Router::new();
 
     router.add_route(
-        Route::from_path("pages/about.rsx", "pages")
+        Route::from_path("pages/about.rs", "pages")
             .with_name("about")
     );
 
@@ -1623,7 +1623,7 @@ fn test_remove_route_removes_from_named_routes() {
 
 #[test]
 fn test_url_generation_with_extra_params() {
-    let route = Route::from_path("pages/users/[id].rsx", "pages");
+    let route = Route::from_path("pages/users/[id].rs", "pages");
 
     let mut params = HashMap::new();
     params.insert("id".to_string(), "123".to_string());
@@ -1639,14 +1639,14 @@ fn test_named_route_type_safe_reference() {
 
     // Add route with name
     router.add_route(
-        Route::from_path("pages/api/v1/users/[id].rsx", "pages")
+        Route::from_path("pages/api/v1/users/[id].rs", "pages")
             .with_name("api.v1.users.show")
     );
 
     // Change pattern (simulating refactoring)
     router.remove_route("/api/v1/users/:id");
     router.add_route(
-        Route::from_path("pages/api/v2/users/[id].rsx", "pages")
+        Route::from_path("pages/api/v2/users/[id].rs", "pages")
             .with_name("api.v1.users.show") // Keep same name
     );
 
@@ -1760,7 +1760,7 @@ fn test_redirect_priority_with_static_routes() {
     let mut router = Router::new();
 
     // Add static route first
-    router.add_route(Route::from_path("pages/about.rsx", "pages"));
+    router.add_route(Route::from_path("pages/about.rs", "pages"));
 
     // Add redirect
     router.add_route(Route::redirect("/old-about", "/about", 301));
@@ -1780,7 +1780,7 @@ fn test_redirect_legacy_url_support() {
     let mut router = Router::new();
 
     // New route
-    router.add_route(Route::from_path("pages/products/page.rsx", "pages"));
+    router.add_route(Route::from_path("pages/products/page.rs", "pages"));
 
     // Legacy redirects
     router.add_route(Route::redirect("/old-products", "/products", 301));
@@ -1820,7 +1820,7 @@ fn test_redirect_canonical_url() {
     router.add_route(Route::redirect("/about/", "/about", 301));
 
     // Canonical route
-    router.add_route(Route::from_path("pages/about.rsx", "pages"));
+    router.add_route(Route::from_path("pages/about.rs", "pages"));
 
     let m = router.match_route("/about/").unwrap();
     assert!(m.is_redirect());
@@ -1829,7 +1829,7 @@ fn test_redirect_canonical_url() {
 
 #[test]
 fn test_redirect_target_non_redirect_route() {
-    let route = Route::from_path("pages/about.rsx", "pages");
+    let route = Route::from_path("pages/about.rs", "pages");
     let params = HashMap::new();
 
     assert!(!route.is_redirect);
@@ -1839,7 +1839,7 @@ fn test_redirect_target_non_redirect_route() {
 #[test]
 fn test_route_match_redirect_methods_non_redirect() {
     let mut router = Router::new();
-    router.add_route(Route::from_path("pages/about.rsx", "pages"));
+    router.add_route(Route::from_path("pages/about.rs", "pages"));
 
     let m = router.match_route("/about").unwrap();
 
@@ -1943,7 +1943,7 @@ fn test_redirect_internationalization() {
     let mut router = Router::new();
 
     // Main route
-    router.add_route(Route::from_path("pages/about.rsx", "pages"));
+    router.add_route(Route::from_path("pages/about.rs", "pages"));
 
     // i18n redirects
     router.add_route(Route::redirect("/über", "/about", 302));
@@ -1960,7 +1960,7 @@ fn test_redirect_chain_not_followed() {
     // Redirect chain: /a → /b → /c
     router.add_route(Route::redirect("/a", "/b", 301));
     router.add_route(Route::redirect("/b", "/c", 301));
-    router.add_route(Route::from_path("pages/c.rsx", "pages"));
+    router.add_route(Route::from_path("pages/c.rs", "pages"));
 
     // Router doesn't follow chains - just returns first redirect
     let m = router.match_route("/a").unwrap();
@@ -1977,7 +1977,7 @@ fn test_redirect_chain_not_followed() {
 
 #[test]
 fn test_optional_catch_all_route_creation() {
-    let route = Route::from_path("pages/docs/[[...slug]].rsx", "pages");
+    let route = Route::from_path("pages/docs/[[...slug]].rs", "pages");
 
     assert_eq!(route.pattern, "/docs/*slug?");
     assert_eq!(route.params, vec!["slug"]);
@@ -1987,7 +1987,7 @@ fn test_optional_catch_all_route_creation() {
 
 #[test]
 fn test_optional_catch_all_matches_zero_segments() {
-    let route = Route::from_path("pages/docs/[[...slug]].rsx", "pages");
+    let route = Route::from_path("pages/docs/[[...slug]].rs", "pages");
 
     // Should match /docs (zero segments)
     let params = route.matches("/docs").unwrap();
@@ -1996,7 +1996,7 @@ fn test_optional_catch_all_matches_zero_segments() {
 
 #[test]
 fn test_optional_catch_all_matches_single_segment() {
-    let route = Route::from_path("pages/docs/[[...slug]].rsx", "pages");
+    let route = Route::from_path("pages/docs/[[...slug]].rs", "pages");
 
     // Should match /docs/intro
     let params = route.matches("/docs/intro").unwrap();
@@ -2005,7 +2005,7 @@ fn test_optional_catch_all_matches_single_segment() {
 
 #[test]
 fn test_optional_catch_all_matches_multiple_segments() {
-    let route = Route::from_path("pages/docs/[[...slug]].rsx", "pages");
+    let route = Route::from_path("pages/docs/[[...slug]].rs", "pages");
 
     // Should match /docs/getting-started/installation
     let params = route.matches("/docs/getting-started/installation").unwrap();
@@ -2017,7 +2017,7 @@ fn test_optional_catch_all_matches_multiple_segments() {
 
 #[test]
 fn test_optional_catch_all_with_constraint() {
-    let route = Route::from_path("pages/docs/[[...slug:alpha]].rsx", "pages");
+    let route = Route::from_path("pages/docs/[[...slug:alpha]].rs", "pages");
 
     assert_eq!(route.pattern, "/docs/*slug?");
     assert!(route.param_constraints.contains_key("slug"));
@@ -2029,8 +2029,8 @@ fn test_optional_catch_all_with_constraint() {
 
 #[test]
 fn test_optional_catch_all_vs_required_catch_all() {
-    let optional = Route::from_path("pages/docs/[[...slug]].rsx", "pages");
-    let required = Route::from_path("pages/blog/[...slug].rsx", "pages");
+    let optional = Route::from_path("pages/docs/[[...slug]].rs", "pages");
+    let required = Route::from_path("pages/blog/[...slug].rs", "pages");
 
     // Optional matches zero segments
     assert!(optional.matches("/docs").is_some());
@@ -2042,8 +2042,8 @@ fn test_optional_catch_all_vs_required_catch_all() {
 
 #[test]
 fn test_optional_catch_all_priority() {
-    let optional = Route::from_path("pages/docs/[[...slug]].rsx", "pages");
-    let required = Route::from_path("pages/blog/[...slug].rsx", "pages");
+    let optional = Route::from_path("pages/docs/[[...slug]].rs", "pages");
+    let required = Route::from_path("pages/blog/[...slug].rs", "pages");
 
     // Debug: print priorities
     eprintln!("Optional priority: {}, params: {:?}, optional: {:?}",
@@ -2061,12 +2061,12 @@ fn test_optional_catch_all_priority() {
 fn test_optional_catch_all_in_router() {
     let mut router = Router::new();
 
-    router.add_route(Route::from_path("pages/docs/[[...slug]].rsx", "pages"));
+    router.add_route(Route::from_path("pages/docs/[[...slug]].rs", "pages"));
 
     // Test zero segments
     let m = router.match_route("/docs").unwrap();
     assert_eq!(m.params.get("slug"), Some(&String::new()));
-    assert_eq!(m.route.template_path, "pages/docs/[[...slug]].rsx");
+    assert_eq!(m.route.template_path, "pages/docs/[[...slug]].rs");
 
     // Test single segment
     let m = router.match_route("/docs/intro").unwrap();
@@ -2079,7 +2079,7 @@ fn test_optional_catch_all_in_router() {
 
 #[test]
 fn test_optional_catch_all_with_static_prefix() {
-    let route = Route::from_path("pages/api/v1/[[...path]].rsx", "pages");
+    let route = Route::from_path("pages/api/v1/[[...path]].rs", "pages");
 
     assert_eq!(route.pattern, "/api/v1/*path?");
 
@@ -2097,33 +2097,33 @@ fn test_optional_catch_all_route_priority_ordering() {
     let mut router = Router::new();
 
     // Static route should have highest priority
-    router.add_route(Route::from_path("pages/docs/getting-started.rsx", "pages"));
+    router.add_route(Route::from_path("pages/docs/getting-started.rs", "pages"));
 
     // Dynamic route
-    router.add_route(Route::from_path("pages/docs/[section].rsx", "pages"));
+    router.add_route(Route::from_path("pages/docs/[section].rs", "pages"));
 
     // Optional catch-all has lower priority
-    router.add_route(Route::from_path("pages/docs/[[...slug]].rsx", "pages"));
+    router.add_route(Route::from_path("pages/docs/[[...slug]].rs", "pages"));
 
     // Static should match first
     let m = router.match_route("/docs/getting-started").unwrap();
-    assert_eq!(m.route.template_path, "pages/docs/getting-started.rsx");
+    assert_eq!(m.route.template_path, "pages/docs/getting-started.rs");
 
     // Dynamic should match next
     let m = router.match_route("/docs/api").unwrap();
-    assert_eq!(m.route.template_path, "pages/docs/[section].rsx");
+    assert_eq!(m.route.template_path, "pages/docs/[section].rs");
 
     // Optional catch-all should match base and deep paths
     let m = router.match_route("/docs").unwrap();
-    assert_eq!(m.route.template_path, "pages/docs/[[...slug]].rsx");
+    assert_eq!(m.route.template_path, "pages/docs/[[...slug]].rs");
 
     let m = router.match_route("/docs/guides/advanced/tips").unwrap();
-    assert_eq!(m.route.template_path, "pages/docs/[[...slug]].rsx");
+    assert_eq!(m.route.template_path, "pages/docs/[[...slug]].rs");
 }
 
 #[test]
 fn test_optional_catch_all_empty_string_vs_none() {
-    let route = Route::from_path("pages/docs/[[...slug]].rsx", "pages");
+    let route = Route::from_path("pages/docs/[[...slug]].rs", "pages");
 
     // When matching zero segments, should return empty string not None
     let params = route.matches("/docs").unwrap();
@@ -2156,8 +2156,8 @@ fn test_optional_catch_all_segment_classification() {
 #[test]
 fn test_optional_catch_all_vs_optional_param() {
     // [[...slug]] is different from [slug?]
-    let catch_all = Route::from_path("pages/docs/[[...slug]].rsx", "pages");
-    let optional_param = Route::from_path("pages/users/[id?].rsx", "pages");
+    let catch_all = Route::from_path("pages/docs/[[...slug]].rs", "pages");
+    let optional_param = Route::from_path("pages/users/[id?].rs", "pages");
 
     // Catch-all captures all remaining segments as one param
     let m = catch_all.matches("/docs/a/b/c").unwrap();
@@ -2174,7 +2174,7 @@ fn test_optional_catch_all_vs_optional_param() {
 
 #[test]
 fn test_optional_catch_all_trailing_slash() {
-    let route = Route::from_path("pages/docs/[[...slug]].rsx", "pages");
+    let route = Route::from_path("pages/docs/[[...slug]].rs", "pages");
 
     // Should match with or without trailing slash
     let m1 = route.matches("/docs").unwrap();
@@ -2189,7 +2189,7 @@ fn test_optional_catch_all_real_world_use_case() {
     // Typical Next.js docs pattern
     let mut router = Router::new();
 
-    router.add_route(Route::from_path("pages/docs/[[...slug]].rsx", "pages"));
+    router.add_route(Route::from_path("pages/docs/[[...slug]].rs", "pages"));
 
     // Index page
     let m = router.match_route("/docs").unwrap();
@@ -2209,7 +2209,7 @@ fn test_optional_catch_all_real_world_use_case() {
 
 #[test]
 fn test_optional_catch_all_with_constraints_validation() {
-    let route = Route::from_path("pages/files/[[...path:slug]].rsx", "pages");
+    let route = Route::from_path("pages/files/[[...path:slug]].rs", "pages");
 
     // Constraint should be stored
     assert_eq!(
@@ -2240,34 +2240,34 @@ fn test_optional_catch_all_with_constraints_validation() {
 
 #[test]
 fn test_route_group_basic() {
-    let route = Route::from_path("pages/(marketing)/about.rsx", "pages");
+    let route = Route::from_path("pages/(marketing)/about.rs", "pages");
 
     // Route group (marketing) should not appear in the pattern
     assert_eq!(route.pattern, "/about");
-    assert_eq!(route.template_path, "pages/(marketing)/about.rsx");
+    assert_eq!(route.template_path, "pages/(marketing)/about.rs");
 }
 
 #[test]
 fn test_route_group_multiple() {
-    let route = Route::from_path("pages/(marketing)/blog/posts.rsx", "pages");
+    let route = Route::from_path("pages/(marketing)/blog/posts.rs", "pages");
 
     // Only (marketing) is skipped, blog is kept
     assert_eq!(route.pattern, "/blog/posts");
-    assert_eq!(route.template_path, "pages/(marketing)/blog/posts.rsx");
+    assert_eq!(route.template_path, "pages/(marketing)/blog/posts.rs");
 }
 
 #[test]
 fn test_route_group_nested() {
-    let route = Route::from_path("pages/(shop)/(products)/list.rsx", "pages");
+    let route = Route::from_path("pages/(shop)/(products)/list.rs", "pages");
 
     // Both (shop) and (products) should be skipped
     assert_eq!(route.pattern, "/list");
-    assert_eq!(route.template_path, "pages/(shop)/(products)/list.rsx");
+    assert_eq!(route.template_path, "pages/(shop)/(products)/list.rs");
 }
 
 #[test]
 fn test_route_group_with_dynamic_params() {
-    let route = Route::from_path("pages/(shop)/products/[id].rsx", "pages");
+    let route = Route::from_path("pages/(shop)/products/[id].rs", "pages");
 
     // (shop) skipped, dynamic param kept
     assert_eq!(route.pattern, "/products/:id");
@@ -2276,7 +2276,7 @@ fn test_route_group_with_dynamic_params() {
 
 #[test]
 fn test_route_group_with_catch_all() {
-    let route = Route::from_path("pages/(docs)/[[...slug]].rsx", "pages");
+    let route = Route::from_path("pages/(docs)/[[...slug]].rs", "pages");
 
     // (docs) skipped, optional catch-all at root
     assert_eq!(route.pattern, "/*slug?");
@@ -2288,12 +2288,12 @@ fn test_route_group_organizational_structure() {
     let mut router = Router::new();
 
     // Marketing routes
-    router.add_route(Route::from_path("pages/(marketing)/about.rsx", "pages"));
-    router.add_route(Route::from_path("pages/(marketing)/blog/page.rsx", "pages"));
+    router.add_route(Route::from_path("pages/(marketing)/about.rs", "pages"));
+    router.add_route(Route::from_path("pages/(marketing)/blog/page.rs", "pages"));
 
     // Shop routes
-    router.add_route(Route::from_path("pages/(shop)/products/page.rsx", "pages"));
-    router.add_route(Route::from_path("pages/(shop)/cart.rsx", "pages"));
+    router.add_route(Route::from_path("pages/(shop)/products/page.rs", "pages"));
+    router.add_route(Route::from_path("pages/(shop)/cart.rs", "pages"));
 
     // All should match without the group names in URL
     assert!(router.match_route("/about").is_some());
@@ -2304,8 +2304,8 @@ fn test_route_group_organizational_structure() {
 
 #[test]
 fn test_route_group_with_layout() {
-    let marketing_layout = Route::from_path("pages/(marketing)/_layout.rsx", "pages");
-    let shop_layout = Route::from_path("pages/(shop)/_layout.rsx", "pages");
+    let marketing_layout = Route::from_path("pages/(marketing)/_layout.rs", "pages");
+    let shop_layout = Route::from_path("pages/(shop)/_layout.rs", "pages");
 
     // Layouts should still be detected
     assert!(marketing_layout.is_layout);
@@ -2321,8 +2321,8 @@ fn test_route_group_same_path_different_groups() {
     let mut router = Router::new();
 
     // Two different files with same URL pattern (different groups)
-    router.add_route(Route::from_path("pages/(v1)/api/users.rsx", "pages"));
-    router.add_route(Route::from_path("pages/(v2)/api/users.rsx", "pages"));
+    router.add_route(Route::from_path("pages/(v1)/api/users.rs", "pages"));
+    router.add_route(Route::from_path("pages/(v2)/api/users.rs", "pages"));
 
     // Both map to /api/users - last one wins (or could be an error)
     let matches: Vec<_> = router.routes().iter()
@@ -2335,7 +2335,7 @@ fn test_route_group_same_path_different_groups() {
 #[test]
 fn test_route_group_empty_name() {
     // Edge case: group with no name
-    let route = Route::from_path("pages/()/about.rsx", "pages");
+    let route = Route::from_path("pages/()/about.rs", "pages");
 
     // Should still skip it
     assert_eq!(route.pattern, "/about");
@@ -2343,7 +2343,7 @@ fn test_route_group_empty_name() {
 
 #[test]
 fn test_route_group_not_at_start() {
-    let route = Route::from_path("pages/admin/(dashboard)/stats.rsx", "pages");
+    let route = Route::from_path("pages/admin/(dashboard)/stats.rs", "pages");
 
     // Group in the middle
     assert_eq!(route.pattern, "/admin/stats");
@@ -2351,17 +2351,17 @@ fn test_route_group_not_at_start() {
 
 #[test]
 fn test_route_group_with_special_chars() {
-    let route = Route::from_path("pages/(admin-panel)/users.rsx", "pages");
+    let route = Route::from_path("pages/(admin-panel)/users.rs", "pages");
 
     // Group names can have hyphens
     assert_eq!(route.pattern, "/users");
-    assert_eq!(route.template_path, "pages/(admin-panel)/users.rsx");
+    assert_eq!(route.template_path, "pages/(admin-panel)/users.rs");
 }
 
 #[test]
 fn test_route_group_priority_unchanged() {
-    let grouped = Route::from_path("pages/(shop)/products.rsx", "pages");
-    let non_grouped = Route::from_path("pages/products.rsx", "pages");
+    let grouped = Route::from_path("pages/(shop)/products.rs", "pages");
+    let non_grouped = Route::from_path("pages/products.rs", "pages");
 
     // Both should have same priority (both static)
     assert_eq!(grouped.priority, non_grouped.priority);
@@ -2370,7 +2370,7 @@ fn test_route_group_priority_unchanged() {
 
 #[test]
 fn test_route_group_with_named_layout() {
-    let route = Route::from_path("pages/(admin)/_layout.dashboard.rsx", "pages");
+    let route = Route::from_path("pages/(admin)/_layout.dashboard.rs", "pages");
 
     assert!(route.is_layout);
     assert_eq!(route.layout_name, Some("dashboard".to_string()));
@@ -2382,17 +2382,17 @@ fn test_route_group_real_world_organization() {
     let mut router = Router::new();
 
     // Auth group
-    router.add_route(Route::from_path("pages/(auth)/login.rsx", "pages"));
-    router.add_route(Route::from_path("pages/(auth)/signup.rsx", "pages"));
-    router.add_route(Route::from_path("pages/(auth)/reset-password.rsx", "pages"));
+    router.add_route(Route::from_path("pages/(auth)/login.rs", "pages"));
+    router.add_route(Route::from_path("pages/(auth)/signup.rs", "pages"));
+    router.add_route(Route::from_path("pages/(auth)/reset-password.rs", "pages"));
 
     // Dashboard group
-    router.add_route(Route::from_path("pages/(dashboard)/home.rsx", "pages"));
-    router.add_route(Route::from_path("pages/(dashboard)/settings.rsx", "pages"));
+    router.add_route(Route::from_path("pages/(dashboard)/home.rs", "pages"));
+    router.add_route(Route::from_path("pages/(dashboard)/settings.rs", "pages"));
 
     // Public group
-    router.add_route(Route::from_path("pages/(public)/about.rsx", "pages"));
-    router.add_route(Route::from_path("pages/(public)/contact.rsx", "pages"));
+    router.add_route(Route::from_path("pages/(public)/about.rs", "pages"));
+    router.add_route(Route::from_path("pages/(public)/contact.rs", "pages"));
 
     // All accessible via clean URLs
     assert!(router.match_route("/login").is_some());
@@ -2405,15 +2405,15 @@ fn test_route_group_real_world_organization() {
 
     // Verify correct templates are matched
     let m = router.match_route("/login").unwrap();
-    assert_eq!(m.route.template_path, "pages/(auth)/login.rsx");
+    assert_eq!(m.route.template_path, "pages/(auth)/login.rs");
 
     let m = router.match_route("/home").unwrap();
-    assert_eq!(m.route.template_path, "pages/(dashboard)/home.rsx");
+    assert_eq!(m.route.template_path, "pages/(dashboard)/home.rs");
 }
 
 #[test]
 fn test_route_group_with_route_aliases() {
-    let route = Route::from_path("pages/(marketing)/about.rsx", "pages")
+    let route = Route::from_path("pages/(marketing)/about.rs", "pages")
         .with_aliases(["/about-us", "/company"]);
 
     assert_eq!(route.pattern, "/about");
@@ -2422,7 +2422,7 @@ fn test_route_group_with_route_aliases() {
 
 #[test]
 fn test_route_group_with_metadata() {
-    let route = Route::from_path("pages/(admin)/users.rsx", "pages")
+    let route = Route::from_path("pages/(admin)/users.rs", "pages")
         .with_meta("permission", "admin.read")
         .with_meta("title", "User Management");
 
@@ -2432,7 +2432,7 @@ fn test_route_group_with_metadata() {
 
 #[test]
 fn test_route_group_does_not_affect_params() {
-    let route = Route::from_path("pages/(api)/users/[id]/posts/[postId].rsx", "pages");
+    let route = Route::from_path("pages/(api)/users/[id]/posts/[postId].rs", "pages");
 
     assert_eq!(route.pattern, "/users/:id/posts/:postId");
     assert_eq!(route.params, vec!["id", "postId"]);
@@ -2440,22 +2440,22 @@ fn test_route_group_does_not_affect_params() {
 
 #[test]
 fn test_route_group_multiple_levels() {
-    let route = Route::from_path("pages/(app)/(dashboard)/(main)/home.rsx", "pages");
+    let route = Route::from_path("pages/(app)/(dashboard)/(main)/home.rs", "pages");
 
     // All three groups should be skipped
     assert_eq!(route.pattern, "/home");
-    assert_eq!(route.template_path, "pages/(app)/(dashboard)/(main)/home.rsx");
+    assert_eq!(route.template_path, "pages/(app)/(dashboard)/(main)/home.rs");
 }
 
 // ===== Phase 4.3: Loading UI Tests =====
 
 #[test]
 fn test_loading_ui_detection() {
-    let loading = Route::from_path("pages/dashboard/loading.rsx", "pages");
+    let loading = Route::from_path("pages/dashboard/loading.rs", "pages");
 
     assert!(loading.is_loading);
     assert_eq!(loading.pattern, "/dashboard");
-    assert_eq!(loading.template_path, "pages/dashboard/loading.rsx");
+    assert_eq!(loading.template_path, "pages/dashboard/loading.rs");
 }
 
 #[test]
@@ -2463,13 +2463,13 @@ fn test_loading_ui_hierarchical_resolution() {
     let mut router = Router::new();
 
     // Root loading
-    router.add_route(Route::from_path("pages/loading.rsx", "pages"));
+    router.add_route(Route::from_path("pages/loading.rs", "pages"));
 
     // Dashboard loading
-    router.add_route(Route::from_path("pages/dashboard/loading.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/loading.rs", "pages"));
 
     // Stats loading
-    router.add_route(Route::from_path("pages/dashboard/stats/loading.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/stats/loading.rs", "pages"));
 
     // Check hierarchical lookup
     assert!(router.get_loading_page("/dashboard/stats").is_some());
@@ -2481,8 +2481,8 @@ fn test_loading_ui_hierarchical_resolution() {
 fn test_loading_pages_collection() {
     let mut router = Router::new();
 
-    router.add_route(Route::from_path("pages/loading.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/loading.rsx", "pages"));
+    router.add_route(Route::from_path("pages/loading.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/loading.rs", "pages"));
 
     assert_eq!(router.loading_pages().len(), 2);
     assert!(router.loading_pages().contains_key("/"));
@@ -2493,11 +2493,11 @@ fn test_loading_pages_collection() {
 
 #[test]
 fn test_template_detection() {
-    let template = Route::from_path("pages/dashboard/_template.rsx", "pages");
+    let template = Route::from_path("pages/dashboard/_template.rs", "pages");
 
     assert!(template.is_template);
     assert_eq!(template.pattern, "/dashboard");
-    assert_eq!(template.template_path, "pages/dashboard/_template.rsx");
+    assert_eq!(template.template_path, "pages/dashboard/_template.rs");
 }
 
 #[test]
@@ -2505,13 +2505,13 @@ fn test_template_hierarchical_resolution() {
     let mut router = Router::new();
 
     // Root template
-    router.add_route(Route::from_path("pages/_template.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_template.rs", "pages"));
 
     // Dashboard template
-    router.add_route(Route::from_path("pages/dashboard/_template.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_template.rs", "pages"));
 
     // Stats template
-    router.add_route(Route::from_path("pages/dashboard/stats/_template.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/stats/_template.rs", "pages"));
 
     // Check hierarchical lookup
     assert!(router.get_template("/dashboard/stats").is_some());
@@ -2523,8 +2523,8 @@ fn test_template_hierarchical_resolution() {
 fn test_templates_collection() {
     let mut router = Router::new();
 
-    router.add_route(Route::from_path("pages/_template.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_template.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_template.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_template.rs", "pages"));
 
     assert_eq!(router.templates().len(), 2);
     assert!(router.templates().contains_key("/"));
@@ -2535,11 +2535,11 @@ fn test_templates_collection() {
 
 #[test]
 fn test_not_found_detection() {
-    let not_found = Route::from_path("pages/dashboard/not-found.rsx", "pages");
+    let not_found = Route::from_path("pages/dashboard/not-found.rs", "pages");
 
     assert!(not_found.is_not_found);
     assert_eq!(not_found.pattern, "/dashboard");
-    assert_eq!(not_found.template_path, "pages/dashboard/not-found.rsx");
+    assert_eq!(not_found.template_path, "pages/dashboard/not-found.rs");
 }
 
 #[test]
@@ -2547,13 +2547,13 @@ fn test_not_found_hierarchical_resolution() {
     let mut router = Router::new();
 
     // Root not-found
-    router.add_route(Route::from_path("pages/not-found.rsx", "pages"));
+    router.add_route(Route::from_path("pages/not-found.rs", "pages"));
 
     // Dashboard not-found
-    router.add_route(Route::from_path("pages/dashboard/not-found.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/not-found.rs", "pages"));
 
     // Stats not-found
-    router.add_route(Route::from_path("pages/dashboard/stats/not-found.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/stats/not-found.rs", "pages"));
 
     // Check hierarchical lookup
     assert!(router.get_not_found_page("/dashboard/stats").is_some());
@@ -2565,8 +2565,8 @@ fn test_not_found_hierarchical_resolution() {
 fn test_not_found_pages_collection() {
     let mut router = Router::new();
 
-    router.add_route(Route::from_path("pages/not-found.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/not-found.rsx", "pages"));
+    router.add_route(Route::from_path("pages/not-found.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/not-found.rs", "pages"));
 
     assert_eq!(router.not_found_pages().len(), 2);
     assert!(router.not_found_pages().contains_key("/"));
@@ -2580,14 +2580,14 @@ fn test_all_special_files_together() {
     let mut router = Router::new();
 
     // Add all special file types for dashboard section
-    router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/loading.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_template.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/not-found.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/_error.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_layout.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/loading.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_template.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/not-found.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/_error.rs", "pages"));
 
     // Regular page
-    router.add_route(Route::from_path("pages/dashboard/page.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/page.rs", "pages"));
 
     // Verify all are accessible
     assert!(router.get_layout("/dashboard").is_some());
@@ -2602,9 +2602,9 @@ fn test_all_special_files_together() {
 fn test_special_files_do_not_create_routes() {
     let mut router = Router::new();
 
-    router.add_route(Route::from_path("pages/loading.rsx", "pages"));
-    router.add_route(Route::from_path("pages/_template.rsx", "pages"));
-    router.add_route(Route::from_path("pages/not-found.rsx", "pages"));
+    router.add_route(Route::from_path("pages/loading.rs", "pages"));
+    router.add_route(Route::from_path("pages/_template.rs", "pages"));
+    router.add_route(Route::from_path("pages/not-found.rs", "pages"));
 
     // These should NOT be in regular routes
     assert_eq!(router.routes().len(), 0);
@@ -2620,9 +2620,9 @@ fn test_special_files_with_route_groups() {
     let mut router = Router::new();
 
     // Special files inside route groups
-    router.add_route(Route::from_path("pages/(app)/loading.rsx", "pages"));
-    router.add_route(Route::from_path("pages/(app)/_template.rsx", "pages"));
-    router.add_route(Route::from_path("pages/(app)/not-found.rsx", "pages"));
+    router.add_route(Route::from_path("pages/(app)/loading.rs", "pages"));
+    router.add_route(Route::from_path("pages/(app)/_template.rs", "pages"));
+    router.add_route(Route::from_path("pages/(app)/not-found.rs", "pages"));
 
     // Pattern should have route group removed
     assert!(router.get_loading_page("/").is_some());
@@ -2631,20 +2631,20 @@ fn test_special_files_with_route_groups() {
 
     // But template_path should preserve the group
     let loading = router.loading_pages().get("/").unwrap();
-    assert_eq!(loading.template_path, "pages/(app)/loading.rsx");
+    assert_eq!(loading.template_path, "pages/(app)/loading.rs");
 }
 
 // ===== Phase 5.1: Parallel Routes Tests =====
 
 #[test]
 fn test_parallel_route_detection() {
-    let route = Route::from_path("pages/dashboard/@analytics/page.rsx", "pages");
+    let route = Route::from_path("pages/dashboard/@analytics/page.rs", "pages");
 
     assert!(route.is_parallel_route);
     assert_eq!(route.parallel_slot, Some("analytics".to_string()));
     // @analytics is skipped from pattern
     assert_eq!(route.pattern, "/dashboard");
-    assert_eq!(route.template_path, "pages/dashboard/@analytics/page.rsx");
+    assert_eq!(route.template_path, "pages/dashboard/@analytics/page.rs");
 }
 
 #[test]
@@ -2652,9 +2652,9 @@ fn test_parallel_route_multiple_slots() {
     let mut router = Router::new();
 
     // Multiple parallel slots for same pattern
-    router.add_route(Route::from_path("pages/dashboard/@analytics/page.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/@team/page.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/@settings/page.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/@analytics/page.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/@team/page.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/@settings/page.rs", "pages"));
 
     let slots = router.get_parallel_routes("/dashboard").unwrap();
     assert_eq!(slots.len(), 3);
@@ -2667,21 +2667,21 @@ fn test_parallel_route_multiple_slots() {
 fn test_parallel_route_specific_slot() {
     let mut router = Router::new();
 
-    router.add_route(Route::from_path("pages/dashboard/@analytics/page.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/@team/page.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/@analytics/page.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/@team/page.rs", "pages"));
 
     let analytics = router.get_parallel_route("/dashboard", "analytics").unwrap();
     assert_eq!(analytics.parallel_slot, Some("analytics".to_string()));
-    assert_eq!(analytics.template_path, "pages/dashboard/@analytics/page.rsx");
+    assert_eq!(analytics.template_path, "pages/dashboard/@analytics/page.rs");
 
     let team = router.get_parallel_route("/dashboard", "team").unwrap();
     assert_eq!(team.parallel_slot, Some("team".to_string()));
-    assert_eq!(team.template_path, "pages/dashboard/@team/page.rsx");
+    assert_eq!(team.template_path, "pages/dashboard/@team/page.rs");
 }
 
 #[test]
 fn test_parallel_route_with_dynamic_params() {
-    let route = Route::from_path("pages/products/@reviews/[id].rsx", "pages");
+    let route = Route::from_path("pages/products/@reviews/[id].rs", "pages");
 
     assert!(route.is_parallel_route);
     assert_eq!(route.parallel_slot, Some("reviews".to_string()));
@@ -2691,18 +2691,18 @@ fn test_parallel_route_with_dynamic_params() {
 
 #[test]
 fn test_parallel_route_with_route_groups() {
-    let route = Route::from_path("pages/(shop)/products/@sidebar/list.rsx", "pages");
+    let route = Route::from_path("pages/(shop)/products/@sidebar/list.rs", "pages");
 
     // Both (shop) and @sidebar are skipped
     assert!(route.is_parallel_route);
     assert_eq!(route.parallel_slot, Some("sidebar".to_string()));
     assert_eq!(route.pattern, "/products/list");
-    assert_eq!(route.template_path, "pages/(shop)/products/@sidebar/list.rsx");
+    assert_eq!(route.template_path, "pages/(shop)/products/@sidebar/list.rs");
 }
 
 #[test]
 fn test_parallel_route_nested() {
-    let route = Route::from_path("pages/app/@modal/profile/@details/page.rsx", "pages");
+    let route = Route::from_path("pages/app/@modal/profile/@details/page.rs", "pages");
 
     // Only first @ is detected
     assert!(route.is_parallel_route);
@@ -2715,9 +2715,9 @@ fn test_parallel_route_nested() {
 fn test_parallel_route_collection_accessor() {
     let mut router = Router::new();
 
-    router.add_route(Route::from_path("pages/dash/@a/page.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dash/@b/page.rsx", "pages"));
-    router.add_route(Route::from_path("pages/other/@c/page.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dash/@a/page.rs", "pages"));
+    router.add_route(Route::from_path("pages/dash/@b/page.rs", "pages"));
+    router.add_route(Route::from_path("pages/other/@c/page.rs", "pages"));
 
     assert_eq!(router.parallel_routes().len(), 2);
     assert!(router.parallel_routes().contains_key("/dash"));
@@ -2726,7 +2726,7 @@ fn test_parallel_route_collection_accessor() {
 
 #[test]
 fn test_parallel_route_with_index() {
-    let route = Route::from_path("pages/dashboard/@analytics/page.rsx", "pages");
+    let route = Route::from_path("pages/dashboard/@analytics/page.rs", "pages");
 
     assert!(route.is_parallel_route);
     assert_eq!(route.parallel_slot, Some("analytics".to_string()));
@@ -2739,10 +2739,10 @@ fn test_parallel_route_real_world_dashboard() {
     let mut router = Router::new();
 
     // Dashboard with multiple parallel sections
-    router.add_route(Route::from_path("pages/dashboard/page.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/@analytics/page.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/@team/page.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/@notifications/page.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/page.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/@analytics/page.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/@team/page.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/@notifications/page.rs", "pages"));
 
     // Main page is a regular route
     assert!(router.match_route("/dashboard").is_some());
@@ -2759,7 +2759,7 @@ fn test_parallel_route_real_world_dashboard() {
 
 #[test]
 fn test_intercepting_route_same_level() {
-    let route = Route::from_path("pages/feed/(.)/photo/[id].rsx", "pages");
+    let route = Route::from_path("pages/feed/(.)/photo/[id].rs", "pages");
 
     assert!(route.is_intercepting);
     assert_eq!(route.intercept_level, Some(InterceptLevel::SameLevel));
@@ -2770,7 +2770,7 @@ fn test_intercepting_route_same_level() {
 
 #[test]
 fn test_intercepting_route_one_level_up() {
-    let route = Route::from_path("pages/feed/(..)/photo/[id].rsx", "pages");
+    let route = Route::from_path("pages/feed/(..)/photo/[id].rs", "pages");
 
     assert!(route.is_intercepting);
     assert_eq!(route.intercept_level, Some(InterceptLevel::OneLevelUp));
@@ -2780,7 +2780,7 @@ fn test_intercepting_route_one_level_up() {
 
 #[test]
 fn test_intercepting_route_from_root() {
-    let route = Route::from_path("pages/feed/(...)/photo/[id].rsx", "pages");
+    let route = Route::from_path("pages/feed/(...)/photo/[id].rs", "pages");
 
     assert!(route.is_intercepting);
     assert_eq!(route.intercept_level, Some(InterceptLevel::FromRoot));
@@ -2790,7 +2790,7 @@ fn test_intercepting_route_from_root() {
 
 #[test]
 fn test_intercepting_route_two_levels_up() {
-    let route = Route::from_path("pages/feed/(....)/photo/[id].rsx", "pages");
+    let route = Route::from_path("pages/feed/(....)/photo/[id].rs", "pages");
 
     assert!(route.is_intercepting);
     assert_eq!(route.intercept_level, Some(InterceptLevel::TwoLevelsUp));
@@ -2802,7 +2802,7 @@ fn test_intercepting_route_two_levels_up() {
 fn test_intercepting_route_in_router() {
     let mut router = Router::new();
 
-    router.add_route(Route::from_path("pages/feed/(.)/photo/[id].rsx", "pages"));
+    router.add_route(Route::from_path("pages/feed/(.)/photo/[id].rs", "pages"));
 
     let route = router.get_intercepting_route("/feed/photo/:id").unwrap();
     assert!(route.is_intercepting);
@@ -2811,7 +2811,7 @@ fn test_intercepting_route_in_router() {
 
 #[test]
 fn test_intercepting_route_with_route_groups() {
-    let route = Route::from_path("pages/(app)/feed/(.)/photo/[id].rsx", "pages");
+    let route = Route::from_path("pages/(app)/feed/(.)/photo/[id].rs", "pages");
 
     // Both (app) and (.) are skipped
     assert!(route.is_intercepting);
@@ -2824,10 +2824,10 @@ fn test_intercepting_route_modal_pattern() {
     let mut router = Router::new();
 
     // Regular photo page
-    router.add_route(Route::from_path("pages/photo/[id].rsx", "pages"));
+    router.add_route(Route::from_path("pages/photo/[id].rs", "pages"));
 
     // Intercepting route when coming from feed
-    router.add_route(Route::from_path("pages/feed/(.)/photo/[id].rsx", "pages"));
+    router.add_route(Route::from_path("pages/feed/(.)/photo/[id].rs", "pages"));
 
     // Regular route exists
     assert!(router.match_route("/photo/123").is_some());
@@ -2841,8 +2841,8 @@ fn test_intercepting_route_modal_pattern() {
 fn test_intercepting_route_collection_accessor() {
     let mut router = Router::new();
 
-    router.add_route(Route::from_path("pages/feed/(.)/photo/[id].rsx", "pages"));
-    router.add_route(Route::from_path("pages/gallery/(..)/image/[id].rsx", "pages"));
+    router.add_route(Route::from_path("pages/feed/(.)/photo/[id].rs", "pages"));
+    router.add_route(Route::from_path("pages/gallery/(..)/image/[id].rs", "pages"));
 
     assert_eq!(router.intercepting_routes().len(), 2);
     assert!(router.intercepting_routes().contains_key("/feed/photo/:id"));
@@ -2851,7 +2851,7 @@ fn test_intercepting_route_collection_accessor() {
 
 #[test]
 fn test_intercepting_route_with_catch_all() {
-    let route = Route::from_path("pages/app/(...)/docs/[...slug].rsx", "pages");
+    let route = Route::from_path("pages/app/(...)/docs/[...slug].rs", "pages");
 
     assert!(route.is_intercepting);
     assert_eq!(route.intercept_level, Some(InterceptLevel::FromRoot));
@@ -2865,13 +2865,13 @@ fn test_intercepting_route_real_world_modal() {
     let mut router = Router::new();
 
     // Feed page
-    router.add_route(Route::from_path("pages/feed/page.rsx", "pages"));
+    router.add_route(Route::from_path("pages/feed/page.rs", "pages"));
 
     // Photo detail page (standalone)
-    router.add_route(Route::from_path("pages/photo/[id].rsx", "pages"));
+    router.add_route(Route::from_path("pages/photo/[id].rs", "pages"));
 
     // Intercepting route - show photo as modal when navigating from feed
-    router.add_route(Route::from_path("pages/feed/(...)/photo/[id].rsx", "pages"));
+    router.add_route(Route::from_path("pages/feed/(...)/photo/[id].rs", "pages"));
 
     // All routes are accessible
     assert!(router.match_route("/feed").is_some());
@@ -2890,11 +2890,11 @@ fn test_parallel_and_intercepting_together() {
     let mut router = Router::new();
 
     // Dashboard with parallel slots
-    router.add_route(Route::from_path("pages/dashboard/@analytics/page.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dashboard/@team/page.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/@analytics/page.rs", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/@team/page.rs", "pages"));
 
     // Intercepting route from dashboard
-    router.add_route(Route::from_path("pages/dashboard/(.)/settings/page.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dashboard/(.)/settings/page.rs", "pages"));
 
     // Both features work together
     let slots = router.get_parallel_routes("/dashboard").unwrap();
@@ -2906,7 +2906,7 @@ fn test_parallel_and_intercepting_together() {
 
 #[test]
 fn test_parallel_route_in_intercepting_route() {
-    let route = Route::from_path("pages/feed/(.)/modal/@content/page.rsx", "pages");
+    let route = Route::from_path("pages/feed/(.)/modal/@content/page.rs", "pages");
 
     // Has both intercepting and parallel route markers
     assert!(route.is_intercepting);
@@ -2922,23 +2922,23 @@ fn test_phase_5_with_all_previous_features() {
     let mut router = Router::new();
 
     // Regular route with dynamic params
-    router.add_route(Route::from_path("pages/users/[id].rsx", "pages"));
+    router.add_route(Route::from_path("pages/users/[id].rs", "pages"));
 
     // Layout
-    router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
+    router.add_route(Route::from_path("pages/_layout.rs", "pages"));
 
     // Loading UI (Phase 4.3)
-    router.add_route(Route::from_path("pages/loading.rsx", "pages"));
+    router.add_route(Route::from_path("pages/loading.rs", "pages"));
 
     // Route group (Phase 4.2)
-    router.add_route(Route::from_path("pages/(app)/dashboard/page.rsx", "pages"));
+    router.add_route(Route::from_path("pages/(app)/dashboard/page.rs", "pages"));
 
     // Parallel routes (Phase 5.1)
-    router.add_route(Route::from_path("pages/dash/@analytics/page.rsx", "pages"));
-    router.add_route(Route::from_path("pages/dash/@team/page.rsx", "pages"));
+    router.add_route(Route::from_path("pages/dash/@analytics/page.rs", "pages"));
+    router.add_route(Route::from_path("pages/dash/@team/page.rs", "pages"));
 
     // Intercepting route (Phase 5.2)
-    router.add_route(Route::from_path("pages/feed/(.)/photo/[id].rsx", "pages"));
+    router.add_route(Route::from_path("pages/feed/(.)/photo/[id].rs", "pages"));
 
     // All features work together
     assert!(router.match_route("/users/123").is_some());
