@@ -9,8 +9,8 @@
 //! use rhtmx_router::{Router, Route};
 //!
 //! let router = Router::new()
-//!     .with_route(Route::from_path("pages/about.rsx", "pages"))
-//!     .with_route(Route::from_path("pages/users/[id].rsx", "pages"));
+//!     .with_route(Route::from_path("pages/about.rs", "pages"))
+//!     .with_route(Route::from_path("pages/users/[id].rs", "pages"));
 //!
 //! let m = router.match_route("/users/123").unwrap();
 //! assert_eq!(m.params.get("id"), Some(&"123".to_string()));
@@ -92,14 +92,14 @@ impl RouteMatch {
 // ============================================================================
 
 impl Route {
-    /// Creates a route from a file system path (e.g. `pages/users/[id]/page.rsx`)
+    /// Creates a route from a file system path (e.g. `pages/users/[id]/page.rs`)
     pub fn from_path(file_path: &str, pages_dir: &str) -> Self {
         let relative = file_path
             .strip_prefix(pages_dir)
             .unwrap_or(file_path)
             .trim_start_matches('/');
 
-        let without_ext = relative.strip_suffix(".rsx").unwrap_or(relative);
+        let without_ext = relative.strip_suffix(".rs").unwrap_or(relative);
         let filename = without_ext.split('/').last().unwrap_or("");
 
         let is_layout = filename == "_layout" || filename.starts_with("_layout.");
@@ -433,7 +433,7 @@ impl Router {
     /// ```
     /// use rhtmx_router::{Router, Route};
     /// let router = Router::new()
-    ///     .with_route(Route::from_path("pages/about.rsx", "pages"));
+    ///     .with_route(Route::from_path("pages/about.rs", "pages"));
     /// ```
     pub fn with_route(mut self, route: Route) -> Self {
         self.add_route_internal(&route); self
@@ -442,8 +442,8 @@ impl Router {
     /// ```
     /// use rhtmx_router::{Router, Route};
     /// let routes = vec![
-    ///     Route::from_path("pages/about.rsx", "pages"),
-    ///     Route::from_path("pages/users/[id].rsx", "pages"),
+    ///     Route::from_path("pages/about.rs", "pages"),
+    ///     Route::from_path("pages/users/[id].rs", "pages"),
     /// ];
     /// let router = Router::new().with_routes(routes);
     /// ```
@@ -455,7 +455,7 @@ impl Router {
     /// ```
     /// use rhtmx_router::{Router, Route};
     /// let router = Router::new()
-    ///     .with_route(Route::from_path("pages/about.rsx", "pages"))
+    ///     .with_route(Route::from_path("pages/about.rs", "pages"))
     ///     .without_route("/about");
     /// ```
     pub fn without_route(mut self, pattern: &str) -> Self {
@@ -480,7 +480,7 @@ impl Router {
     /// ```
     /// use rhtmx_router::{Router, Route};
     /// let mut router = Router::new();
-    /// router.add_route(Route::from_path("pages/about.rsx", "pages"));
+    /// router.add_route(Route::from_path("pages/about.rs", "pages"));
     /// ```
     #[deprecated(since = "0.2.0", note = "Use with_route() for functional programming style")]
     pub fn add_route(&mut self, route: Route) {
@@ -490,7 +490,7 @@ impl Router {
     /// ```
     /// use rhtmx_router::{Router, Route};
     /// let mut router = Router::new();
-    /// router.add_route(Route::from_path("pages/about.rsx", "pages"));
+    /// router.add_route(Route::from_path("pages/about.rs", "pages"));
     /// router.remove_route("/about");
     /// ```
     #[deprecated(since = "0.2.0", note = "Use without_route() for functional programming style")]
@@ -570,7 +570,7 @@ impl Router {
     /// ```
     /// use rhtmx_router::{Router, Route};
     /// let mut router = Router::new();
-    /// router.add_route(Route::from_path("pages/users/[id].rsx", "pages"));
+    /// router.add_route(Route::from_path("pages/users/[id].rs", "pages"));
     /// let m = router.match_route("/users/123").unwrap();
     /// assert_eq!(m.params.get("id"), Some(&"123".to_string()));
     /// ```
@@ -598,8 +598,8 @@ impl Router {
     /// ```
     /// use rhtmx_router::{Router, Route};
     /// let mut router = Router::new();
-    /// router.add_route(Route::from_path("pages/_layout.rsx", "pages"));
-    /// router.add_route(Route::from_path("pages/dashboard/_layout.rsx", "pages"));
+    /// router.add_route(Route::from_path("pages/_layout.rs", "pages"));
+    /// router.add_route(Route::from_path("pages/dashboard/_layout.rs", "pages"));
     /// let layout = router.get_layout("/dashboard/settings").unwrap();
     /// assert_eq!(layout.pattern, "/dashboard");
     /// ```
@@ -645,8 +645,8 @@ impl Router {
     /// ```
     /// use rhtmx_router::{Router, Route};
     /// let mut router = Router::new();
-    /// router.add_route(Route::from_path("pages/_error.rsx", "pages"));
-    /// router.add_route(Route::from_path("pages/api/_error.rsx", "pages"));
+    /// router.add_route(Route::from_path("pages/_error.rs", "pages"));
+    /// router.add_route(Route::from_path("pages/api/_error.rs", "pages"));
     /// let err = router.get_error_page("/api/users").unwrap();
     /// assert_eq!(err.pattern, "/api");
     /// ```
@@ -659,7 +659,7 @@ impl Router {
     /// ```
     /// use rhtmx_router::{Router, Route};
     /// let mut router = Router::new();
-    /// router.add_route(Route::from_path("pages/dashboard/loading.rsx", "pages"));
+    /// router.add_route(Route::from_path("pages/dashboard/loading.rs", "pages"));
     /// let loading = router.get_loading_page("/dashboard/users").unwrap();
     /// assert_eq!(loading.pattern, "/dashboard");
     /// ```
@@ -672,7 +672,7 @@ impl Router {
     /// ```
     /// use rhtmx_router::{Router, Route};
     /// let mut router = Router::new();
-    /// router.add_route(Route::from_path("pages/_template.rsx", "pages"));
+    /// router.add_route(Route::from_path("pages/_template.rs", "pages"));
     /// let template = router.get_template("/about").unwrap();
     /// assert_eq!(template.pattern, "/");
     /// ```
@@ -691,8 +691,8 @@ impl Router {
     /// ```
     /// use rhtmx_router::{Router, Route};
     /// let mut router = Router::new();
-    /// router.add_route(Route::from_path("pages/dashboard/@analytics/page.rsx", "pages"));
-    /// router.add_route(Route::from_path("pages/dashboard/@team/page.rsx", "pages"));
+    /// router.add_route(Route::from_path("pages/dashboard/@analytics/page.rs", "pages"));
+    /// router.add_route(Route::from_path("pages/dashboard/@team/page.rs", "pages"));
     /// let slots = router.get_parallel_routes("/dashboard").unwrap();
     /// assert_eq!(slots.len(), 2);
     /// ```
@@ -705,7 +705,7 @@ impl Router {
     /// ```
     /// use rhtmx_router::{Router, Route};
     /// let mut router = Router::new();
-    /// router.add_route(Route::from_path("pages/dashboard/@analytics/page.rsx", "pages"));
+    /// router.add_route(Route::from_path("pages/dashboard/@analytics/page.rs", "pages"));
     /// let route = router.get_parallel_route("/dashboard", "analytics").unwrap();
     /// assert_eq!(route.parallel_slot, Some("analytics".to_string()));
     /// ```
@@ -725,7 +725,7 @@ impl Router {
     /// use rhtmx_router::{Router, Route};
     /// use std::collections::HashMap;
     /// let mut router = Router::new();
-    /// router.add_route(Route::from_path("pages/users/[id].rsx", "pages").with_name("user.profile"));
+    /// router.add_route(Route::from_path("pages/users/[id].rs", "pages").with_name("user.profile"));
     /// let mut params = HashMap::new();
     /// params.insert("id".to_string(), "123".to_string());
     /// let url = router.url_for("user.profile", &params).unwrap();
@@ -738,7 +738,7 @@ impl Router {
     /// ```
     /// use rhtmx_router::{Router, Route};
     /// let mut router = Router::new();
-    /// router.add_route(Route::from_path("pages/posts/[year]/[slug].rsx", "pages").with_name("post.show"));
+    /// router.add_route(Route::from_path("pages/posts/[year]/[slug].rs", "pages").with_name("post.show"));
     /// let url = router.url_for_params("post.show", &[("year", "2024"), ("slug", "hello-world")]).unwrap();
     /// assert_eq!(url, "/posts/2024/hello-world");
     /// ```
@@ -750,7 +750,7 @@ impl Router {
     /// ```
     /// use rhtmx_router::{Router, Route};
     /// let mut router = Router::new();
-    /// router.add_route(Route::from_path("pages/about.rsx", "pages").with_name("about"));
+    /// router.add_route(Route::from_path("pages/about.rs", "pages").with_name("about"));
     /// let route = router.get_route_by_name("about").unwrap();
     /// assert_eq!(route.pattern, "/about");
     /// ```

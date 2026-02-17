@@ -7,8 +7,6 @@ use tracing::{error, info, warn};
 /// Type of file change that occurred
 #[derive(Debug, Clone, PartialEq)]
 pub enum ChangeType {
-    Template,
-    Component,
     SourceCode,
 }
 
@@ -38,27 +36,16 @@ impl HotReloadWatcher {
                     // Only process modify and create events
                     if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
                         for path in event.paths {
-                            // Determine change type based on file path
-                            let path_str = path.to_str().unwrap_or("");
+                            // Only watch .rs files — all pages are now compiled Rust
+                            if path.extension().and_then(|s| s.to_str()) != Some("rs") {
+                                continue;
+                            }
 
-                            let change_type =
-                                if path_str.contains("pages/") || path_str.contains("pages\\") {
-                                    ChangeType::Template
-                                } else if path_str.contains("components/")
-                                    || path_str.contains("components\\")
-                                {
-                                    ChangeType::Component
-                                } else if path.extension().and_then(|s| s.to_str()) == Some("rs") {
-                                    ChangeType::SourceCode
-                                } else {
-                                    continue; // Skip other files
-                                };
-
-                            info!("📝 File changed: {:?} ({:?})", path, change_type);
+                            info!("File changed: {:?} (recompile required)", path);
 
                             let file_change = FileChange {
                                 path: path.clone(),
-                                change_type,
+                                change_type: ChangeType::SourceCode,
                             };
 
                             // Broadcast change event (ignore if no receivers)
@@ -74,9 +61,9 @@ impl HotReloadWatcher {
         for path in watch_paths {
             if path.exists() {
                 watcher.watch(&path, RecursiveMode::Recursive)?;
-                info!("👀 Watching: {:?}", path);
+                info!("Watching: {:?}", path);
             } else {
-                warn!("⚠️  Path does not exist: {:?}", path);
+                warn!("Path does not exist: {:?}", path);
             }
         }
 
@@ -96,7 +83,6 @@ impl HotReloadWatcher {
 pub fn create_watcher() -> Result<HotReloadWatcher> {
     let watch_paths = vec![
         PathBuf::from("pages"),
-        PathBuf::from("components"),
         PathBuf::from("src"),
     ];
 

@@ -709,8 +709,6 @@ dependencies = [
  "anyhow",
  "axum",
  "maud",
- "once_cell",
- "regex",
  "rhtmx-macro",
  "rhtmx-router",
  "serde",

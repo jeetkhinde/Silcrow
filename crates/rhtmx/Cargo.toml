@@ -18,8 +18,6 @@ rhtmx-router = { path = "../rhtmx-router" }
 axum = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-regex = { workspace = true }
-once_cell = { workspace = true }
 maud = { workspace = true }
 anyhow = { workspace = true }
 toml = { workspace = true }
