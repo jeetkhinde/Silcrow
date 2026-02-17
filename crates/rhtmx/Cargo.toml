@@ -12,14 +12,9 @@ name = "rhtmx"
 path = "src/lib.rs"
 
 [dependencies]
-rhtmx-router = { path = "../rhtmx-router" }
-
 axum = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 maud = { workspace = true }
 anyhow = { workspace = true }
 toml = { workspace = true }
-
-[dev-dependencies]
-serde_json = { workspace = true }

@@ -441,6 +441,26 @@ pub fn redirect() -> RedirectResponse {
     RedirectResponse::new()
 }
 
+// ============================================================================
+// Maud Integration
+// ============================================================================
+
+/// Convert Maud Markup to RHTMX Html
+pub fn maud_to_html(markup: maud::Markup) -> Html {
+    Html(markup.into_string())
+}
+
+/// Trait for seamless Maud Markup -> Html conversion
+pub trait MaudMarkup {
+    fn to_html(self) -> Html;
+}
+
+impl MaudMarkup for maud::Markup {
+    fn to_html(self) -> Html {
+        maud_to_html(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,10 +1,7 @@
 // RHTMX - Rust + HTMX Framework
-// Type-safe web framework with Maud templates and zero runtime overhead
+// Single-crate web framework with Maud templates and Axum routing
 
 pub mod html;
-
-// Framework modules
-pub mod template_loader;
 pub mod request_context;
 pub mod config;
 
@@ -17,10 +14,10 @@ pub use html::{
     OkResponse, ErrorResponse, RedirectResponse,
     Ok, Error, Redirect,
     ok, error, redirect,
+    maud_to_html, MaudMarkup,
 };
 
 // Re-export framework types
-pub use template_loader::{TemplateLoader, HandlerFn, PageRoute};
 pub use request_context::{RequestContext, QueryParams, FormData};
 pub use config::Config;
 
