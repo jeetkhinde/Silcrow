@@ -8,9 +8,6 @@ pub mod template_loader;
 pub mod request_context;
 pub mod config;
 
-// Re-export HTTP handler macros from rhtmx-macro
-pub use rhtmx_macro::{get, post, put, patch, delete};
-
 // Re-export Maud for templates
 pub use maud::{html as maud, Markup, PreEscaped, DOCTYPE};
 

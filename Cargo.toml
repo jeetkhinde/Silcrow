@@ -1,7 +1,6 @@
 [workspace]
 members = [
   "crates/rhtmx",
-  "crates/rhtmx-macro",
   "crates/rhtmx-router",
   "crates/rhtmx-server",
 ]

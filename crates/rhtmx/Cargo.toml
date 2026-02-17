@@ -12,7 +12,6 @@ name = "rhtmx"
 path = "src/lib.rs"
 
 [dependencies]
-rhtmx-macro = { path = "../rhtmx-macro" }
 rhtmx-router = { path = "../rhtmx-router" }
 
 axum = { workspace = true }
