@@ -1,9 +1,8 @@
-# crates/rhtmx/Cargo.toml
 [package]
 name = "rhtmx"
 version = "0.1.0"
 edition = "2021"
-description = "RHTMX - Rust + HTMX framework with compile-time HTML generation"
+description = "HTMX response builders for Axum + Maud"
 license = "MIT"
 repository = "https://github.com/jeetkhinde/RHTMX"
 
@@ -12,15 +11,5 @@ name = "rhtmx"
 path = "src/lib.rs"
 
 [dependencies]
-rhtmx-macro = { path = "../rhtmx-macro" }
-rhtmx-router = { path = "../rhtmx-router" }
-
 axum = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 maud = { workspace = true }
-anyhow = { workspace = true }
-toml = { workspace = true }
-
-[dev-dependencies]
-serde_json = { workspace = true }

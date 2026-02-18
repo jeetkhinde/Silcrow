@@ -2,7 +2,6 @@
 // Demonstrates the clean RHTMX architecture
 
 use rhtmx::{html, Html, Ok};
-use rhtmx::{get, post, delete};
 use serde::{Deserialize, Serialize};
 
 // ============================================================================
@@ -66,16 +65,14 @@ mod db {
 // HTTP Handlers (in actual app, these would be in pages/users.rs)
 // ============================================================================
 
-// Handles GET /users
-get!();
-fn index() -> rhtmx::OkResponse {
+/// GET /users
+pub fn index() -> rhtmx::OkResponse {
     let users = db::get_users().unwrap_or_default();
     Ok().render(users_page, users)
 }
 
-// Handles POST /users
-post!();
-fn create(req: CreateUserRequest) -> rhtmx::OkResponse {
+/// POST /users
+pub fn create(req: CreateUserRequest) -> rhtmx::OkResponse {
     let user = db::create_user(req.name, req.email).unwrap();
 
     Ok()
@@ -84,9 +81,8 @@ fn create(req: CreateUserRequest) -> rhtmx::OkResponse {
         .toast("User created successfully!")
 }
 
-// Handles DELETE /users/:id
-delete!(":id");
-fn delete(id: i32) -> rhtmx::OkResponse {
+/// DELETE /users/:id
+pub fn destroy(id: i32) -> rhtmx::OkResponse {
     db::delete_user(id).unwrap();
 
     Ok()
