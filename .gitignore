@@ -1,9 +1,8 @@
 # Compiled output
 /target/
-**/target/
+
 # Cargo lock file (for libraries)
 /Cargo.lock
-**/Cargo.lock
 # IDE / Editor files
 .idea/
 .vscode/

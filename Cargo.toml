@@ -1,10 +1,15 @@
-[workspace]
-members = [
-  "crates/rhtmx",
-]
+[package]
+name = "rhtmx"
+version = "0.1.0"
+edition = "2021"
+description = "HTMX response builders for Axum + Maud"
+license = "MIT"
+repository = "https://github.com/jeetkhinde/RHTMX"
 
-resolver = "2"
+[lib]
+name = "rhtmx"
+path = "src/lib.rs"
 
-[workspace.dependencies]
+[dependencies]
 maud = "0.26"
 axum = "0.7"
