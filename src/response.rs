@@ -133,9 +133,8 @@ impl JsonOkResponse {
     /// Insert a key-value pair into the JSON response.
     /// The value must implement `serde::Serialize`.
     pub fn set(mut self, key: impl Into<String>, value: impl serde::Serialize) -> Self {
-        if let Result::Ok(v) = serde_json::to_value(value) {
-            self.data.insert(key.into(), v);
-        }
+        let v = serde_json::to_value(value).expect("Failed to serialize value for JSON response");
+        self.data.insert(key.into(), v);
         self
     }
 
@@ -300,9 +299,9 @@ impl IntoResponse for RedirectResponse {
     fn into_response(self) -> Response {
         let mut headers = HeaderMap::new();
         if let Some(ref location) = self.location {
-            if let Result::Ok(value) = HeaderValue::from_str(location) {
-                headers.insert(axum::http::header::LOCATION, value);
-            }
+            let value = HeaderValue::from_str(location)
+                .expect("Redirect location contains invalid characters for a header value");
+            headers.insert(axum::http::header::LOCATION, value);
         }
         (self.status, headers).into_response()
     }
