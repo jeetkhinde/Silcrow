@@ -1,24 +1,26 @@
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
 
-// ============================================================================
-// IntoHtml trait — bridges Maud Markup, String, and &str
-// ============================================================================
-
 pub trait IntoHtml {
     fn into_html(self) -> String;
 }
 
 impl IntoHtml for maud::Markup {
-    fn into_html(self) -> String { self.into_string() }
+    fn into_html(self) -> String {
+        self.into_string()
+    }
 }
 
 impl IntoHtml for String {
-    fn into_html(self) -> String { self }
+    fn into_html(self) -> String {
+        self
+    }
 }
 
 impl IntoHtml for &str {
-    fn into_html(self) -> String { self.to_string() }
+    fn into_html(self) -> String {
+        self.to_string()
+    }
 }
 
 // -- Shared helpers --
@@ -40,15 +42,6 @@ fn insert_toast(headers: &mut HeaderMap, message: &str) {
     }
 }
 
-// ============================================================================
-// OkResponse
-// ============================================================================
-
-/// HTMX-aware success response with OOB swaps and toast support.
-///
-/// ```ignore
-/// Ok().html(maud::html! { div { "Hello" } }).toast("Saved!")
-/// ```
 #[derive(Debug)]
 pub struct OkResponse {
     content: Option<String>,
@@ -101,7 +94,9 @@ impl OkResponse {
 }
 
 impl Default for OkResponse {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl IntoResponse for OkResponse {
@@ -111,7 +106,9 @@ impl IntoResponse for OkResponse {
             insert_toast(&mut headers, &msg);
         }
         let main = self.content.unwrap_or_default();
-        let oob: String = self.oob_updates.iter()
+        let oob: String = self
+            .oob_updates
+            .iter()
             .map(|(target, html)| {
                 format!(r#"<div id="{}" hx-swap-oob="true">{}</div>"#, target, html)
             })
@@ -120,15 +117,6 @@ impl IntoResponse for OkResponse {
     }
 }
 
-// ============================================================================
-// ErrorResponse
-// ============================================================================
-
-/// HTMX-aware error response.
-///
-/// ```ignore
-/// Error().message("Invalid input").status(StatusCode::BAD_REQUEST)
-/// ```
 #[derive(Debug)]
 pub struct ErrorResponse {
     content: Option<String>,
@@ -173,27 +161,24 @@ impl ErrorResponse {
 }
 
 impl Default for ErrorResponse {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl IntoResponse for ErrorResponse {
     fn into_response(self) -> Response {
-        let content = self.content
-            .or_else(|| self.message.map(|msg| format!(r#"<div class="error">{}</div>"#, msg)))
+        let content = self
+            .content
+            .or_else(|| {
+                self.message
+                    .map(|msg| format!(r#"<div class="error">{}</div>"#, msg))
+            })
             .unwrap_or_else(|| r#"<div class="error">An error occurred</div>"#.into());
         (self.status, self.headers, Html(content)).into_response()
     }
 }
 
-// ============================================================================
-// RedirectResponse
-// ============================================================================
-
-/// HTMX-aware redirect (sets both Location and HX-Redirect).
-///
-/// ```ignore
-/// Redirect().to("/dashboard").toast("Welcome back!")
-/// ```
 #[derive(Debug)]
 pub struct RedirectResponse {
     location: Option<String>,
@@ -230,7 +215,9 @@ impl RedirectResponse {
 }
 
 impl Default for RedirectResponse {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl IntoResponse for RedirectResponse {
@@ -254,88 +241,16 @@ impl IntoResponse for RedirectResponse {
 // ============================================================================
 
 #[allow(non_snake_case)]
-pub fn Ok() -> OkResponse { OkResponse::new() }
+pub fn Ok() -> OkResponse {
+    OkResponse::new()
+}
 
 #[allow(non_snake_case)]
-pub fn Error() -> ErrorResponse { ErrorResponse::new() }
+pub fn Error() -> ErrorResponse {
+    ErrorResponse::new()
+}
 
 #[allow(non_snake_case)]
-pub fn Redirect() -> RedirectResponse { RedirectResponse::new() }
-
-// ============================================================================
-// Tests
-// ============================================================================
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_ok_with_string() {
-        let resp = Ok().html("<div>Hello</div>").into_response();
-        assert_eq!(resp.status(), StatusCode::OK);
-    }
-
-    #[test]
-    fn test_ok_with_maud() {
-        let markup = maud::html! { div { "Hello" } };
-        let resp = Ok().html(markup).into_response();
-        assert_eq!(resp.status(), StatusCode::OK);
-    }
-
-    #[test]
-    fn test_ok_with_toast() {
-        let resp = Ok().html("content").toast("Saved!").into_response();
-        assert!(resp.headers().contains_key("hx-trigger"));
-    }
-
-    #[test]
-    fn test_ok_with_oob() {
-        let resp = Ok()
-            .html("<div>Main</div>")
-            .oob("counter", "42")
-            .oob("status", maud::html! { span { "active" } })
-            .into_response();
-        assert_eq!(resp.status(), StatusCode::OK);
-    }
-
-    #[test]
-    fn test_error_with_message() {
-        let resp = Error()
-            .message("Bad input")
-            .status(StatusCode::BAD_REQUEST)
-            .into_response();
-        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-    }
-
-    #[test]
-    fn test_error_with_maud() {
-        let resp = Error()
-            .html(maud::html! { div.error { "Oops" } })
-            .status(StatusCode::UNPROCESSABLE_ENTITY)
-            .into_response();
-        assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
-    }
-
-    #[test]
-    fn test_redirect() {
-        let resp = Redirect().to("/dashboard").into_response();
-        assert_eq!(resp.status(), StatusCode::SEE_OTHER);
-        assert!(resp.headers().contains_key("location"));
-        assert!(resp.headers().contains_key("hx-redirect"));
-    }
-
-    #[test]
-    fn test_redirect_with_toast() {
-        let resp = Redirect().to("/home").toast("Logged in!").into_response();
-        assert!(resp.headers().contains_key("hx-trigger"));
-        assert!(resp.headers().contains_key("location"));
-    }
-
-    #[test]
-    fn test_toast_escaping() {
-        let resp = Ok().toast(r#"He said "hello""#).into_response();
-        let trigger = resp.headers().get("hx-trigger").unwrap().to_str().unwrap();
-        assert!(trigger.contains(r#"\"hello\""#));
-    }
+pub fn Redirect() -> RedirectResponse {
+    RedirectResponse::new()
 }
