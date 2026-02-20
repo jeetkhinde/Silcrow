@@ -214,8 +214,8 @@ sc gen endpoint CreateInvoice --method POST --path /invoices
 use crate::prelude::*;
 use std::sync::Arc;
 use axum::extract::State;
-use axum::response::Response;
-use silcrow::{SilcrowRequest, JsonOk, Respond};
+use axum::{Json, http::StatusCode};
+use silcrow::SilcrowRequest;
 use tracing::instrument;
 use crate::AppState;
 
@@ -223,9 +223,9 @@ use crate::AppState;
 pub async fn create_invoice(
     State(state): State<Arc<AppState>>,
     _req: SilcrowRequest,
-) -> Result<Response, ApplicationError> {
+) -> Result<(StatusCode, Json<serde_json::Value>), ApplicationError> {
     // TODO: construct usecase from state, call execute
-    Ok(JsonOk().set("status", "ok").ok())
+    Ok((StatusCode::OK, Json(serde_json::json!({ "status": "ok" }))))
 }
 ```
 
@@ -455,7 +455,8 @@ impl IntoResponse for ApplicationError {
 }
 ```
 
-Handlers return `Result<Response, ApplicationError>` — Axum calls `into_response()` automatically on `Err`.
+Handlers should prefer plain Axum + Maud return types such as `Markup`, `(StatusCode, Html<_>)`, or `(StatusCode, Json<_>)`, usually wrapped in `Result<_, ApplicationError>`.
+Use Silcrow's `JsonOkResponse` / `HtmlOkResponse` when protocol-specific conveniences (like `_toast`) are needed.
 
 ---
 
@@ -516,7 +517,7 @@ Generated services depend on:
 
 | Crate | Version | Used in |
 |---|---|---|
-| `silcrow` | 0.1 | presentation (response builders, JS serving) |
+| `silcrow` | 0.1 | presentation (Silcrow request extractor, optional response conveniences, JS serving) |
 | `axum` | 0.7 | presentation (routing, handlers, extractors) |
 | `sqlx` | 0.8 | infrastructure (Postgres queries, migrations) |
 | `maud` | 0.26 | presentation (SSR templates) |

@@ -1,4 +1,15 @@
 // silcrow/crates/silcrow/lib.rs — Silcrow server-side library for building Silcrow-compatible web applications
+//
+// Public docs/examples should default to plain Axum + Maud handler returns.
+//
+// Typical patterns:
+// - `Markup` for full-page SSR templates.
+// - `(StatusCode, axum::response::Html<String>)` for explicit HTML fragment responses.
+// - `Result<T, AppError>` for domain/application error flow where `AppError: IntoResponse`.
+//
+// `JsonOkResponse` / `HtmlOkResponse` remain available as convenience builders when you
+// specifically want Silcrow protocol-oriented helpers (for example `_toast` payloads,
+// Silcrow-focused headers, or builder-style mutation of JSON/HTML responses).
 pub mod assets;
 pub mod config;
 pub mod layout;
