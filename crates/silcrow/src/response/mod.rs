@@ -10,7 +10,6 @@ pub mod error;
 pub mod html;
 pub mod json;
 pub mod macros;
-pub mod proc_macro;
 pub mod redirect;
 pub use error::ErrorResponse;
 pub use html::HtmlOkResponse;
