@@ -5,7 +5,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Premium response builders and content negotiation for Axum"
 license = "MIT"
-repository = "https://github.com/jeetkhinde/RHTMX"
+repository = "https://github.com/jeetkhinde/pilcrow"
 
 [lib]
 name = "pilcrow"
