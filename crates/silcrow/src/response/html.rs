@@ -1,5 +1,5 @@
 // silcrow/src/response/html.rs
-
+// silcrow/src/response/html.rs — Silcrow server-side HTML response builder
 use super::base::{finalize_response, BaseResponse};
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};

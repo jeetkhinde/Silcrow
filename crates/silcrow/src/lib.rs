@@ -1,3 +1,4 @@
+// silcrow/crates/silcrow/lib.rs — Silcrow server-side library for building Silcrow-compatible web applications
 pub mod assets;
 pub mod config;
 pub mod layout;

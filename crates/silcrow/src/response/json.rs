@@ -1,5 +1,5 @@
 // silcrow/src/response/json.rs
-
+// silcrow/crates/silcrow/src/response/json.rs — Silcrow server-side JSON response builder
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 

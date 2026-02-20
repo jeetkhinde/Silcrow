@@ -1,3 +1,5 @@
+// silcrow/crates/silcrow/silcrow.js — Silcrow DOM patcher runtime and navigator implementation
+
 (function () {
   "use strict";
 
@@ -574,7 +576,7 @@
     const event = new CustomEvent("silcrow:navigate", {
       bubbles: true,
       cancelable: true,
-      detail: { url: fullUrl, method, trigger, target: targetEl },
+      detail: {url: fullUrl, method, trigger, target: targetEl},
     });
     if (!document.dispatchEvent(event)) return;
 
@@ -584,7 +586,7 @@
       prevAbort.controller.abort();
     }
     const controller = new AbortController();
-    abortMap.set(targetEl, { controller, method });
+    abortMap.set(targetEl, {controller, method});
 
     // Timeout: per-element or global default
     const timeout = getTimeout(sourceEl);
@@ -634,7 +636,7 @@
 
         const cacheControl = response.headers.get("silcrow-cache");
         if (method === "GET" && !redirected && cacheControl !== "no-cache") {
-          cacheSet(fullUrl, { text, contentType, ts: Date.now() });
+          cacheSet(fullUrl, {text, contentType, ts: Date.now()});
         }
 
         if (method !== "GET") {
@@ -664,7 +666,7 @@
       if (shouldPushHistory && trigger !== "popstate") {
         const current = history.state || {};
         history.replaceState(
-          { ...current, scrollY: window.scrollY },
+          {...current, scrollY: window.scrollY},
           "",
           location.href
         );
@@ -714,7 +716,7 @@
       const historyUrl = redirected ? finalUrl : fullUrl;
       if (shouldPushHistory && trigger !== "popstate") {
         history.pushState(
-          { silcrow: true, url: historyUrl, targetSelector },
+          {silcrow: true, url: historyUrl, targetSelector},
           "",
           historyUrl
         );
@@ -732,7 +734,7 @@
       document.dispatchEvent(
         new CustomEvent("silcrow:load", {
           bubbles: true,
-          detail: { url: finalUrl, target: targetEl, redirected },
+          detail: {url: finalUrl, target: targetEl, redirected},
         })
       );
     } catch (err) {
@@ -746,18 +748,18 @@
           document.dispatchEvent(
             new CustomEvent("silcrow:error", {
               bubbles: true,
-              detail: { error: timeoutErr, url: fullUrl },
+              detail: {error: timeoutErr, url: fullUrl},
             })
           );
           if (errorHandler) {
-            errorHandler(timeoutErr, { url: fullUrl, method, trigger, target: targetEl });
+            errorHandler(timeoutErr, {url: fullUrl, method, trigger, target: targetEl});
           }
         }
         return;
       }
 
       if (errorHandler) {
-        errorHandler(err, { url: fullUrl, method, trigger, target: targetEl });
+        errorHandler(err, {url: fullUrl, method, trigger, target: targetEl});
       } else {
         console.error("[silcrow]", err);
       }
@@ -765,7 +767,7 @@
       document.dispatchEvent(
         new CustomEvent("silcrow:error", {
           bubbles: true,
-          detail: { error: err, url: fullUrl },
+          detail: {error: err, url: fullUrl},
         })
       );
     } finally {
@@ -862,18 +864,18 @@
     const controller = new AbortController();
     const wantsHTML = el.hasAttribute("s-html");
     const promise = fetch(fullUrl, {
-      headers: { "silcrow-target": "true", "Accept" : wantsHTML ? "text/html" : "application/json" },
+      headers: {"silcrow-target": "true", "Accept": wantsHTML ? "text/html" : "application/json"},
       signal: controller.signal,
     })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const contentType = r.headers.get("Content-Type") || "";
         const cacheControl = r.headers.get("silcrow-cache");
-        return r.text().then((text) => ({ text, contentType, cacheControl }));
+        return r.text().then((text) => ({text, contentType, cacheControl}));
       })
-      .then(({ text, contentType, cacheControl }) => {
+      .then(({text, contentType, cacheControl}) => {
         if (cacheControl !== "no-cache") {
-          cacheSet(fullUrl, { text, contentType, ts: Date.now() });
+          cacheSet(fullUrl, {text, contentType, ts: Date.now()});
         }
       })
       .catch(() => {})
@@ -891,7 +893,7 @@
 
     if (!history.state?.silcrow) {
       history.replaceState(
-        { silcrow: true, url: location.href },
+        {silcrow: true, url: location.href},
         "",
         location.href
       );

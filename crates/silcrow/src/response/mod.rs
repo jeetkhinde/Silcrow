@@ -1,5 +1,5 @@
 // silcrow/src/response/mod.rs
-
+// silcrow/crates/silcrow/src/response/mod.rs — Silcrow server-side response types and builders for HTML, JSON, redirects, and errors
 pub mod base;
 pub mod error;
 pub mod html;

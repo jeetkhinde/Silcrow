@@ -1,5 +1,6 @@
 // silcrow/src/response/macros.rs
 // JSON builder macro
+// These macros are designed to provide a convenient and flexible way to create responses in Silcrow handlers. They support both JSON and HTML responses, as well as error and redirect responses, with optional parameters for status codes, headers, caching, and toast notifications. The `ok!` macro is the most powerful and flexible, allowing you to specify all aspects of the response in a single invocation, while the other macros provide simpler shortcuts for common cases.
 #[macro_export]
 macro_rules! json_ok {
     () => {

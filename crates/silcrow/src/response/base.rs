@@ -1,4 +1,5 @@
 // silcrow/src/response/base.rs
+// silcrow/crates/silcrow/src/response/base.rs — Silcrow server-side base response type and shared finalizer for HTML, JSON, redirect, and error responses
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 

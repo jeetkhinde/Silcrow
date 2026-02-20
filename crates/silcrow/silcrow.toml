@@ -1,4 +1,5 @@
-# Silcrow Configuration File
+# /silcrow/crates/silcrow/silcrow.toml
+# Silcrow-ssr Configuration File
 # This file is optional — Silcrow works with sensible defaults if missing.
 
 [project]

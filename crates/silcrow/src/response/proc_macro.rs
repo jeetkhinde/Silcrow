@@ -1,3 +1,4 @@
+// silcrow/crates/silcrow/src/response/proc_macro.rs — Silcrow server-side procedural macro for auto-generating Silcrow-compatible response handlers from regular Rust functions
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, ItemFn};

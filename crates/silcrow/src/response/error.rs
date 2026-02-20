@@ -1,4 +1,5 @@
 // silcrow/src/response/error.rs
+// silcrow/crates/silcrow/src/response/error.rs — Silcrow server-side error response builder
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;

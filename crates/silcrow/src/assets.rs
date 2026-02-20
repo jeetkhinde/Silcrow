@@ -1,3 +1,4 @@
+// silcrow/crates/silcrow/src/assets.rs — Silcrow embedded assets and asset-serving utilities
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 
@@ -19,11 +20,11 @@ pub async fn serve_silcrow_js() -> Response {
     (
         StatusCode::OK,
         [
-            (header::CONTENT_TYPE, "application/javascript; charset=utf-8"),
             (
-                header::CACHE_CONTROL,
-                "public, max-age=31536000, immutable",
+                header::CONTENT_TYPE,
+                "application/javascript; charset=utf-8",
             ),
+            (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
         ],
         SILCROW_JS,
     )

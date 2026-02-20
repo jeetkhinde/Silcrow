@@ -1,5 +1,5 @@
 // silcrow/src/response/redirect.rs
-
+// silcrow/crates/silcrow/src/response/redirect.rs — Silcrow server-side HTTP redirect response builder
 use super::base::{finalize_response, BaseResponse};
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};

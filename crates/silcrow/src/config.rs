@@ -1,5 +1,5 @@
 use serde::Deserialize;
-
+// silcrow/crates/silcrow/src/config.rs — Silcrow project configuration, loaded from `silcrow.toml`
 /// Silcrow project configuration, loaded from `silcrow.toml`.
 #[derive(Debug, Deserialize)]
 pub struct SilcrowConfig {
