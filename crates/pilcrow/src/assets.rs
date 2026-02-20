@@ -1,4 +1,5 @@
-// silcrow/crates/silcrow/src/assets.rs — Silcrow embedded assets and asset-serving utilities
+// ./crates/pilcrow/src/assets.rs
+
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 
@@ -9,13 +10,6 @@ pub const SILCROW_JS: &str = include_str!("../public/silcrow.js");
 pub const SILCROW_JS_PATH: &str = "/_silcrow/silcrow.js";
 
 /// Axum handler that serves the embedded Silcrow JS with aggressive caching.
-///
-/// Wire into your router:
-/// ```rust
-/// use silcrow::assets;
-/// let app = Router::new()
-///     .route(assets::SILCROW_JS_PATH, get(assets::serve_silcrow_js));
-/// ```
 pub async fn serve_silcrow_js() -> Response {
     (
         StatusCode::OK,
@@ -31,17 +25,7 @@ pub async fn serve_silcrow_js() -> Response {
         .into_response()
 }
 
-/// Returns a `<script>` tag pointing to the Silcrow JS bundle.
-///
-/// Use in Maud templates:
-/// ```rust
-/// use silcrow::assets::script_tag;
-/// html! {
-///     head { (script_tag()) }
-/// }
-/// ```
-pub fn script_tag() -> maud::Markup {
-    maud::html! {
-        script src=(SILCROW_JS_PATH) defer {}
-    }
+/// Returns a raw HTML `<script>` tag pointing to the Silcrow JS bundle.
+pub fn script_tag() -> &'static str {
+    "<script src=\"/_silcrow/silcrow.js\" defer></script>"
 }

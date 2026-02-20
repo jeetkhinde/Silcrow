@@ -1,4 +1,4 @@
-// silcrow/crates/silcrow/silcrow.js — Silcrow DOM patcher runtime and navigator implementation
+// ./crates/pilcrow/public/silcrow.js — Silcrow DOM patcher runtime and navigator implementation
 
 (function () {
   "use strict";
@@ -452,28 +452,30 @@
 
   // Internal function to check for and trigger toasts
   function processToasts(isJSON, content = null) {
-    if (!toastHandler) return; // Do nothing if the developer didn't set up a UI
+    if (!toastHandler) return;
 
-    if (isJSON && content && content._toast) {
-      // 1. Handle JSON APIs
-      toastHandler(content._toast.message, content._toast.level);
-      delete content._toast; // Remove it so it doesn't mess with data binding
+    if (isJSON && content && content._toasts) {
+      // 1. Handle JSON APIs (Array of toasts)
+      content._toasts.forEach(t => toastHandler(t.message, t.level));
+      delete content._toasts;
 
+      // If Pilcrow safely wrapped an array payload, unwrap it for the DOM patcher
+      if (content.data !== undefined && Object.keys(content).length === 1) {
+        Object.assign(content, content.data);
+        delete content.data;
+      }
     } else if (!isJSON) {
-      // 2. Handle HTML pages & Redirects (via Cookies)
-      const match = document.cookie.match(new RegExp('(^|;\\s*)silcrow_toast=([^;]+)'));
+      // 2. Handle HTML pages & Redirects (URL-encoded JSON array Cookie)
+      const match = document.cookie.match(new RegExp('(^|;\\s*)silcrow_toasts=([^;]+)'));
       if (match) {
-        const rawValue = decodeURIComponent(match[2]);
-        const delimiterIndex = rawValue.indexOf(':');
-
-        if (delimiterIndex !== -1) {
-          const level = rawValue.substring(0, delimiterIndex);
-          const message = rawValue.substring(delimiterIndex + 1);
-          toastHandler(message, level);
+        try {
+          const rawJSON = decodeURIComponent(match[2]);
+          const toasts = JSON.parse(rawJSON);
+          toasts.forEach(t => toastHandler(t.message, t.level));
+        } catch (e) {
+          console.error("Failed to parse toasts", e);
         }
-
-        // Destroy the cookie immediately so it only shows once
-        document.cookie = "silcrow_toast=; Max-Age=0; path=/";
+        document.cookie = "silcrow_toasts=; Max-Age=0; path=/";
       }
     }
   }
