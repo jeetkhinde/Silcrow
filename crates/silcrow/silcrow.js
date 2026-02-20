@@ -908,7 +908,35 @@
     responseCache.clear();
     preloadInflight.clear();
   }
+  let toastHandler = null;
 
+  // Internal function to check for and trigger toasts
+  function processToasts(isJSON, content = null) {
+    if (!toastHandler) return; // Do nothing if the developer didn't set up a UI
+
+    if (isJSON && content && content._toast) {
+      // 1. Handle JSON APIs
+      toastHandler(content._toast.message, content._toast.level);
+      delete content._toast; // Remove it so it doesn't mess with data binding
+
+    } else if (!isJSON) {
+      // 2. Handle HTML pages & Redirects (via Cookies)
+      const match = document.cookie.match(new RegExp('(^|;\\s*)silcrow_toast=([^;]+)'));
+      if (match) {
+        const rawValue = decodeURIComponent(match[2]);
+        const delimiterIndex = rawValue.indexOf(':');
+
+        if (delimiterIndex !== -1) {
+          const level = rawValue.substring(0, delimiterIndex);
+          const message = rawValue.substring(delimiterIndex + 1);
+          toastHandler(message, level);
+        }
+
+        // Destroy the cookie immediately so it only shows once
+        document.cookie = "silcrow_toast=; Max-Age=0; path=/";
+      }
+    }
+  }
   // ════════════════════════════════════════════════════════════
   // Unified Public API
   // ════════════════════════════════════════════════════════════
@@ -918,7 +946,12 @@
     patch,
     invalidate,
     stream,
-
+    onToast(handler) {
+      toastHandler = handler;
+      // Check for a toast cookie immediately in case the initial page load had one
+      processToasts(false);
+      return this;
+    },
     // Navigation
     go(path, options = {}) {
       return navigate(path, {
