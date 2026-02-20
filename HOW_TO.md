@@ -15,9 +15,14 @@ tokio = { version = "1", features = ["full"] }
 ## Quick Start
 
 ```rust
-use axum::{routing::get, Router};
+use axum::{
+    http::StatusCode,
+    response::Html,
+    routing::get,
+    Json, Router,
+};
 use silcrow::*;
-use silcrow::maud::html;
+use silcrow::maud::{html, Markup};
 
 #[tokio::main]
 async fn main() {
@@ -34,19 +39,29 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn index(req: SilcrowRequest) -> Response {
-    if req.is_silcrow {
-        JsonOk().set("message", "Hello from Silcrow!").ok()
-    } else {
-        page("My App", html! {
-            h1 s-bind="message" { "Click the button" }
-            button s-action="/api/greet" { "Greet" }
-        }).ok()
-    }
+async fn index(req: SilcrowRequest) -> Markup {
+    // Default SSR path: plain Maud markup return
+    let _ = req;
+    page("My App", html! {
+        h1 s-bind="message" { "Click the button" }
+        button s-action="/api/greet" { "Greet" }
+    })
 }
 
-async fn greet() -> Response {
-    JsonOk().set("message", "Hello from Silcrow!").ok()
+async fn greet() -> (StatusCode, Json<serde_json::Value>) {
+    // Default JSON path: plain Axum tuple + Json
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({ "message": "Hello from Silcrow!" })),
+    )
+}
+
+async fn greet_html() -> (StatusCode, Html<String>) {
+    // Explicit HTML fragment path for s-html targets
+    (
+        StatusCode::OK,
+        Html(html! { p { "Hello fragment" } }.into_string()),
+    )
 }
 ```
 
@@ -79,20 +94,22 @@ Load it with `SilcrowConfig::load()`. All fields have defaults — the file is e
 Use directly as a handler parameter — no manual header parsing needed:
 
 ```rust
-async fn handler(req: SilcrowRequest) -> Response {
-    if req.is_silcrow {
-        // Request came from Silcrow navigation (client JS)
-        if req.wants_html {
-            // Element has s-html attribute — return HTML fragment
-            HtmlOk(html! { div { "partial update" } }).ok()
-        } else {
-            // Default — return JSON for Silcrow.patch()
-            JsonOk().set("count", 42).ok()
-        }
-    } else {
-        // Normal browser request — return full page
-        page("Title", html! { body_content }).ok()
+async fn handler(req: SilcrowRequest) -> Result<impl axum::response::IntoResponse, AppError> {
+    if req.wants_html {
+        return Ok((
+            StatusCode::OK,
+            Html(html! { div { "partial update" } }.into_string()),
+        ));
     }
+
+    if req.wants_json {
+        return Ok((
+            StatusCode::OK,
+            Json(serde_json::json!({ "count": 42 })),
+        ));
+    }
+
+    Ok(page("Title", html! { body_content }))
 }
 ```
 
@@ -101,9 +118,20 @@ Fields:
 - `req.wants_html` — `true` when `Accept: text/html`
 - `req.wants_json` — `true` when `Accept: application/json`
 
-### Response Builders
+### Response Patterns
 
-**JSON response** (default for `s-action` elements):
+Default recommendation: start with plain Axum + Maud return types, then use Silcrow builders when protocol integration helpers are useful.
+
+**Plain JSON response** (default for `s-action` elements):
+
+```rust
+(StatusCode::OK, Json(serde_json::json!({
+    "name": "Alice",
+    "items": [1, 2, 3]
+})))
+```
+
+**Silcrow JSON convenience builder** (useful for `_toast`, fluent headers/status, or protocol-centric payload shaping):
 
 ```rust
 JsonOk()
@@ -115,7 +143,18 @@ JsonOk()
     .status(StatusCode::CREATED)    // custom status code
 ```
 
-**HTML fragment response** (for `s-html` elements):
+**Plain HTML fragment response** (for `s-html` elements):
+
+```rust
+(StatusCode::OK, Html(html! {
+    div.card {
+        h2 { "New content" }
+        p { "Replaces the target element's innerHTML" }
+    }
+}.into_string()))
+```
+
+**Silcrow HTML convenience builder** (useful when keeping response construction style consistent with Silcrow JSON builders):
 
 ```rust
 HtmlOk(html! {
@@ -153,7 +192,7 @@ Redirect().to("/dashboard")
 Redirect().to("/login").status(StatusCode::TEMPORARY_REDIRECT)
 ```
 
-**Dispatcher pattern** (useful in branching logic):
+**Dispatcher pattern with Silcrow builders** (useful in branching logic when you want one fluent API for both formats):
 
 ```rust
 Ok().html(html! { ... })  // returns HtmlOkResponse
@@ -318,7 +357,17 @@ Everything lives on `window.Silcrow`. One object, one import.
 
 Items must have a `key` property. Local bindings use dot prefix (`.name`, `.email`).
 
-Server sends:
+Server sends (plain Axum JSON):
+```rust
+(StatusCode::OK, Json(serde_json::json!({
+    "items": [
+        {"key": 1, "name": "Alice", "email": "alice@example.com"},
+        {"key": 2, "name": "Bob", "email": "bob@example.com"}
+    ]
+})))
+```
+
+Or with Silcrow convenience utilities when desired:
 ```rust
 JsonOk().set("items", vec![
     json!({"key": 1, "name": "Alice", "email": "alice@example.com"}),
@@ -475,7 +524,7 @@ And `aria-busy="true"` for accessibility. Both are removed when the request comp
    - Accept: application/json (or text/html if s-html present)
 3. Axum handler receives request
    - SilcrowRequest extractor parses headers automatically
-4. Handler returns JsonOk().set("count", 42)
+4. Handler returns `(StatusCode::OK, Json(json!({"count": 42})))`
 5. Silcrow JS receives JSON, calls patch() on target element
 6. DOM updates via s-bind attributes
 ```
