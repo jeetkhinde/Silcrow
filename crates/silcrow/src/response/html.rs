@@ -3,21 +3,19 @@
 use super::base::{finalize_response, BaseResponse};
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
+use maud::Markup;
 
 pub struct HtmlOkResponse {
     base: BaseResponse,
-    markup: String,
+    markup: Markup,
 }
 
 impl HtmlOkResponse {
-    pub fn new(markup: impl Into<String>) -> Self {
+    pub fn new(markup: Markup) -> Self {
         let mut base = BaseResponse::new();
         base.status(StatusCode::OK);
 
-        Self {
-            base,
-            markup: markup.into(),
-        }
+        Self { base, markup }
     }
     pub fn status(mut self, status: StatusCode) -> Self {
         self.base.status(status);
@@ -38,6 +36,6 @@ impl HtmlOkResponse {
 
 impl IntoResponse for HtmlOkResponse {
     fn into_response(self) -> Response {
-        finalize_response(self.base, axum::response::Html(self.markup))
+        finalize_response(self.base, axum::response::Html(self.markup.into_string()))
     }
 }
