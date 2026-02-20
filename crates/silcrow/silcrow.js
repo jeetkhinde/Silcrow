@@ -678,9 +678,11 @@
 
       if (isJSON) {
         swapContent = JSON.parse(text);
+        processToasts(true, swapContent); // <-- ADD THIS HERE
       } else {
         const isFullPage = !targetSelector;
         swapContent = extractHTML(text, targetSelector, isFullPage);
+        processToasts(false); // <-- ADD THIS HERE
       }
 
       // Fire silcrow:before-swap — transition hook
