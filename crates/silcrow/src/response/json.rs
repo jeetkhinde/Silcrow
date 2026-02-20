@@ -22,9 +22,28 @@ impl JsonOkResponse {
     }
 
     pub fn set(mut self, key: impl Into<String>, value: impl serde::Serialize) -> Self {
-        let v = serde_json::to_value(value).expect("Failed to serialize JSON");
-        self.data.insert(key.into(), v);
+        let key = key.into();
+
+        match serde_json::to_value(value) {
+            Ok(v) => {
+                self.data.insert(key, v);
+            }
+            Err(_) => {
+                self.data.insert(key, serde_json::Value::Null);
+            }
+        }
+
         self
+    }
+
+    pub fn try_set(
+        mut self,
+        key: impl Into<String>,
+        value: impl serde::Serialize,
+    ) -> std::result::Result<Self, serde_json::Error> {
+        let v = serde_json::to_value(value)?;
+        self.data.insert(key.into(), v);
+        Ok(self)
     }
 
     pub fn set_value(mut self, key: impl Into<String>, value: serde_json::Value) -> Self {
@@ -77,6 +96,25 @@ impl JsonOkResponse {
         res.base.status(StatusCode::CREATED);
         res
     }
+
+    pub fn try_from<T>(value: T) -> std::result::Result<Self, serde_json::Error>
+    where
+        T: serde::Serialize,
+    {
+        let mut res = JsonOkResponse::new();
+        let v = serde_json::to_value(value)?;
+
+        match v {
+            serde_json::Value::Object(map) => {
+                res.data = map;
+            }
+            other => {
+                res.data.insert("data".into(), other);
+            }
+        }
+
+        Ok(res)
+    }
 }
 
 impl Default for JsonOkResponse {
@@ -96,18 +134,13 @@ where
     T: serde::Serialize,
 {
     fn from(value: T) -> Self {
-        let mut res = JsonOkResponse::new();
-        let v = serde_json::to_value(value).expect("Failed to serialize JSON");
-
-        match v {
-            serde_json::Value::Object(map) => {
-                res.data = map;
-            }
-            other => {
-                res.data.insert("data".into(), other);
-            }
-        }
-
-        res
+        Self::try_from(value).unwrap_or_else(|err| {
+            JsonOkResponse::new().set_value(
+                "error",
+                serde_json::json!({
+                    "message": format!("Failed to serialize JSON: {err}"),
+                }),
+            )
+        })
     }
 }
