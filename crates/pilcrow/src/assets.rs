@@ -3,7 +3,7 @@ use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 
 /// The unified Silcrow client runtime, embedded at compile time.
-pub const SILCROW_JS: &str = include_str!("../silcrow.js");
+pub const SILCROW_JS: &str = include_str!("../public/silcrow.js");
 
 /// Canonical URL path for serving the Silcrow JS bundle.
 pub const SILCROW_JS_PATH: &str = "/_silcrow/silcrow.js";

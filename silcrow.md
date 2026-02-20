@@ -1,3 +1,4 @@
+# Silcrow.js is client side library.
 Based on the provided `silcrow.js` source code, here is a complete breakdown of all the custom attributes, headers, and events that Silcrow supports.
 
 ### 1. Data Binding & Templating Attributes (`s-*`)

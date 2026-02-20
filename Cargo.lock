@@ -435,6 +435,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
+name = "pilcrow"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "maud",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "syn",
+ "toml",
+]
+
+[[package]]
 name = "pin-project-lite"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -581,21 +596,6 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
-]
-
-[[package]]
-name = "silcrow"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "maud",
- "proc-macro2",
- "quote",
- "serde",
- "serde_json",
- "syn",
- "toml",
 ]
 
 [[package]]

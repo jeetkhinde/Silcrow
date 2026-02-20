@@ -1,14 +1,14 @@
-# /silcrow/crates/silcrow/Cargo.toml
+# ./crates/pilcrow/Cargo.toml
 [package]
-name = "silcrow"
+name = "pilcrow"
 version = "0.1.0"
 edition = "2021"
-description = "Silcrow response builders for Axum + Maud"
+description = "Pilcrow response builders for Axum + Maud"
 license = "MIT"
 repository = "https://github.com/jeetkhinde/RHTMX"
 
 [lib]
-name = "silcrow"
+name = "pilcrow"
 path = "src/lib.rs"
 proc-macro = true
 [dependencies]
