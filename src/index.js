@@ -1,4 +1,4 @@
-// silcrow/index.js
+// /index.js
 
 // ════════════════════════════════════════════════════════════
 // API — public surface & lifecycle
@@ -21,7 +21,7 @@ function init() {
 
   // Auto-scan for s-live elements
   initLiveElements();
-// Observe DOM for removed live elements
+  // Observe DOM for removed live elements
   liveObserver = new MutationObserver(function (mutations) {
     function cleanupLiveNode(node) {
       const state = liveConnections.get(node);

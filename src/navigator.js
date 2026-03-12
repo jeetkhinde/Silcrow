@@ -1,4 +1,4 @@
-// silcrow/navigator.js
+// /navigator.js
 // ════════════════════════════════════════════════════════════
 // Navigator — client-side routing, history, caching
 // ════════════════════════════════════════════════════════════
@@ -31,13 +31,13 @@ function getMethod(el) {
 function resolveUrl(el) {
   let raw = el.getAttribute("s-action");
   if (!raw) return null;
-  
+
   // 1. Contextual Interpolation: Auto-inject the ID into the URL
   if (raw.includes("{s-key}")) {
     const closest = el.closest("[s-key]");
     if (closest) raw = raw.replace(/{s-key}/g, closest.getAttribute("s-key"));
   }
-  
+
   try {
     return new URL(raw, location.origin).href;
   } catch (e) {
@@ -48,7 +48,7 @@ function resolveUrl(el) {
 // ── Target Resolution ──────────────────────────────────────
 function getTarget(el) {
   let sel = el.getAttribute("s-target");
-  
+
   if (sel) {
     // If they explicitly provide a target, support interpolation there too
     if (sel.includes("{s-key}")) {
@@ -58,8 +58,8 @@ function getTarget(el) {
     const target = document.querySelector(sel);
     if (target) return target;
   }
-  
-   // Walk up: if inside a list item, target the list container
+
+  // Walk up: if inside a list item, target the list container
   const listItem = el.closest("[s-key]");
   if (listItem) {
     const listContainer = listItem.closest("[s-list]");
@@ -245,7 +245,7 @@ function prepareSwapContent(text, contentType, targetSelector) {
 // ── Post-Swap Finalization ─────────────────────────────────
 function finalizeNavigation(ctx) {
   const {pushUrl, redirected, finalUrl, fullUrl, shouldPushHistory,
-         trigger, targetSelector, targetEl, sideEffects} = ctx;
+    trigger, targetSelector, targetEl, sideEffects} = ctx;
 
   processSideEffectHeaders(sideEffects, targetEl);
 
@@ -306,7 +306,7 @@ async function navigate(url, options = {}) {
 
   const timeout = getTimeout(sourceEl);
   let timedOut = false;
-  const timeoutId = setTimeout(() => { timedOut = true; controller.abort(); }, timeout);
+  const timeoutId = setTimeout(() => {timedOut = true; controller.abort();}, timeout);
 
   showLoading(targetEl);
 
@@ -496,7 +496,7 @@ function onSubmit(e) {
     });
   } else {
     const hasFiles = [...formData.values()].some(v => v instanceof File);
-    
+
     navigate(form.getAttribute("s-action"), {
       method,
       body: hasFiles ? formData : new URLSearchParams(formData),

@@ -1,4 +1,4 @@
-// silcrow/optimistic.js
+// /optimistic.js
 // ════════════════════════════════════════════════════════════
 // Optimistic — snapshot & revert for instant UI feedback
 // ════════════════════════════════════════════════════════════

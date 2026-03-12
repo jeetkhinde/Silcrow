@@ -1,4 +1,4 @@
-// silcrow/url-safety.js
+// /url-safety.js
 // ════════════════════════════════════════════════════════════
 // URL Safety — shared protocol & URL validation primitives
 // ════════════════════════════════════════════════════════════

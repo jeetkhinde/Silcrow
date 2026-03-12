@@ -1,4 +1,4 @@
-// ./public/silcrow/patcher.js
+// /patcher.js
 // ════════════════════════════════════════════════════════════
 // Patcher — reactive data binding & DOM patching
 // ════════════════════════════════════════════════════════════
