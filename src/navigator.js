@@ -28,20 +28,23 @@ function getMethod(el) {
 }
 
 // ── URL Resolution ─────────────────────────────────────────
+// ── URL Resolution ─────────────────────────────────────────
 function resolveUrl(el) {
   let raw = el.getAttribute("s-action");
   if (!raw) return null;
 
-  // 1. Contextual Interpolation: Auto-inject the ID into the URL
-  if (raw.includes("{s-key}")) {
-    const closest = el.closest("[s-key]");
-    if (closest) raw = raw.replace(/{s-key}/g, closest.getAttribute("s-key"));
+  // Unified placeholder support: :key or {s-key} fallback
+  if (raw.includes(":key") || raw.includes("{s-key}")) {
+    const closest = el.closest("[:key]") || el.closest("[s-key]");
+    if (closest) {
+      const id = closest.getAttribute(":key") || closest.getAttribute("s-key");
+      raw = raw.replace(/:key/g, id).replace(/{s-key}/g, id);
+    }
   }
 
   try {
     return new URL(raw, location.origin).href;
   } catch (e) {
-    console.error(e);
     return null;
   }
 }

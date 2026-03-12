@@ -6,6 +6,8 @@
 const instanceCache = new WeakMap();
 const validatedTemplates = new WeakSet();
 const localBindingsCache = new WeakMap();
+const identityMap = new WeakMap();
+
 // 1. Global Middleware Registry
 const patchMiddleware = [];
 const PATH_RE = /^\.?[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*$/;
@@ -24,7 +26,36 @@ const knownProps = {
   href: "string",
   selectedIndex: "number",
 };
-
+function getStableId(obj) {
+  if (obj === null || typeof obj !== 'object') return String(obj);
+  let id = identityMap.get(obj);
+  if (!id) {
+    id = crypto.randomUUID();
+    identityMap.set(obj, id);
+  }
+  return id;
+}
+function scanBindings(root, alias = null) {
+  const bindings = new Map();
+  const elements = [root, ...root.querySelectorAll("*")];
+  for (const el of elements) {
+    if (el.closest("template")) continue;
+    for (const attr of el.attributes) {
+      if (!attr.name.startsWith(":")) continue;
+      const prop = attr.name.slice(1);
+      const path = attr.value;
+      if (alias && path.startsWith(alias + ".")) {
+        const field = path.substring(alias.length + 1);
+        if (!bindings.has(field)) bindings.set(field, []);
+        bindings.get(field).push({el, prop});
+      } else if (!alias && !path.includes(".")) {
+        if (!bindings.has(path)) bindings.set(path, []);
+        bindings.get(path).push({el, prop});
+      }
+    }
+  }
+  return bindings;
+}
 /**
  * Detects if an element has shorthand reactive attributes (:prop) or s-list.
  */
@@ -224,63 +255,52 @@ function makeTemplateResolver(container, scalarMap, keyField) {
 
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
 
-function reconcile(container, items, resolveTemplate, keyField) {
-  const existing = new Map();
+function reconcile(container, template, items, alias, keyPath) {
+  const existingBlocks = new Map();
+  // Find all existing nodes marked with :key (or s-key legacy)
   for (const child of container.children) {
-    if (child.hasAttribute("s-key")) {
-      existing.set(child.getAttribute("s-key"), child);
+    const k = child.getAttribute(":key") || child.getAttribute("s-key");
+    if (k) {
+      if (!existingBlocks.has(k)) existingBlocks.set(k, []);
+      existingBlocks.get(k).push(child);
     }
   }
 
-  const validItems = items.filter(i => i != null && typeof i === "object" && hasOwn(i, keyField));
   const nextKeys = new Set();
-  let prevNode = null;
+  let anchor = template;
 
-  for (const item of validItems) {
-    const key = String(item[keyField]);
-    nextKeys.add(key);
-    let node = existing.get(key) || resolveTemplate(item);
-    if (!existing.has(key)) node.setAttribute("s-key", key);
+  for (const item of items) {
+    const key = keyPath ? resolvePath(item, keyPath) : getStableId(item);
+    nextKeys.add(String(key));
 
-    patchItem(node, item, keyField);
-
-    if (prevNode) {
-      if (prevNode.nextElementSibling !== node) prevNode.after(node);
-    } else if (container.firstElementChild !== node) {
-      container.prepend(node);
+    let block = existingBlocks.get(String(key));
+    if (!block) {
+      const frag = template.content.cloneNode(true);
+      block = Array.from(frag.children).filter(n => n.nodeType === 1);
+      block.forEach(el => el.setAttribute(":key", key));
     }
-    prevNode = node;
+
+    block.forEach(node => {
+      patchItem(node, item, alias);
+      if (anchor.nextElementSibling !== node) anchor.after(node);
+      anchor = node;
+    });
   }
 
-  for (const [key, node] of existing) {
-    if (!nextKeys.has(key)) node.remove();
+  for (const [key, nodes] of existingBlocks) {
+    if (!nextKeys.has(key)) nodes.forEach(n => n.remove());
   }
 }
 
-function patchItem(node, item, keyField) {
+function patchItem(node, item, alias) {
   let bindings = localBindingsCache.get(node);
   if (!bindings) {
-    bindings = new Map();
-    const elements = [node, ...node.querySelectorAll("*")];
-    for (const el of elements) {
-      for (const attr of el.attributes) {
-        if (attr.name.startsWith(":") && attr.value.startsWith('.')) {
-          const field = attr.value.substring(1);
-          const prop = attr.name.slice(1);
-          if (!bindings.has(field)) bindings.set(field, []);
-          bindings.get(field).push({el, prop});
-        }
-      }
-    }
+    bindings = scanBindings(node, alias);
     localBindingsCache.set(node, bindings);
   }
-
   for (const field in item) {
-    if (field === keyField) continue;
     const targets = bindings.get(field);
-    if (targets) {
-      for (const {el, prop} of targets) setValue(el, prop, item[field]);
-    }
+    if (targets) targets.forEach(t => setValue(t.el, t.prop, item[field]));
   }
 }
 
@@ -295,25 +315,14 @@ function resolvePath(obj, path) {
 }
 
 function buildMaps(root) {
-  const scalarMap = new Map();
-  const collectionMap = new Map();
-
-  registerSubtreeBindings(root, scalarMap);
-
-  const lists = root.hasAttribute("s-list") ? [root] : [];
-  const descendants = root.querySelectorAll("[s-list]");
-  for (const container of [...lists, ...descendants]) {
-    const listName = container.getAttribute("s-list");
-    if (isValidPath(listName)) {
-      const keyField = getKeyField(container);
-      collectionMap.set(listName, {
-        container,
-        resolveTemplate: makeTemplateResolver(container, scalarMap, keyField),
-        keyField,
-      });
-    }
-  }
-  return {scalarMap, collectionMap};
+  const collections = [];
+  root.querySelectorAll("template[s-for]").forEach(tpl => {
+    const expr = parseForExpression(tpl.getAttribute("s-for"));
+    const keyAttr = tpl.getAttribute(":key");
+    const keyPath = keyAttr?.startsWith(expr.alias + ".") ? keyAttr.substring(expr.alias.length + 1) : null;
+    collections.push({path: expr.path, tpl, alias: expr.alias, keyPath});
+  });
+  return {scalars: scanBindings(root), collections};
 }
 
 function mergeItem(container, item, resolveTemplate, keyField) {
@@ -355,32 +364,37 @@ function applyPatch(data, scalarMap, collectionMap) {
   }
 }
 
+/**
+ * Ensures we always have a valid DOM element to work with.
+ * Prevents null pointer errors if document.querySelector fails.
+ */
 function resolveRoot(root) {
   if (typeof root === "string") return document.querySelector(root) || document.createElement("div");
   return root instanceof Element ? root : document.createElement("div");
 }
 
+/**
+ * The entry point for all DOM updates in Silcrow.
+ * Standardized on the colon-prefix (:) for all reactive bindings.
+ */
 function patch(data, root, options = {}) {
   const element = resolveRoot(root);
 
-  // 1. PIPELINE: Run global transformers
+  // 1. PIPELINE: Run global data transformers (middleware)
   let transformedData = data;
   try {
-    // Use a shallow clone to protect the original response reference
     transformedData = patchMiddleware.reduce((acc, fn) => fn(acc) || acc, {...data});
   } catch (err) {
     warn("Middleware failed: " + err.message);
-    transformedData = data; // Fallback to original on error
+    transformedData = data;
   }
 
-  // 2. METADATA: Process server-driven toasts (from toasts.js)
-  // Pilcrow often sends toasts in the '_toasts' key
+  // 2. METADATA: Automatically extract and show server-sent toasts
   if (transformedData && transformedData._toasts) {
     processToasts(true, transformedData);
   }
 
-  // 3. UNWRAPPING: Smart Data Detection
-  // If the object only has a 'data' key after toasts are removed, unwrap it
+  // 3. UNWRAPPING: Simplifies paths if the server sends { data: { ... } }
   if (
     transformedData &&
     typeof transformedData === "object" &&
@@ -390,25 +404,17 @@ function patch(data, root, options = {}) {
     transformedData = transformedData.data;
   }
 
-  // 4. SAFETY GATE: Final Object Check
-  const isObject = transformedData !== null &&
-    typeof transformedData === 'object' &&
-    !Array.isArray(transformedData);
-
-  if (!isObject) {
-    warn("Invalid patch data. Expected Object, got: " + typeof transformedData);
-    return;
-  }
-
-  // 5. EXECUTION: Proceed to DOM Patching
+  // 4. IDENTITY & CACHE: Rebuild maps if invalidated or first-run
   let instance = instanceCache.get(element);
   if (!instance || options.invalidate) {
-    instance = buildMaps(element);
+    instance = buildMaps(element); // buildMaps now supports s-for and :key
     instanceCache.set(element, instance);
   }
 
+  // 5. EXECUTION: Apply scalar bindings and collection reconciliation
   applyPatch(transformedData, instance.scalarMap, instance.collectionMap);
 
+  // 6. NOTIFICATION: Signal to the rest of the app that UI has changed
   if (!options.silent) {
     element.dispatchEvent(new CustomEvent('silcrow:patched', {
       bubbles: true,

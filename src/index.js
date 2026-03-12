@@ -1,9 +1,10 @@
 // /index.js
+// ════════════════════════════════════════════════════════════
+// API — Public Surface & "One Way" Lifecycle
+// ════════════════════════════════════════════════════════════
 
-// ════════════════════════════════════════════════════════════
-// API — public surface & lifecycle
-// ════════════════════════════════════════════════════════════
 let liveObserver = null;
+
 function init() {
   document.addEventListener("click", onClick);
   document.addEventListener("submit", onSubmit);
@@ -12,16 +13,14 @@ function init() {
   document.addEventListener("silcrow:sse", onSSEEvent);
 
   if (!history.state?.silcrow) {
-    history.replaceState(
-      {silcrow: true, url: location.href},
-      "",
-      location.href
-    );
+    history.replaceState({silcrow: true, url: location.href}, "", location.href);
   }
 
-  // Auto-scan for s-live elements
+  // 1. Unified Live Initialization
   initLiveElements();
-  // Observe DOM for removed live elements
+
+  // 2. Fragment-Aware Mutation Observer
+  // Updated to track elements by our stable identity (:key)
   liveObserver = new MutationObserver(function (mutations) {
     function cleanupLiveNode(node) {
       const state = liveConnections.get(node);
@@ -41,6 +40,7 @@ function init() {
 
         cleanupLiveNode(removed);
 
+        // Cleanup any nested live connections within the removed fragment
         if (removed.querySelectorAll) {
           for (const child of removed.querySelectorAll("[s-live]")) {
             cleanupLiveNode(child);
@@ -49,8 +49,8 @@ function init() {
       }
     }
   });
-  liveObserver.observe(document.body, {childList: true, subtree: true});
 
+  liveObserver.observe(document.body, {childList: true, subtree: true});
 }
 
 function destroy() {
@@ -59,96 +59,58 @@ function destroy() {
   window.removeEventListener("popstate", onPopState);
   document.removeEventListener("mouseenter", onMouseEnter, true);
   document.removeEventListener("silcrow:sse", onSSEEvent);
+
   if (liveObserver) {
     liveObserver.disconnect();
     liveObserver = null;
   }
+
   responseCache.clear();
   preloadInflight.clear();
   destroyAllLive();
 }
 
 window.Silcrow = {
-  // Runtime
-  patch,
-  invalidate,
-  stream,
-  send: sendWs,
-  onToast(handler) {
-    setToastHandler(handler);
-    return this;
-  },
+  // --- Runtime (Unified ":" Bindings) ---
+  patch,         // Handles middleware, toasts, and s-for blocks
+  invalidate,    // Clears cached maps for a root
+  stream,        // Batched updates for high-frequency data
 
-  // Navigation
+  // --- Navigation (Unified ":" Placeholders) ---
   go(path, options = {}) {
     return navigate(path, {
       method: options.method || (options.body ? "POST" : "GET"),
       body: options.body || null,
-      target: options.target
-        ? document.querySelector(options.target)
-        : null,
+      target: options.target ? document.querySelector(options.target) : null,
       skipHistory: options.skipHistory || false,
       trigger: "api",
     });
   },
+
+  // --- Live (SSE & WebSocket) ---
+  live: openLive,     // Declarative connection manager
+  send: sendWs,       // Unified WebSocket sender
+  disconnect: disconnectLive,
+  reconnect: reconnectLive,
+
+  // --- Feedback Systems ---
+  optimistic: optimisticPatch,
+  revert: revertOptimistic,
+  onToast: (handler) => {setToastHandler(handler); return window.Silcrow;},
+
+  // --- Extensibility ---
   use(fn) {
-    if (typeof fn === 'function') {
-      patchMiddleware.push(fn);
-    }
-    return this;
-  },
-  onRoute(handler) {
-    routeHandler = handler;
+    if (typeof fn === 'function') patchMiddleware.push(fn);
     return this;
   },
 
-  onError(handler) {
-    errorHandler = handler;
-    return this;
-  },
-
-  cache: {
-    clear(path) {
-      if (path) {
-        const url = new URL(path, location.origin).href;
-        responseCache.delete(url);
-      } else {
-        responseCache.clear();
-      }
-    },
-    has(path) {
-      const url = new URL(path, location.origin).href;
-      return !!cacheGet(url);
-    },
-  },
-
-  // Live (SSE)
-  live(root, url) {
-    openLive(root, url);
-  },
-
-  disconnect(root) {
-    disconnectLive(root);
-  },
-
-  reconnect(root) {
-    reconnectLive(root);
-  },
-
-  // Optimistic
-  optimistic(root, data) {
-    optimisticPatch(root, data);
-  },
-
-  revert(root) {
-    revertOptimistic(root);
-  },
+  onRoute: (h) => {routeHandler = h; return window.Silcrow;},
+  onError: (h) => {errorHandler = h; return window.Silcrow;},
 
   destroy,
 };
 
-
-// Auto-init navigation when DOM is ready
+// Auto-boot Silcrow
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", init);
 } else {
