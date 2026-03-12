@@ -91,7 +91,12 @@ window.Silcrow = {
       trigger: "api",
     });
   },
-
+  use(fn) {
+    if (typeof fn === 'function') {
+      patchMiddleware.push(fn);
+    }
+    return this;
+  },
   onRoute(handler) {
     routeHandler = handler;
     return this;
