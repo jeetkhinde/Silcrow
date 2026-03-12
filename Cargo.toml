@@ -1,3 +1,0 @@
-[workspace]
-members = ["crates/pilcrow", "crates/pilcrow-cli"]
-resolver = "2"
