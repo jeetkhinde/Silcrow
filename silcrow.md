@@ -39,21 +39,21 @@ This enables console warnings and throws on template validation errors.
 
 Silcrow.js has three independent systems exposed through a single window.Silcrow API:
 
-1. **Runtime** — reactive data binding and DOM patching via s-bind and s-list attributes
+1. **Runtime** — reactive data binding and DOM patching via shorthand colon-prefixed attributes (:prop) and s-list
 2. **Navigator** — client-side routing, history management, and response caching via s-action attributes
 3. **Live** — SSE and WebSocket connections, optimistic updates, and real-time data streaming via s-live attributes
 
 ## **Runtime: Data Binding & DOM Patching**
 
-### **Scalar Binding with s-bind**
+### **Scalar Binding**
 
-Bind any element to a data path. The format is s-bind="path" for text content or s-bind="path:property" for element properties.
+Bind any element property to a data path using the :property="path" syntax. For text content, use the special :text shorthand.
 
 ```html
-<h1 s-bind="user.name"></h1>
-<input s-bind="user.email:value" />
-<img s-bind="user.avatar:src" />
-<button s-bind="user.banned:disabled"></button>
+<h1 :text="user.name"></h1>
+<input :value="user.email" />
+<img :src="user.avatar" />
+<button :disabled="user.banned"></button>
 
 ```
 
@@ -81,10 +81,10 @@ Render collections of keyed objects into a container. Each item **must** have a 
 </ul>
 
 <template id="todo-tpl">
-  <li s-key=".key">
-    <span s-bind=".text"></span>
-    <input type="checkbox" s-bind=".done:checked" />
-  </li>
+<li s-key=".key">
+  <span :text=".text"></span>
+  <input type="checkbox" :checked=".done" />
+</li>
 </template>
 
 ```
@@ -153,7 +153,30 @@ The item with key "2" is removed from the DOM. All other items are untouched. Th
 **Template rules:** Templates must contain exactly one element child. Scripts and event handler attributes inside templates are rejected during validation.
 
 **Server-Rendered Lists (Hydration):**
-Silcrow seamlessly handles collections that are pre-rendered by the server. If an item exists in the DOM with an `s-key` but was not created dynamically via Silcrow's `<template>` cloning, Silcrow will lazily scan and cache its `[s-bind]` attributes on the first patch. This allows you to serve fully populated HTML on initial load and effortlessly transition to client-side patches.
+Silcrow seamlessly handles collections that are pre-rendered by the server. If an item exists in the DOM with an `s-key` but was not created dynamically via Silcrow's `<template>` cloning, Silcrow will lazily scan and cache its shorthand reactive attributes (e.g., :text, :value) on the first patch. This allows you to serve fully populated HTML on initial load and effortlessly transition to client-side patches.
+
+
+### **Data Processing Pipeline**
+Silcrow processes data through a multi-stage lifecycle before patching the DOM:
+
+1. **Middleware**: Global transformers registered via Silcrow.use().
+
+2. **Toasts**: Automatic extraction and display of server-sent notifications.
+
+3. **Smart Unwrapping**: If the payload contains only a data key, Silcrow automatically unwraps it to simplify binding paths.
+
+4. **Safety Check**: Verification that the final payload is a valid non-null object.
+
+#### **Silcrow.use(fn)**
+
+Register a global middleware function to transform data across all patches.
+
+```javascript
+  Silcrow.use((data) => {
+    data.lastUpdated = new Date().toLocaleTimeString();
+    return data; // Return modified object or new object
+  });
+```
 
 ### **Silcrow.patch(data, root, options?)**
 
@@ -166,7 +189,7 @@ After each patch, a silcrow:patched event fires on the root with detail.paths li
 
 ### **Silcrow.invalidate(root)**
 
-Clears the cached binding map and template validations for a root. Call this when you've added or removed s-bind / s-list elements dynamically.
+Clears the cached binding map and template validations for a root. Call this when you've added or removed shorthand binding or s-list elements dynamically.
 
 ### **Silcrow.stream(root)**
 
@@ -222,7 +245,7 @@ This allows you to write perfectly minimal, form-less action buttons inside your
 <ul s-list="tasks">
   <template>
     <li s-key=".key">
-      <span s-bind=".title"></span>
+      <span :text=".title"></span>
       <button s-action="/tasks/{s-key}/delete" DELETE>Delete</button>
     </li>
   </template>
@@ -238,7 +261,7 @@ Because of {s-key} interpolation and implicit targeting, you have two distinct t
 
 ```html
 <form s-action="/tasks/{s-key}/edit" method="PUT">  
-  <input type="text" name="title" s-bind=".title" />  
+  <input type="text" name="title" :value=".title" /> 
   <button type="submit">Save</button>  
 </form>
 
@@ -384,7 +407,7 @@ Add `s-live` to any element to automatically open an SSE connection on page load
 
 ```html
 <div id="feed" s-live="/events/feed">
-  <span s-bind="count"></span> items
+  <span :text="count"></span> items
 </div>
 
 ```
@@ -397,7 +420,7 @@ Prefix the URL with `ws:` to use WebSocket instead of SSE:
 
 ```html
 <div id="chat" s-live="ws:/ws/chat">
-  <span s-bind="messages"></span>
+  <span :text="messages"></span>
 </div>
 
 ```
@@ -591,6 +614,7 @@ All events bubble and are dispatched on document (except `silcrow:patched` which
 ```javascript
 // Register handlers (chainable)
 Silcrow
+  .use((data) => { /* global transform */ return data; })
   .onToast((msg, level) => { /* ... */ })
   .onRoute(({ url, finalUrl, redirected, method, response, contentType, target }) => {
     // Return false to prevent the default swap
@@ -610,7 +634,8 @@ Silcrow.destroy();
 
 | **Method** | **Description** |
 | --- | --- |
-| `Silcrow.patch(data, root, options?)` | Patch data into bound elements under root |
+| `Silcrow.use(fn)` | Register a global data transformer |
+| `Silcrow.patch(data, root, options?)` | Process middleware, unwrap data, and patch the DOM |
 | `Silcrow.invalidate(root)` | Clear cached binding maps for root |
 | `Silcrow.stream(root)` | Returns microtask-batched updater function |
 
