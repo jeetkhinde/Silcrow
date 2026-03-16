@@ -1,40 +1,101 @@
 // /patcher.js
 // ════════════════════════════════════════════════════════════
-// Patcher — reactive data binding & DOM patching (Shorthand Only)
+// Patcher — Unified ":" Bindings, s-for Fragments & Identity
 // ════════════════════════════════════════════════════════════
 
 const instanceCache = new WeakMap();
 const validatedTemplates = new WeakSet();
 const localBindingsCache = new WeakMap();
-const identityMap = new WeakMap();
-
-// 1. Global Middleware Registry
+const identityMap = new WeakMap(); // Tracks object reference -> stable UUID
 const patchMiddleware = [];
+
 const PATH_RE = /^\.?[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*$/;
 function isValidPath(p) {return PATH_RE.test(p);}
 
-function isOnHandler(prop) {
-  return prop && prop.toLowerCase().startsWith("on");
+const knownProps = {
+  value: "string", checked: "boolean", disabled: "boolean",
+  selected: "boolean", src: "string", href: "string", selectedIndex: "number",
+};
+
+// ── Fix 1: URL-bearing attribute set for security gate ─────
+const URL_BINDING_PROPS = new Set([
+  "href", "src", "action", "formaction", "xlink:href",
+  "poster", "cite", "background"
+]);
+
+// ── Fix 3: Prototype pollution deny-set ────────────────────
+const BLOCKED_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+function resolvePath(obj, path) {
+  if (typeof obj !== "object" || obj === null) return undefined;
+  if (!isValidPath(path)) return undefined;
+  const parts = path.split(".");
+  let cur = obj;
+  for (const part of parts) {
+    if (BLOCKED_KEYS.has(part)) return undefined;
+    if (!Object.prototype.hasOwnProperty.call(cur, part)) return undefined;
+    cur = cur[part];
+    if (cur === null || cur === undefined) {
+      return parts.indexOf(part) === parts.length - 1 ? cur : undefined;
+    }
+  }
+  return cur;
 }
 
-const knownProps = {
-  value: "string",
-  checked: "boolean",
-  disabled: "boolean",
-  selected: "boolean",
-  src: "string",
-  href: "string",
-  selectedIndex: "number",
-};
+// ── Fix 13: Missing utility — resolveRoot ──────────────────
+function resolveRoot(root) {
+  if (typeof root === "string") return document.querySelector(root) || document.body;
+  return root || document.body;
+}
+
+// ── Fix 8: Debug warning on implicit identity ──────────────
 function getStableId(obj) {
   if (obj === null || typeof obj !== 'object') return String(obj);
   let id = identityMap.get(obj);
   if (!id) {
+    warn('s-for block without :key — identity tracking is unreliable for server data');
     id = crypto.randomUUID();
     identityMap.set(obj, id);
   }
   return id;
 }
+
+function parseForExpression(expr) {
+  const match = expr.match(/^\s*([A-Za-z0-9_-]+)\s+in\s+([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)\s*$/);
+  return match ? {alias: match[1], path: match[2]} : null;
+}
+
+// ── Fix 1: URL safety gate in setValue ──────────────────────
+function setValue(el, prop, value) {
+  if (prop === "text") {
+    el.textContent = value == null ? "" : String(value);
+    return;
+  }
+  if (prop === "show") {
+    el.style.display = value ? "" : "none";
+    return;
+  }
+
+  // SECURITY: sanitize URL-bearing properties
+  if (URL_BINDING_PROPS.has(prop)) {
+    const allowDataImage = prop === "src" && el.tagName === "IMG";
+    if (!hasSafeProtocol(String(value || ""), allowDataImage)) {
+      warn('Blocked unsafe URL for :' + prop + ' — "' + String(value).slice(0, 50) + '"');
+      return;
+    }
+  }
+
+  if (value == null) {
+    if (prop in knownProps) {
+      el[prop] = knownProps[prop] === "boolean" ? false : (knownProps[prop] === "number" ? 0 : "");
+    } else el.removeAttribute(prop);
+    return;
+  }
+  if (prop in knownProps) el[prop] = value;
+  else el.setAttribute(prop, String(value));
+}
+
+// ── Fix 2 + Fix 10: Block dangerous bindings + validate prop names ──
 function scanBindings(root, alias = null) {
   const bindings = new Map();
   const elements = [root, ...root.querySelectorAll("*")];
@@ -43,7 +104,21 @@ function scanBindings(root, alias = null) {
     for (const attr of el.attributes) {
       if (!attr.name.startsWith(":")) continue;
       const prop = attr.name.slice(1);
+
+      // Fix 10: Reject malformed prop names (empty, double-colon, whitespace)
+      if (!prop || prop.startsWith(":") || prop !== prop.trim()) {
+        warn('Skipping malformed binding attribute: "' + attr.name + '"');
+        continue;
+      }
+
+      // Fix 2: Reject event handler, style injection, and srcdoc bindings
+      if (prop.startsWith("on") || prop === "style" || prop === "srcdoc") {
+        warn('Blocked binding to dangerous attribute: :' + prop);
+        continue;
+      }
+
       const path = attr.value;
+
       if (alias && path.startsWith(alias + ".")) {
         const field = path.substring(alias.length + 1);
         if (!bindings.has(field)) bindings.set(field, []);
@@ -56,210 +131,12 @@ function scanBindings(root, alias = null) {
   }
   return bindings;
 }
-/**
- * Detects if an element has shorthand reactive attributes (:prop) or s-list.
- */
-function hasAnyBinding(el) {
-  if (!el.hasAttribute) return false;
-  if (el.hasAttribute("s-list")) return true;
-  for (const attr of el.attributes) {
-    if (attr.name.startsWith(":")) return true;
-  }
-  return false;
-}
 
-/**
- * Validates and adds a binding to the scalar map.
- */
-function addBinding(path, prop, el, scalarMap) {
-  if (isOnHandler(prop)) return warn("Rejected event binding: " + prop);
-  if (!isValidPath(path)) return warn("Invalid path: " + path);
-
-  if (!scalarMap.has(path)) scalarMap.set(path, []);
-  scalarMap.get(path).push({el, prop});
-}
-
-function isUnsafeBoundUrl(el, prop, value) {
-  const name = String(prop || "").toLowerCase();
-  if (!name) return false;
-
-  if (name === "srcset") {
-    return !hasSafeSrcSet(value);
-  }
-
-  if (!URL_ATTRS.has(name)) return false;
-
-  const allowDataImage = name === "src" && el.tagName === "IMG";
-  return !hasSafeProtocol(value, allowDataImage);
-}
-
-function setValue(el, prop, value) {
-  if (isOnHandler(prop)) {
-    throwErr("Binding to event handler attribute rejected: " + prop);
-    return;
-  }
-
-  // Handle :text="path" shorthand for textContent
-  if (prop === "text") {
-    el.textContent = value == null ? "" : String(value);
-    return;
-  }
-
-  if (value == null) {
-    if (prop in knownProps) {
-      const t = knownProps[prop];
-      if (t === "boolean") el[prop] = false;
-      else if (t === "number") el[prop] = 0;
-      else el[prop] = "";
-    } else {
-      el.removeAttribute(prop);
-    }
-    return;
-  }
-
-  if (isUnsafeBoundUrl(el, prop, value)) {
-    warn("Rejected unsafe URL in binding: " + prop);
-    if (prop in knownProps) {
-      el[prop] = "";
-    } else {
-      el.removeAttribute(prop);
-    }
-    return;
-  }
-
-  if (prop in knownProps) {
-    el[prop] = value;
-  } else {
-    el.setAttribute(prop, String(value));
-  }
-}
-
-function scanBindableNodes(root) {
-  const result = [];
-  if (hasAnyBinding(root)) result.push(root);
-
-  const descendants = root.querySelectorAll("*");
-  for (const el of descendants) {
-    if (el.closest("template")) continue;
-    if (hasAnyBinding(el)) result.push(el);
-  }
-  return result;
-}
-
-function registerSubtreeBindings(node, scalarMap) {
-  for (const el of scanBindableNodes(node)) {
-    for (const attr of el.attributes) {
-      if (!attr.name.startsWith(":") || attr.name.length <= 1) continue;
-
-      const path = attr.value;
-      if (!path.startsWith(".")) {
-        addBinding(path, attr.name.slice(1), el, scalarMap);
-      }
-    }
-  }
-}
-
-function validateTemplate(tpl) {
-  const content = tpl.content;
-  if (content.querySelectorAll("script").length) {
-    throwErr("Script not allowed in template");
-  }
-  for (const el of content.querySelectorAll("*")) {
-    for (const attr of el.attributes) {
-      if (attr.name.toLowerCase().startsWith("on")) {
-        throwErr("Event handler attribute not allowed in template");
-      }
-    }
-    if (el.hasAttribute("s-list")) {
-      throwErr("Nested s-list not allowed");
-    }
-  }
-}
-
-function cloneTemplate(tpl, scalarMap) {
-  if (!validatedTemplates.has(tpl)) {
-    validateTemplate(tpl);
-    validatedTemplates.add(tpl);
-  }
-  const frag = tpl.content.cloneNode(true);
-  const node = frag.firstElementChild;
-  if (!node) {
-    throwErr("Template must contain exactly one element child");
-    return document.createElement("div");
-  }
-
-  const localBindings = new Map();
-  const elements = [node, ...node.querySelectorAll("*")];
-
-  for (const el of elements) {
-    for (const attr of el.attributes) {
-      if (attr.name.startsWith(":") && attr.value.startsWith('.')) {
-        const field = attr.value.substring(1);
-        const prop = attr.name.slice(1);
-        if (!localBindings.has(field)) localBindings.set(field, []);
-        localBindings.get(field).push({el, prop});
-      }
-    }
-  }
-
-  localBindingsCache.set(node, localBindings);
-  registerSubtreeBindings(node, scalarMap);
-  return node;
-}
-
-function asTemplate(el) {
-  return el instanceof HTMLTemplateElement ? el : null;
-}
-
-function getKeyField(container) {
-  const templateId = container.getAttribute("s-template");
-  let tpl = null;
-  if (templateId) tpl = asTemplate(document.getElementById(templateId));
-  if (!tpl) tpl = asTemplate(container.querySelector(":scope > template"));
-  if (!tpl) return "key";
-
-  const elements = [];
-  for (const n of tpl.content.children) {
-    if (n.nodeType === 1) elements.push(n);
-  }
-  if (elements.length !== 1) return "key";
-
-  const sKey = elements[0].getAttribute("s-key");
-  if (!sKey || !sKey.startsWith(".")) return "key";
-  return sKey.substring(1);
-}
-
-function makeTemplateResolver(container, scalarMap, keyField) {
-  const templateId = container.getAttribute("s-template");
-
-  return function resolve(item) {
-    let tpl = null;
-    if (item && item[keyField] != null) {
-      const keyStr = String(item[keyField]);
-      const hashIdx = keyStr.indexOf("#");
-      if (hashIdx !== -1) {
-        const tplName = keyStr.substring(0, hashIdx);
-        tpl = asTemplate(document.getElementById(tplName));
-      }
-    }
-    if (!tpl && templateId) tpl = asTemplate(document.getElementById(templateId));
-    if (!tpl) tpl = asTemplate(container.querySelector(":scope > template"));
-
-    if (!tpl) {
-      throwErr("No resolvable template for collection");
-      return document.createElement("div");
-    }
-    return cloneTemplate(tpl, scalarMap);
-  };
-}
-
-const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
-
+// ── Fix 7: Duplicate key detection ─────────────────────────
 function reconcile(container, template, items, alias, keyPath) {
   const existingBlocks = new Map();
-  // Find all existing nodes marked with :key (or s-key legacy)
   for (const child of container.children) {
-    const k = child.getAttribute(":key") || child.getAttribute("s-key");
+    const k = child.getAttribute(":key");
     if (k) {
       if (!existingBlocks.has(k)) existingBlocks.set(k, []);
       existingBlocks.get(k).push(child);
@@ -270,10 +147,16 @@ function reconcile(container, template, items, alias, keyPath) {
   let anchor = template;
 
   for (const item of items) {
-    const key = keyPath ? resolvePath(item, keyPath) : getStableId(item);
-    nextKeys.add(String(key));
+    const key = String(keyPath ? resolvePath(item, keyPath) : getStableId(item));
 
-    let block = existingBlocks.get(String(key));
+    // Fix 7: Detect duplicate keys
+    if (nextKeys.has(key)) {
+      warn('Duplicate :key "' + key + '" in s-for — second item ignored');
+      continue;
+    }
+    nextKeys.add(key);
+
+    let block = existingBlocks.get(key);
     if (!block) {
       const frag = template.content.cloneNode(true);
       block = Array.from(frag.children).filter(n => n.nodeType === 1);
@@ -304,16 +187,6 @@ function patchItem(node, item, alias) {
   }
 }
 
-function resolvePath(obj, path) {
-  const parts = path.split('.');
-  let current = obj;
-  for (const part of parts) {
-    if (current == null || ['__proto__', 'constructor', 'prototype'].includes(part)) return undefined;
-    current = current[part];
-  }
-  return current;
-}
-
 function buildMaps(root) {
   const collections = [];
   root.querySelectorAll("template[s-for]").forEach(tpl => {
@@ -325,116 +198,115 @@ function buildMaps(root) {
   return {scalars: scanBindings(root), collections};
 }
 
-function mergeItem(container, item, resolveTemplate, keyField) {
-  const key = String(item[keyField]);
-  let node = null;
-  for (const child of container.children) {
-    if (child.getAttribute("s-key") === key) {node = child; break;}
-  }
-  if (!node) {
-    node = resolveTemplate(item);
-    node.setAttribute("s-key", key);
-    container.appendChild(node);
-  }
-  patchItem(node, item, keyField);
-}
+// ── Fix 11: Object merge and remove modes ──────────────────
+function mergeOrRemoveItem(container, template, item, alias, keyPath) {
+  const key = String(resolvePath(item, keyPath));
+  if (!key) return;
 
-function removeItem(container, item, keyField) {
-  const key = String(item[keyField]);
-  for (const child of container.children) {
-    if (child.getAttribute("s-key") === key) {child.remove(); return;}
-  }
-}
-
-function applyPatch(data, scalarMap, collectionMap) {
-  for (const [path, bindings] of scalarMap.entries()) {
-    const value = resolvePath(data, path);
-    if (value !== undefined) {
-      for (const {el, prop} of bindings) setValue(el, prop, value);
+  if (item._remove) {
+    // Remove mode: delete all nodes with this key
+    for (const child of [...container.children]) {
+      if (child.getAttribute(":key") === key) child.remove();
     }
+    return;
   }
 
-  for (const [path, {container, resolveTemplate, keyField}] of collectionMap.entries()) {
-    const value = resolvePath(data, path);
-    if (Array.isArray(value)) reconcile(container, value, resolveTemplate, keyField);
-    else if (value && hasOwn(value, keyField)) {
-      if (value._remove) removeItem(container, value, keyField);
-      else mergeItem(container, value, resolveTemplate, keyField);
-    }
+  // Merge mode: update existing or append new
+  const existing = [];
+  for (const child of container.children) {
+    if (child.getAttribute(":key") === key) existing.push(child);
+  }
+
+  if (existing.length > 0) {
+    existing.forEach(node => patchItem(node, item, alias));
+  } else {
+    const frag = template.content.cloneNode(true);
+    const block = Array.from(frag.children).filter(n => n.nodeType === 1);
+    block.forEach(el => {
+      el.setAttribute(":key", key);
+      patchItem(el, item, alias);
+      container.appendChild(el);
+    });
   }
 }
 
-/**
- * Ensures we always have a valid DOM element to work with.
- * Prevents null pointer errors if document.querySelector fails.
- */
-function resolveRoot(root) {
-  if (typeof root === "string") return document.querySelector(root) || document.createElement("div");
-  return root instanceof Element ? root : document.createElement("div");
+// ── Fix 4: Deep clone helper for middleware isolation ───────
+function safeClone(obj) {
+  try { return structuredClone(obj); }
+  catch { return JSON.parse(JSON.stringify(obj)); }
 }
 
-/**
- * The entry point for all DOM updates in Silcrow.
- * Standardized on the colon-prefix (:) for all reactive bindings.
- */
 function patch(data, root, options = {}) {
   const element = resolveRoot(root);
 
-  // 1. PIPELINE: Run global data transformers (middleware)
+  // Fix 4: Deep-clone for middleware isolation (prevents cache poisoning)
   let transformedData = data;
   try {
-    transformedData = patchMiddleware.reduce((acc, fn) => fn(acc) || acc, {...data});
+    transformedData = patchMiddleware.reduce((acc, fn) => fn(safeClone(acc)) ?? acc, safeClone(data));
   } catch (err) {
-    warn("Middleware failed: " + err.message);
     transformedData = data;
   }
 
-  // 2. METADATA: Automatically extract and show server-sent toasts
-  if (transformedData && transformedData._toasts) {
-    processToasts(true, transformedData);
-  }
+  if (transformedData?._toasts) processToasts(true, transformedData);
 
-  // 3. UNWRAPPING: Simplifies paths if the server sends { data: { ... } }
+  // Fix 5: Smart unwrap — only unwrap { data: X } when X is a plain object
+  // Primitives and arrays are valid domain values, not envelopes
   if (
-    transformedData &&
-    typeof transformedData === "object" &&
-    transformedData.data !== undefined &&
-    Object.keys(transformedData).length === 1
+    transformedData?.data !== undefined &&
+    Object.keys(transformedData).length === 1 &&
+    typeof transformedData.data === "object" &&
+    transformedData.data !== null &&
+    !Array.isArray(transformedData.data)
   ) {
     transformedData = transformedData.data;
   }
 
-  // 4. IDENTITY & CACHE: Rebuild maps if invalidated or first-run
   let instance = instanceCache.get(element);
   if (!instance || options.invalidate) {
-    instance = buildMaps(element); // buildMaps now supports s-for and :key
+    instance = buildMaps(element);
     instanceCache.set(element, instance);
   }
 
-  // 5. EXECUTION: Apply scalar bindings and collection reconciliation
-  applyPatch(transformedData, instance.scalarMap, instance.collectionMap);
-
-  // 6. NOTIFICATION: Signal to the rest of the app that UI has changed
-  if (!options.silent) {
-    element.dispatchEvent(new CustomEvent('silcrow:patched', {
-      bubbles: true,
-      detail: {paths: Array.from(instance.scalarMap.keys())}
-    }));
+  for (const [path, bindings] of instance.scalars.entries()) {
+    const val = resolvePath(transformedData, path);
+    if (val !== undefined) bindings.forEach(b => setValue(b.el, b.prop, val));
   }
+
+  // Fix 11: Handle array (full sync), object merge, and object remove
+  instance.collections.forEach(col => {
+    const val = resolvePath(transformedData, col.path);
+    if (Array.isArray(val)) {
+      reconcile(col.tpl.parentElement, col.tpl, val, col.alias, col.keyPath);
+    } else if (val && typeof val === "object" && col.keyPath) {
+      mergeOrRemoveItem(col.tpl.parentElement, col.tpl, val, col.alias, col.keyPath);
+    }
+  });
+
+  // Fix 12: Fire silcrow:patched event
+  const patchedPaths = Array.from(instance.scalars.keys());
+  element.dispatchEvent(new CustomEvent("silcrow:patched", {
+    bubbles: true,
+    detail: {paths: patchedPaths},
+  }));
 }
+
+// ── Fix 9: Invalidate clears localBindingsCache ────────────
 function invalidate(root) {
   const element = resolveRoot(root);
   instanceCache.delete(element);
-  for (const tpl of element.querySelectorAll('template')) validatedTemplates.delete(tpl);
+  element.querySelectorAll('[\\:key]').forEach(el => localBindingsCache.delete(el));
 }
 
+// ── Fix 13: Missing utility — stream ───────────────────────
 function stream(root) {
-  const element = resolveRoot(root);
-  let pending = null, scheduled = false;
-  return function update(data) {
+  let pending = null;
+  return function(data) {
     pending = data;
-    if (scheduled) return;
-    scheduled = true;
-    queueMicrotask(() => {scheduled = false; patch(pending, element);});
+    queueMicrotask(() => {
+      if (pending === data) {
+        patch(pending, root);
+        pending = null;
+      }
+    });
   };
 }

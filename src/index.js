@@ -4,6 +4,7 @@
 // ════════════════════════════════════════════════════════════
 
 let liveObserver = null;
+let middlewareLocked = false;
 
 function init() {
   document.addEventListener("click", onClick);
@@ -51,6 +52,9 @@ function init() {
   });
 
   liveObserver.observe(document.body, {childList: true, subtree: true});
+
+  // Fix 6: Lock middleware pipeline after initialization
+  middlewareLocked = true;
 }
 
 function destroy() {
@@ -100,6 +104,10 @@ window.Silcrow = {
 
   // --- Extensibility ---
   use(fn) {
+    if (middlewareLocked) {
+      warn("Silcrow.use() called after init — middleware registration is closed.");
+      return this;
+    }
     if (typeof fn === 'function') patchMiddleware.push(fn);
     return this;
   },

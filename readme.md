@@ -39,7 +39,7 @@ This enables console warnings and throws on template validation errors.
 
 Silcrow.js has three independent systems exposed through a single window.Silcrow API:
 
-1. **Runtime** — reactive data binding and DOM patching via shorthand colon-prefixed attributes (:prop) and s-list
+1. **Runtime** — reactive data binding and DOM patching via unified colon-prefixed attributes (:prop) and fragment-aware s-for loops.
 2. **Navigator** — client-side routing, history management, and response caching via s-action attributes
 3. **Live** — SSE and WebSocket connections, optimistic updates, and real-time data streaming via s-live attributes
 
@@ -47,13 +47,13 @@ Silcrow.js has three independent systems exposed through a single window.Silcrow
 
 ### **Scalar Binding**
 
-Bind any element property to a data path using the :property="path" syntax. For text content, use the special :text shorthand.
+Bind any element property to a data path using the :property="path" syntax. For text content, use the special :text shorthand. To toggle visibility via CSS, use :show.
 
 ```html
 <h1 :text="user.name"></h1>
+<div :show="user.is_online">Online Now</div>
 <input :value="user.email" />
-<img :src="user.avatar" />
-<button :disabled="user.banned"></button>
+<button :disabled="user.banned">Action</button>
 
 ```
 
@@ -68,42 +68,55 @@ Silcrow.patch({
 
 The second argument is a root — either a CSS selector string or a DOM Element. Silcrow only patches bindings within that root.
 
-**Known properties** (value, checked, disabled, selected, src, href, selectedIndex) are set as DOM properties. Everything else is set as an attribute. null or undefined values reset properties to their type default or remove attributes.
+**Known properties** (`value`, `checked`, `disabled`, `selected`, `src`, `href`, `selectedIndex`) are set as DOM properties. All other bindings are set as attributes.
 
 **Security:** Binding to event handler attributes (onclick, onload, etc.) is rejected. Text content is set via textContent, never innerHTML.
 
-### **Collection Rendering with s-list**
+### **Fragment Loops with s-for**
 
-Render collections of keyed objects into a container. Each item **must** have a `key` property.
+Render collections of objects into a container using the `<template s-for>` directive. Silcrow supports multi-sibling fragments (e.g., dt/dd pairs) without requiring a wrapper div.
 
 ```html
-<ul s-list="todos" s-template="todo-tpl">
-</ul>
-
-<template id="todo-tpl">
-<li s-key=".key">
-  <span :text=".text"></span>
-  <input type="checkbox" :checked=".done" />
-</li>
-</template>
+<dl>
+  <template s-for="task in tasks" :key="task.id">
+    <dt :text="task.title"></dt>
+    <dd>
+      <button s-action="/tasks/:key/done" POST>Complete</button>
+    </dd>
+  </template>
+</dl>
 
 ```
 
-**s-list dispatches on the shape of the value you patch:**
+#### **Identity & Stability**
+
+Silcrow uses **Identity-Locked Reconciliation**:
+
+1. **Explicit Key**: If `:key="task.id"` is provided, Silcrow uses that data field.
+
+2. **Implicit Identity**: If `:key` is omitted or set to `index`, Silcrow uses a `WeakMap` to assign a stable UUID to the object reference. This ensures that if the list reorders, the DOM nodes move instead of being destroyed, preserving `<input>` focus and CSS transitions.
+
+#### **Printed Context**
+
+Silcrow "prints" the stable ID as a `:key` attribute on **every sibling** in the rendered block. This allows nested actions to resolve their context automatically.
+
+#### **Collection Patching Modes**
+
+Silcrow dispatches logic based on the shape of the data patched to an s-for path:
 
 | Value shape | Mode | Behavior |
 | --- | --- | --- |
-| Array `[...]` | **Full sync** | Reconcile entire list — add new items, update existing, remove stale, reorder |
-| Keyed object `{key, ...}` | **Merge** | Append or update a single item. All other items in the DOM are untouched. |
-| Keyed object with `_remove: true` | **Remove** | Delete the single item matching the key. All other items are untouched. |
+| Array `[...]` | **Full sync** | Reconciles the entire list (add, remove, reorder). |
+| Object `{...}` | **Merge** | Appends or updates a single item based on its `:key`. |
+| Object `{_remove: true}` | **Remove** | Deletes the specific item matching the `:key`. |
 
 **Full sync** (initial load, delete, reorder):
 
 ```javascript
 Silcrow.patch({
   todos: [
-    { key: "1", text: "Buy milk", done: false },
-    { key: "2", text: "Write docs", done: true },
+    { id: "1", text: "Buy milk", done: false },
+    { id: "2", text: "Write docs", done: true },
   ]
 }, "#app");
 
@@ -113,21 +126,21 @@ Silcrow.patch({
 
 ```javascript
 Silcrow.patch({
-  todos: { key: "3", text: "Ship it", done: false }
+  todos: { id: "3", text: "Ship it", done: false }
 }, "#app");
 ```
 
-The new item is appended; existing items with keys "1" and "2" are untouched. If an item with key "3" already exists, it is updated in-place.
+The new item is appended; existing items with keys "1" and "2" are untouched. If an item with `id` "3" already exists, it is updated in-place.
 
 **Remove** (delete a single item — no need to send the full list):
 
 ```javascript
 Silcrow.patch({
-  todos: { key: "2", _remove: true }
+  todos: { id: "2", _remove: true }
 }, "#app");
 ```
 
-The item with key "2" is removed from the DOM. All other items are untouched. The `_remove` field is a reserved tombstone sentinel — any other fields in the object are ignored.
+The item with `id` "2" is removed from the DOM. All other items are untouched. The `_remove` field is a reserved tombstone sentinel — any other fields in the object are ignored.
 
 **Direct targeting:** `s-target` can point directly to the `[s-list]` element (not its parent):
 
@@ -155,21 +168,23 @@ The item with key "2" is removed from the DOM. All other items are untouched. Th
 **Server-Rendered Lists (Hydration):**
 Silcrow seamlessly handles collections that are pre-rendered by the server. If an item exists in the DOM with an `s-key` but was not created dynamically via Silcrow's `<template>` cloning, Silcrow will lazily scan and cache its shorthand reactive attributes (e.g., :text, :value) on the first patch. This allows you to serve fully populated HTML on initial load and effortlessly transition to client-side patches.
 
-
 ### **Data Processing Pipeline**
+
 Silcrow processes data through a multi-stage lifecycle before patching the DOM:
 
 1. **Middleware**: Global transformers registered via Silcrow.use().
 
 2. **Toasts**: Automatic extraction and display of server-sent notifications.
 
-3. **Smart Unwrapping**: If the payload contains only a data key, Silcrow automatically unwraps it to simplify binding paths.
+3. **Smart Unwrapping**: If the payload is `{ data: X }` with a single key and `X` is a plain object, Silcrow unwraps it to simplify binding paths. Primitives (`{ data: "Loading…" }`) and arrays (`{ data: [...] }`) are never unwrapped — they pass through as-is for direct binding.
 
 4. **Safety Check**: Verification that the final payload is a valid non-null object.
 
 #### **Silcrow.use(fn)**
 
-Register a global middleware function to transform data across all patches.
+Register a global middleware function to transform data across all patches. **Middleware must be registered before Silcrow initializes** (i.e., before `DOMContentLoaded`). Calls to `Silcrow.use()` after initialization are rejected with a console warning.
+
+Each middleware receives a deep-cloned copy of the data, so mutations inside a middleware cannot affect the original payload or other middleware in the chain.
 
 ```javascript
   Silcrow.use((data) => {
@@ -211,7 +226,7 @@ Dot-separated paths resolve into nested objects: `"user.profile.name"` reads `da
 
 ### **Declarative Navigation with s-action**
 
-Add `s-action` to any element to make it navigate on click:
+Add `s-action` to any element to enable client-side navigation or mutations. Silcrow standardizes on the colon-prefix (`:`) for dynamic URL parameters.
 
 ```html
 <a s-action="/dashboard">Dashboard</a>
@@ -220,47 +235,65 @@ Add `s-action` to any element to make it navigate on click:
 
 ```
 
+```html
+<a s-action="/dashboard">Dashboard</a>
+<button s-action="/tasks/:key/complete" POST>Complete</button>
+<button s-action="/items/:key" DELETE s-target="#notifications">Remove</button>
+```
+
+### The `:key` Placeholder**
+
+When an action is placed inside an `s-for` loop, Silcrow provides automatic context discovery. Any `:key` placeholder in an `s-action` or `s-target` is automatically replaced with the stable ID of the nearest loop block.
+
+* **Discovery**: The Navigator looks for the nearest printed `:key` attribute in the DOM.
+
+* **Symmetry**: This matches the `:key` used in your templates, creating a "One Way" mental model for dynamic data.
+
+#### **Implicit Targeting**
+
+If you omit the `s-target` attribute, Silcrow intelligently resolves the swap target:
+
+1. **Container Swap**: If inside an `s-for` loop, it targets the parent container. This allows the server to return a single JSON object for a "Merge" patch.
+
+2. **Self Swap**: If no loop context is found, it targets the triggering element itself.
+
+#### **Form Mutations vs. Pure Buttons**
+
+Silcrow eliminates the need for `<form>` wrappers for simple, binary actions.
+
+* **Pure Buttons**: Use for actions where the URL contains all required state (e.g., `POST`, `PATCH`, `DELETE` via `/:key`).
+
+* **Forms**: Use only when sending user input (e.g., text fields, file uploads). Silcrow automatically serializes the form into a `FormData` body.
+
+```html
+<button s-action="/tasks/:key/star" POST>Star Task</button>
+
+<form s-action="/tasks/:key/rename" PATCH>
+  <input name="new_name" placeholder="Enter name..." />
+  <button type="submit">Rename</button>
+</form>
+```
+
 ### **Attributes**
 
 | **Attribute** | **Purpose** | **Default** |
 | --- | --- | --- |
-| `s-action` | URL to request | *(required)* |
-| `s-target` | CSS selector — swap response into this element | Closest $$s-key$$ parent, or the triggering element itself |
-| `s-html` | Request text/html instead of application/json | JSON |
+| `s-action` | URL to request (supports `/:key` interpolation) | *(required)* |
+| `s-target` | CSS selector for the swap target | Closest loop block or self |
+| `s-html` | Force request to expect `text/html` | `application/json` |
 | `s-skip-history` | Don't push to browser history | Push for full-page GETs |
-| `s-preload` | Preload on mouse hover | Off |
+| `s-preload` | Preload on `mouseenter` | Off |
 | `s-timeout` | Request timeout in ms | 30000 |
 | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` | HTTP method (as attribute) | `GET` (or `POST` for forms) |
 
-### **Actions within Lists (s-key Context)**
-
-When building actions inside `s-list` templates, Silcrow provides two ergonomic features to eliminate boilerplate and avoid unnecessary `<form>` wrappers for simple actions:
-
-1. **`{s-key}` Interpolation:** Any `{s-key}` string in your `s-action` or `s-target` attributes is automatically replaced with the value of the closest parent's `s-key` attribute.
-2. **Implicit List Targeting:** If you omit the `s-target` attribute, the action will automatically bubble up to target the parent `[s-list]` container (falling back to the `[s-key]` item if orphaned). This perfectly aligns with `s-list` merge behavior: your server can return a single updated JSON object or an HTML fragment, and Silcrow will route it to the list container to append or update the item without needing explicit `s-target` wiring.
-
-This allows you to write perfectly minimal, form-less action buttons inside your collections:
-
-```html
-<ul s-list="tasks">
-  <template>
-    <li s-key=".key">
-      <span :text=".title"></span>
-      <button s-action="/tasks/{s-key}/delete" DELETE>Delete</button>
-    </li>
-  </template>
-</ul>
-
-```
-
 #### **Forms vs. Pure Buttons for Mutations**
 
-Because of {s-key} interpolation and implicit targeting, you have two distinct tools depending on whether your mutation requires a request body. While the HTTP specification builds POST, PUT, and PATCH to carry bodies, it does *not* mandate them.
+Because of `:key` interpolation and implicit targeting, you have two distinct tools depending on whether your mutation requires a request body. While the HTTP specification builds POST, PUT, and PATCH to carry bodies, it does *not* mandate them.
 
 **1. When you NEED a body → Use a `<form>`** If the user is submitting new data (like typing a task title), you must use a form. Silcrow relies on the form boundary to serialize inputs into a FormData request body.
 
 ```html
-<form s-action="/tasks/{s-key}/edit" method="PUT">  
+<form s-action="/tasks/:key/edit" method="PUT">  
   <input type="text" name="title" :value=".title" /> 
   <button type="submit">Save</button>  
 </form>
@@ -272,8 +305,8 @@ Because of {s-key} interpolation and implicit targeting, you have two distinct t
 If the action is binary and the URL itself contains all the required context (via the ID), you don't need a body. You can use form-less buttons for POST, PUT, and PATCH just like you do for DELETE.
 
 ```html
-<button s-action="/tasks/{s-key}/toggle" PATCH>Toggle Complete</button>  
-<button s-action="/tasks/{s-key}/upvote" POST>Upvote</button>
+<button s-action="/tasks/:key/toggle" PATCH>Toggle Complete</button>  
+<button s-action="/tasks/:key/upvote" POST>Upvote</button>
 ```
 
 **The Architect's Rule of Thumb:**
@@ -284,7 +317,7 @@ If the action is binary and the URL itself contains all the required context (vi
 
 **Server-Side Example (Axum):**
 
-For a pure button, the backend handler simply extracts the ID from the path and processes the action without expecting a body, returning the updated fragment directly to the targeted `{s-key}` item.
+For a pure button, the backend handler simply extracts the ID from the path and processes the action without expecting a body, returning the updated fragment directly to the targeted `:key` item.
 
 ```rust
 use axum::extract::Path;
@@ -537,6 +570,10 @@ WebSocket messages are JSON objects with a `type` field that matches the Rust `W
 ### **Silcrow.optimistic(root, data)**
 
 Takes a snapshot of the root element's current DOM state, then immediately patches the data. Use this for instant UI feedback before the server confirms:
+
+* **Stability**: Uses the same `:key` identity logic as standard patches, ensuring list items don't jump or flicker.
+
+* **Visuals**: Ideal for toggling `:show` states or updating `:text` counters immediately on click.
 
 ```javascript
 // User clicks "like" — update immediately

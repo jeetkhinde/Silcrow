@@ -28,17 +28,16 @@ function getMethod(el) {
 }
 
 // ── URL Resolution ─────────────────────────────────────────
-// ── URL Resolution ─────────────────────────────────────────
 function resolveUrl(el) {
   let raw = el.getAttribute("s-action");
   if (!raw) return null;
 
-  // Unified placeholder support: :key or {s-key} fallback
-  if (raw.includes(":key") || raw.includes("{s-key}")) {
-    const closest = el.closest("[:key]") || el.closest("[s-key]");
+  // Unified placeholder: Replaces :key with the printed attribute value
+  if (raw.includes(":key")) {
+    const closest = el.closest("[:key]");
     if (closest) {
-      const id = closest.getAttribute(":key") || closest.getAttribute("s-key");
-      raw = raw.replace(/:key/g, id).replace(/{s-key}/g, id);
+      const id = closest.getAttribute(":key");
+      raw = raw.replace(/:key/g, id);
     }
   }
 
@@ -49,27 +48,37 @@ function resolveUrl(el) {
   }
 }
 // ── Target Resolution ──────────────────────────────────────
+/**
+ * Resolves the target element for a response swap.
+ * Prioritizes explicit s-target, then bubbles up to the nearest loop block.
+ */
 function getTarget(el) {
   let sel = el.getAttribute("s-target");
 
   if (sel) {
-    // If they explicitly provide a target, support interpolation there too
-    if (sel.includes("{s-key}")) {
-      const closest = el.closest("[s-key]");
-      if (closest) sel = sel.replace(/{s-key}/g, closest.getAttribute("s-key"));
+    // 1. Explicit target with :key interpolation support
+    if (sel.includes(":key")) {
+      const closest = el.closest("[:key]");
+      if (closest) sel = sel.replace(/:key/g, closest.getAttribute(":key"));
     }
     const target = document.querySelector(sel);
     if (target) return target;
   }
 
-  // Walk up: if inside a list item, target the list container
-  const listItem = el.closest("[s-key]");
+  // 2. Contextual Bubble-up: Find the nearest loop item
+  const listItem = el.closest("[:key]");
   if (listItem) {
-    const listContainer = listItem.closest("[s-list]");
-    if (listContainer) return listContainer;  // ← the fix
-    return listItem; // fallback if somehow orphaned
+    // If we are inside an s-for block, the primary target is the container 
+    // holding the s-for template. This allows the server to return 
+    // a single object for a "merge" patch.
+    const container = listItem.parentElement;
+    if (container && container.querySelector("template[s-for]")) {
+      return container;
+    }
+    return listItem; // Fallback to the individual block
   }
-  return el; // Ultimate fallback: target the button itself
+
+  return el; // Ultimate fallback: target the triggering element
 }
 
 // ── Timeout Resolution ─────────────────────────────────────
