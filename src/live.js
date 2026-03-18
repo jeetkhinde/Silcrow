@@ -403,17 +403,20 @@ function destroyAllLive() {
   wsHubs.clear();
 }
 
-// ── Auto-scan for s-live elements on init ──────────────────
+/**
+ * Scans the DOM for explicit live connection attributes.
+ * Strict protocol enforcement.
+ */
 function initLiveElements() {
-  const elements = document.querySelectorAll("[s-live]");
-  for (const el of elements) {
-    const raw = el.getAttribute("s-live");
-    if (!raw) continue;
+  // 1. Server-Sent Events (SSE)
+  document.querySelectorAll("[s-sse]").forEach(el => {
+    const url = el.getAttribute("s-sse");
+    if (url) openLive(el, url);
+  });
 
-    if (raw.startsWith("ws:")) {
-      openWsLive(el, raw.slice(3));
-    } else {
-      openLive(el, raw);
-    }
-  }
+  // 2. WebSockets (WS/WSS)
+  document.querySelectorAll("[s-ws], [s-wss]").forEach(el => {
+    const url = el.getAttribute("s-ws") || el.getAttribute("s-wss");
+    if (url) openWsLive(el, url);
+  });
 }

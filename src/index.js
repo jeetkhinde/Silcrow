@@ -22,7 +22,7 @@ function init() {
 
   // 2. Fragment-Aware Mutation Observer
   // Updated to track elements by our stable identity (:key)
-  liveObserver = new MutationObserver(function (mutations) {
+ liveObserver = new MutationObserver(function (mutations) {
     function cleanupLiveNode(node) {
       const state = liveConnections.get(node);
       if (!state) return;
@@ -41,16 +41,17 @@ function init() {
 
         cleanupLiveNode(removed);
 
-        // Cleanup any nested live connections within the removed fragment
+        // Track nested connections using explicit selectors
         if (removed.querySelectorAll) {
-          for (const child of removed.querySelectorAll("[s-live]")) {
+          const selector = "[s-sse], [s-ws], [s-wss]";
+          for (const child of removed.querySelectorAll(selector)) {
             cleanupLiveNode(child);
           }
         }
       }
     }
   });
-
+  
   liveObserver.observe(document.body, {childList: true, subtree: true});
 
   // Fix 6: Lock middleware pipeline after initialization

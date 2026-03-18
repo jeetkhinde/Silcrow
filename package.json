@@ -1,0 +1,18 @@
+{
+  "name": "silcrow",
+  "version": "1.0.0",
+  "description": "A lightweight client-side runtime for hypermedia-driven applications",
+  "main": "dist/silcrow.js",
+  "scripts": {
+    "build": "node build.js",
+    "watch": "node build.js --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "terser": "^5.46.1"
+  },
+  "files": [
+    "dist/"
+  ],
+  "license": "MIT"
+}

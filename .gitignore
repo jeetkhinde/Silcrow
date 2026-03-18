@@ -1,5 +1,8 @@
 # Compiled output
 /target/
+/dist/
+node_modules/
+package-lock.json
 
 # Cargo lock file (for libraries)
 /Cargo.lock
