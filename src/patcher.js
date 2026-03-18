@@ -1,30 +1,38 @@
 // /patcher.js
 // ════════════════════════════════════════════════════════════
-// Patcher — Unified ":" Bindings, s-for Fragments & Identity
+// Patcher — Directive-based State, Colon Shorthands & Identity
 // ════════════════════════════════════════════════════════════
 
 const instanceCache = new WeakMap();
 const validatedTemplates = new WeakSet();
 const localBindingsCache = new WeakMap();
-const identityMap = new WeakMap(); // Tracks object reference -> stable UUID
+const identityMap = new WeakMap(); 
 const patchMiddleware = [];
 
 const PATH_RE = /^\.?[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*$/;
-function isValidPath(p) {return PATH_RE.test(p);}
+function isValidPath(p) { return PATH_RE.test(p); }
 
 const knownProps = {
-  value: "string", checked: "boolean", disabled: "boolean",
-  selected: "boolean", src: "string", href: "string", selectedIndex: "number",
+  value: "string",
+  checked: "boolean",
+  disabled: "boolean",
+  selected: "boolean",
+  hidden: "boolean",    
+  required: "boolean",  
+  readOnly: "boolean",  
+  src: "string",
+  href: "string",
+  selectedIndex: "number",
 };
 
-// ── Fix 1: URL-bearing attribute set for security gate ─────
 const URL_BINDING_PROPS = new Set([
   "href", "src", "action", "formaction", "xlink:href",
   "poster", "cite", "background"
 ]);
 
-// ── Fix 3: Prototype pollution deny-set ────────────────────
 const BLOCKED_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+// ── Internal Utilities ──────────────────────────────────────
 
 function resolvePath(obj, path) {
   if (typeof obj !== "object" || obj === null) return undefined;
@@ -42,22 +50,24 @@ function resolvePath(obj, path) {
   return cur;
 }
 
-// ── Fix 13: Missing utility — resolveRoot ──────────────────
 function resolveRoot(root) {
   if (typeof root === "string") return document.querySelector(root) || document.body;
   return root || document.body;
 }
 
-// ── Fix 8: Debug warning on implicit identity ──────────────
 function getStableId(obj) {
   if (obj === null || typeof obj !== 'object') return String(obj);
   let id = identityMap.get(obj);
   if (!id) {
-    warn('s-for block without :key — identity tracking is unreliable for server data');
     id = crypto.randomUUID();
     identityMap.set(obj, id);
   }
   return id;
+}
+
+function safeClone(obj) {
+  try { return structuredClone(obj); }
+  catch { return JSON.parse(JSON.stringify(obj)); }
 }
 
 function parseForExpression(expr) {
@@ -65,74 +75,136 @@ function parseForExpression(expr) {
   return match ? {alias: match[1], path: match[2]} : null;
 }
 
-// ── Fix 1: URL safety gate in setValue ──────────────────────
+// ── Binding Engine ──────────────────────────────────────────
+
 function setValue(el, prop, value) {
+  if (isOnHandler(prop)) {
+    throwErr("Binding to event handler attribute rejected: " + prop);
+    return;
+  }
+
+  // Spread Directive: s-use="ui"
+  if (prop === null) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      for (const key in value) {
+        setValue(el, key, value[key]); 
+      }
+      return;
+    }
+    el.textContent = value == null ? "" : String(value);
+    return;
+  }
+
   if (prop === "text") {
     el.textContent = value == null ? "" : String(value);
     return;
   }
+
   if (prop === "show") {
     el.style.display = value ? "" : "none";
     return;
   }
 
-  // SECURITY: sanitize URL-bearing properties
-  if (URL_BINDING_PROPS.has(prop)) {
-    const allowDataImage = prop === "src" && el.tagName === "IMG";
-    if (!hasSafeProtocol(String(value || ""), allowDataImage)) {
-      warn('Blocked unsafe URL for :' + prop + ' — "' + String(value).slice(0, 50) + '"');
-      return;
+  if (prop === "class") {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      for (const [className, enabled] of Object.entries(value)) {
+        el.classList.toggle(className, !!enabled);
+      }
+    } else {
+      el.setAttribute("class", value == null ? "" : String(value));
+    }
+    return;
+  }
+
+  if (prop === "style") {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      for (const [rule, val] of Object.entries(value)) {
+        el.style[rule] = val == null ? "" : String(val);
+      }
+    } else {
+      el.setAttribute("style", value == null ? "" : String(value));
+    }
+    return;
+  }
+
+  const name = String(prop).toLowerCase();
+  if (URL_BINDING_PROPS.has(name)) {
+    const allowDataImage = name === "src" && el.tagName === "IMG";
+    if (!hasSafeProtocol(value, allowDataImage)) {
+      warn("Rejected unsafe URL in binding: " + prop);
+      value = ""; 
     }
   }
 
   if (value == null) {
     if (prop in knownProps) {
-      el[prop] = knownProps[prop] === "boolean" ? false : (knownProps[prop] === "number" ? 0 : "");
-    } else el.removeAttribute(prop);
+      const t = knownProps[prop];
+      if (t === "boolean") el[prop] = false;
+      else if (t === "number") el[prop] = 0;
+      else el[prop] = "";
+    } else {
+      el.removeAttribute(prop);
+    }
     return;
   }
-  if (prop in knownProps) el[prop] = value;
-  else el.setAttribute(prop, String(value));
+
+  if (prop in knownProps) {
+    el[prop] = value;
+  } else if (value === false) {
+    el.removeAttribute(prop);
+  } else if (value === true) {
+    el.setAttribute(prop, "");
+  } else {
+    el.setAttribute(prop, String(value));
+  }
 }
 
-// ── Fix 2 + Fix 10: Block dangerous bindings + validate prop names ──
+function parseBind(el) {
+  const spreadPath = el.getAttribute("s-use");
+  if (spreadPath) return { path: spreadPath, prop: null };
+
+  for (const attr of el.attributes) {
+    if (attr.name.startsWith(":") && attr.name !== ":key") {
+      const prop = attr.name.slice(1);
+      if (prop.startsWith("on") || prop === "style" || prop === "srcdoc") {
+        warn('Blocked dangerous binding: :' + prop);
+        continue;
+      }
+      return { path: attr.value, prop };
+    }
+  }
+  return null;
+}
+
 function scanBindings(root, alias = null) {
   const bindings = new Map();
-  const elements = [root, ...root.querySelectorAll("*")];
+  const selector = '[s-use], [\\:text], [\\:class], [\\:style], [\\:show], [\\:value], [\\:disabled], [\\:hidden]';
+  
+  const elements = [];
+  if (root.matches && root.matches(selector)) elements.push(root);
+  elements.push(...root.querySelectorAll(selector));
+
   for (const el of elements) {
     if (el.closest("template")) continue;
-    for (const attr of el.attributes) {
-      if (!attr.name.startsWith(":")) continue;
-      const prop = attr.name.slice(1);
+    const parsed = parseBind(el);
+    if (!parsed) continue;
 
-      // Fix 10: Reject malformed prop names (empty, double-colon, whitespace)
-      if (!prop || prop.startsWith(":") || prop !== prop.trim()) {
-        warn('Skipping malformed binding attribute: "' + attr.name + '"');
-        continue;
-      }
+    const { path, prop } = parsed;
 
-      // Fix 2: Reject event handler, style injection, and srcdoc bindings
-      if (prop.startsWith("on") || prop === "style" || prop === "srcdoc") {
-        warn('Blocked binding to dangerous attribute: :' + prop);
-        continue;
-      }
-
-      const path = attr.value;
-
-      if (alias && path.startsWith(alias + ".")) {
-        const field = path.substring(alias.length + 1);
-        if (!bindings.has(field)) bindings.set(field, []);
-        bindings.get(field).push({el, prop});
-      } else if (!alias && !path.includes(".")) {
-        if (!bindings.has(path)) bindings.set(path, []);
-        bindings.get(path).push({el, prop});
-      }
+    if (alias && path.startsWith(alias + ".")) {
+      const field = path.substring(alias.length + 1);
+      if (!bindings.has(field)) bindings.set(field, []);
+      bindings.get(field).push({ el, prop });
+    } else if (!alias && !path.includes(".")) {
+      if (!bindings.has(path)) bindings.set(path, []);
+      bindings.get(path).push({ el, prop });
     }
   }
   return bindings;
 }
 
-// ── Fix 7: Duplicate key detection ─────────────────────────
+// ── Collection Engine ───────────────────────────────────────
+
 function reconcile(container, template, items, alias, keyPath) {
   const existingBlocks = new Map();
   for (const child of container.children) {
@@ -148,10 +220,8 @@ function reconcile(container, template, items, alias, keyPath) {
 
   for (const item of items) {
     const key = String(keyPath ? resolvePath(item, keyPath) : getStableId(item));
-
-    // Fix 7: Detect duplicate keys
     if (nextKeys.has(key)) {
-      warn('Duplicate :key "' + key + '" in s-for — second item ignored');
+      warn('Duplicate :key "' + key + '" in s-for — item skipped');
       continue;
     }
     nextKeys.add(key);
@@ -187,31 +257,17 @@ function patchItem(node, item, alias) {
   }
 }
 
-function buildMaps(root) {
-  const collections = [];
-  root.querySelectorAll("template[s-for]").forEach(tpl => {
-    const expr = parseForExpression(tpl.getAttribute("s-for"));
-    const keyAttr = tpl.getAttribute(":key");
-    const keyPath = keyAttr?.startsWith(expr.alias + ".") ? keyAttr.substring(expr.alias.length + 1) : null;
-    collections.push({path: expr.path, tpl, alias: expr.alias, keyPath});
-  });
-  return {scalars: scanBindings(root), collections};
-}
-
-// ── Fix 11: Object merge and remove modes ──────────────────
 function mergeOrRemoveItem(container, template, item, alias, keyPath) {
   const key = String(resolvePath(item, keyPath));
   if (!key) return;
 
   if (item._remove) {
-    // Remove mode: delete all nodes with this key
     for (const child of [...container.children]) {
       if (child.getAttribute(":key") === key) child.remove();
     }
     return;
   }
 
-  // Merge mode: update existing or append new
   const existing = [];
   for (const child of container.children) {
     if (child.getAttribute(":key") === key) existing.push(child);
@@ -230,16 +286,25 @@ function mergeOrRemoveItem(container, template, item, alias, keyPath) {
   }
 }
 
-// ── Fix 4: Deep clone helper for middleware isolation ───────
-function safeClone(obj) {
-  try { return structuredClone(obj); }
-  catch { return JSON.parse(JSON.stringify(obj)); }
+// ── Public API & Lifecycle ──────────────────────────────────
+
+function buildMaps(root) {
+  const collections = [];
+  root.querySelectorAll("template[s-for]").forEach(tpl => {
+    const expr = parseForExpression(tpl.getAttribute("s-for"));
+    const keyAttr = tpl.getAttribute(":key");
+    const keyPath = keyAttr?.startsWith(expr.alias + ".") 
+      ? keyAttr.substring(expr.alias.length + 1) 
+      : keyAttr;
+      
+    collections.push({path: expr.path, tpl, alias: expr.alias, keyPath});
+  });
+  return {scalars: scanBindings(root), collections};
 }
 
 function patch(data, root, options = {}) {
   const element = resolveRoot(root);
 
-  // Fix 4: Deep-clone for middleware isolation (prevents cache poisoning)
   let transformedData = data;
   try {
     transformedData = patchMiddleware.reduce((acc, fn) => fn(safeClone(acc)) ?? acc, safeClone(data));
@@ -249,8 +314,7 @@ function patch(data, root, options = {}) {
 
   if (transformedData?._toasts) processToasts(true, transformedData);
 
-  // Fix 5: Smart unwrap — only unwrap { data: X } when X is a plain object
-  // Primitives and arrays are valid domain values, not envelopes
+  // Smart Unwrap: { data: X } -> X for plain objects
   if (
     transformedData?.data !== undefined &&
     Object.keys(transformedData).length === 1 &&
@@ -272,7 +336,6 @@ function patch(data, root, options = {}) {
     if (val !== undefined) bindings.forEach(b => setValue(b.el, b.prop, val));
   }
 
-  // Fix 11: Handle array (full sync), object merge, and object remove
   instance.collections.forEach(col => {
     const val = resolvePath(transformedData, col.path);
     if (Array.isArray(val)) {
@@ -282,22 +345,18 @@ function patch(data, root, options = {}) {
     }
   });
 
-  // Fix 12: Fire silcrow:patched event
-  const patchedPaths = Array.from(instance.scalars.keys());
   element.dispatchEvent(new CustomEvent("silcrow:patched", {
     bubbles: true,
-    detail: {paths: patchedPaths},
+    detail: {paths: Array.from(instance.scalars.keys())},
   }));
 }
 
-// ── Fix 9: Invalidate clears localBindingsCache ────────────
 function invalidate(root) {
   const element = resolveRoot(root);
   instanceCache.delete(element);
   element.querySelectorAll('[\\:key]').forEach(el => localBindingsCache.delete(el));
 }
 
-// ── Fix 13: Missing utility — stream ───────────────────────
 function stream(root) {
   let pending = null;
   return function(data) {
