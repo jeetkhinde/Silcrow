@@ -3,8 +3,6 @@
 node_modules/
 package-lock.json
 
-# Cargo lock file (for libraries)
-/Cargo.lock
 # IDE / Editor files
 .idea/
 .vscode/
@@ -13,11 +11,6 @@ package-lock.json
 .env
 .env.local
 .env.*.local
-
-# Database files
-*.db
-*.sqlite
-*.sqlite3
 
 # Backup / OS files
 *.swp
