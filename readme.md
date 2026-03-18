@@ -39,7 +39,7 @@ This enables console warnings and throws on template validation errors.
 
 Silcrow.js has three independent systems exposed through a single window.Silcrow API:
 
-1. **Runtime** — reactive data binding and DOM patching via unified colon-prefixed attributes (:prop) and fragment-aware s-for loops.
+1. **Runtime** — reactive data binding via the `s-use` directive (for object spreading) and surgical colon-shorthands (`:prop`), plus fragment-aware `s-for` loops.
 2. **Navigator** — client-side routing, history management, and response caching via s-action attributes
 3. **Live** — SSE and WebSocket connections, optimistic updates, and real-time data streaming via s-live attributes
 
@@ -47,11 +47,12 @@ Silcrow.js has three independent systems exposed through a single window.Silcrow
 
 ### **Scalar Binding**
 
-Bind any element property to a data path using the :property="path" syntax. For text content, use the special :text shorthand. To toggle visibility via CSS, use :show.
+Use colon-prefixed attributes to bind specific properties to data paths. For boolean attributes (like `disabled` or `hidden`), Silcrow removes the attribute entirely if the value is `false`. For text content, use the special :text shorthand. To toggle visibility via CSS, use :show.
 
 ```html
 <h1 :text="user.name"></h1>
 <div :show="user.is_online">Online Now</div>
+<div :class="user.status_flags"></div>
 <input :value="user.email" />
 <button :disabled="user.banned">Action</button>
 
@@ -61,18 +62,56 @@ Patch data into the DOM:
 
 ```javascript
 Silcrow.patch({
-  user: { name: "Alice", email: "a@b.com", avatar: "/img/alice.png", banned: false }
+  user: { name: "Alice", email: "a@b.com", avatar: "/img/alice.png", banned: false, status_flags: { online: true, admin: false } }
 }, "#app");
 
 ```
 
+### Spread Binding with s-use
+
+Use the `s-use` directive to spread an object's properties onto an element. This is useful for binding multiple properties at once.
+
+```html
+<div s-use="user"></div>
+```
+
+This is equivalent to:
+
+```html
+<div :name="user.name" :email="user.email" :avatar="user.avatar" :banned="user.banned" :status_flags="user.status_flags"></div>
+```
+
+```html
+<div class="card" s-use="taskUI"></div> 
+```
+
+```javascript
+Silcrow.patch({ taskUI: { text: "Fix bug", class: { "is-active": true }, show: true } }, "#app");
+```
+
 The second argument is a root — either a CSS selector string or a DOM Element. Silcrow only patches bindings within that root.
 
-**Known properties** (`value`, `checked`, `disabled`, `selected`, `src`, `href`, `selectedIndex`) are set as DOM properties. All other bindings are set as attributes.
+**Known properties** are set as DOM properties. All other bindings are set as attributes.
+
+```javascript
+// Known properties
+const knownProps = {
+  value: "string",
+  checked: "boolean",
+  disabled: "boolean",
+  selected: "boolean",
+  hidden: "boolean",    
+  required: "boolean",  
+  readOnly: "boolean",  
+  src: "string",
+  href: "string",
+  selectedIndex: "number",
+};
+```
 
 **Security:** Binding to event handler attributes (onclick, onload, etc.) is rejected. Text content is set via textContent, never innerHTML.
 
-### **Fragment Loops with s-for**
+### **Fragment Loops**
 
 Render collections of objects into a container using the `<template s-for>` directive. Silcrow supports multi-sibling fragments (e.g., dt/dd pairs) without requiring a wrapper div.
 
@@ -142,17 +181,17 @@ Silcrow.patch({
 
 The item with `id` "2" is removed from the DOM. All other items are untouched. The `_remove` field is a reserved tombstone sentinel — any other fields in the object are ignored.
 
-**Direct targeting:** `s-target` can point directly to the `[s-list]` element (not its parent):
+**Direct targeting:** `s-target` can point directly to the `[s-for]` container:
 
 ```html
 <form s-action="/todos" POST s-target="#todo-list">...</form>
-<ul id="todo-list" s-list="todos" s-template="todo-tpl">...</ul>
+<ul id="todo-list" s-for="todo in todos" :key="todo.id">...</ul>
 
 ```
 
 **Local bindings** use a leading dot (.text, .done) — they bind to fields on the individual item, not the global data object.
 
-**Reconciliation:** Silcrow uses keyed reconciliation. Existing DOM nodes are reused by key, new items are created from the template, removed items are deleted, and order is maintained by repositioning. Duplicate keys are rejected.
+**Reconciliation:** Silcrow uses keyed reconciliation. Existing DOM nodes are reused by key, new items are created from the template, and duplicate keys are automatically skipped to prevent UI corruption.
 
 **Template resolution order:**
 
@@ -672,7 +711,7 @@ Silcrow.destroy();
 | **Method** | **Description** |
 | --- | --- |
 | `Silcrow.use(fn)` | Register a global data transformer |
-| `Silcrow.patch(data, root, options?)` | Process middleware, unwrap data, and patch the DOM |
+| `Silcrow.patch(data, root, options?)` | Process middleware, unwrap data, and apply `s-use` and `:` bindings |
 | `Silcrow.invalidate(root)` | Clear cached binding maps for root |
 | `Silcrow.stream(root)` | Returns microtask-batched updater function |
 
