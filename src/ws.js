@@ -237,7 +237,7 @@ function openWsLive(root, url) {
   connectWsHub(hub);
 }
 
-function sendWs(root, data) {
+function sendWs(data, root) {
   const states = resolveLiveStates(root);
   if (!states.length) {
     warn("No live connection found for send target");

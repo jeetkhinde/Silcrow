@@ -1,5 +1,5 @@
 // Silcrow.js — Hypermedia Runtime
-// Built: 2026-03-18T21:40:09.303Z
+// Built: 2026-03-19T19:05:20.831Z
 (function(){
 "use strict";
 // /debug.js
@@ -1252,7 +1252,7 @@ function openWsLive(root, url) {
   connectWsHub(hub);
 }
 
-function sendWs(root, data) {
+function sendWs(data, root) {
   const states = resolveLiveStates(root);
   if (!states.length) {
     warn("No live connection found for send target");
@@ -1864,7 +1864,7 @@ function onMouseEnter(e) {
 
 const snapshots = new WeakMap();
 
-function optimisticPatch(root, data) {
+function optimisticPatch(data, root) {
   const element = typeof root === "string" ? document.querySelector(root) : root;
   if (!element) {
     warn("Optimistic root not found: " + root);

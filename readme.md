@@ -120,7 +120,7 @@ Silcrow.destroy();
 | **Method** | **Description** |
 | --- | --- |
 | `Silcrow.live(root, url)` | Open an SSE connection, pipe messages to `patch()` |
-| `Silcrow.send(root, data)` | Send data over an established WebSocket connection |
+| `Silcrow.send(data, root)` | Send data over an established WebSocket connection |
 | `Silcrow.disconnect(root)` | Pause a live connection (SSE or WS) and stop auto-reconnect |
 | `Silcrow.reconnect(root)` | Resume a disconnected connection with reset backoff |
 
@@ -128,7 +128,7 @@ Silcrow.destroy();
 
 | **Method** | **Description** |
 | --- | --- |
-| `Silcrow.optimistic(root, data)` | Snapshot DOM, then patch immediately |
+| `Silcrow.optimistic(data, root)` | Snapshot DOM, then patch immediately |
 | `Silcrow.revert(root)` | Restore DOM from snapshot, invalidate bindings |
 
 ### **Lifecycle Handlers**

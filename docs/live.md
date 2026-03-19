@@ -51,7 +51,7 @@ Connections can also be managed via the JavaScript API:
 
 * `Silcrow.reconnect(root)`: Resumes a disconnected connection and resets the backoff timer.
 
-* `Silcrow.send(root, data)`: Sends data over an established WebSocket connection.
+* `Silcrow.send(data, root)`: Sends data over an established WebSocket connection.
 
 ## **SSE & WebSocket Message Formats**
 
@@ -129,7 +129,7 @@ Silcrow.reconnect("#feed");
 WebSocket connections are bidirectional. Use `Silcrow.send()` to send data to the server:
 
 ```javascript
-Silcrow.send("#chat", { type: "custom", event: "message", data: { text: "Hello" } });
+Silcrow.send({ type: "custom", event: "message", data: { text: "Hello" } }, "#chat");
 
 ```
 

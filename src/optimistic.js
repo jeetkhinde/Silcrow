@@ -5,7 +5,7 @@
 
 const snapshots = new WeakMap();
 
-function optimisticPatch(root, data) {
+function optimisticPatch(data, root) {
   const element = typeof root === "string" ? document.querySelector(root) : root;
   if (!element) {
     warn("Optimistic root not found: " + root);

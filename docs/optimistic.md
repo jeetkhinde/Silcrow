@@ -1,6 +1,6 @@
 # **Optimistic Updates**
 
-## **Silcrow.optimistic(root, data)**
+## **Silcrow.optimistic(data, root)**
 
 Takes a snapshot of the root element's current DOM state, then immediately patches the data. Use this for instant UI feedback before the server confirms:
 
@@ -10,7 +10,7 @@ Takes a snapshot of the root element's current DOM state, then immediately patch
 
 ```javascript
 // User clicks "like" — update immediately
-Silcrow.optimistic("#post-42", { likes: currentLikes + 1, liked: true });
+Silcrow.optimistic({ likes: currentLikes + 1, liked: true }, "#post-42");
 
 // Send to server
 Silcrow.go("/api/posts/42/like", { method: "POST", target: "#post-42" });
