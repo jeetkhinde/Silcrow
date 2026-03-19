@@ -195,7 +195,7 @@ function scanBindings(root, alias = null) {
       const field = path.substring(alias.length + 1);
       if (!bindings.has(field)) bindings.set(field, []);
       bindings.get(field).push({ el, prop });
-    } else if (!alias && !path.includes(".")) {
+    } else if (!alias) {
       if (!bindings.has(path)) bindings.set(path, []);
       bindings.get(path).push({ el, prop });
     }
