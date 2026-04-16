@@ -1,5 +1,7 @@
 # **Optimistic Updates**
 
+> **Source Module(s):** [`src/optimistic.js`](../src/optimistic.js)
+
 ## **Silcrow.optimistic(data, root)**
 
 Takes a snapshot of the root element's current DOM state, then immediately patches the data. Use this for instant UI feedback before the server confirms:

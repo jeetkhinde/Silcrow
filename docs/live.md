@@ -1,5 +1,7 @@
 # **Live: SSE, WebSocket & Real-Time Updates**
 
+> **Source Module(s):** [`src/live.js`](../src/live.js), [`src/ws.js`](../src/ws.js)
+
 ## **Declarative Connections**
 
 Add `s-sse`, `s-ws`, or `s-wss` to any element to automatically open a live connection on page load.

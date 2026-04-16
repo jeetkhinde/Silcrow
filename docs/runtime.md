@@ -1,5 +1,7 @@
 # **Runtime: Data Binding & DOM Patching**
 
+> **Source Module(s):** [`src/patcher.js`](../src/patcher.js)
+
 ## **Scalar Binding**
 
 Use colon-prefixed attributes to bind specific properties to data paths. For boolean attributes (like `disabled` or `hidden`), Silcrow removes the attribute entirely if the value is `false`. For text content, use the special :text shorthand. To toggle visibility via CSS, use :show.

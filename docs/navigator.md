@@ -1,5 +1,7 @@
 # **Navigator: Client-Side Routing**
 
+> **Source Module(s):** [`src/navigator.js`](../src/navigator.js)
+
 ## **Declarative Navigation with Verb Attributes**
 
 Add `s-get`, `s-post`, `s-put`, `s-patch`, or `s-delete` to any element to enable client-side navigation or mutations. The attribute name declares the HTTP method, and its value is the URL. Silcrow standardizes on the colon-prefix (`:`) for dynamic URL parameters.

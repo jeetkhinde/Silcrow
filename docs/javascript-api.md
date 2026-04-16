@@ -1,5 +1,7 @@
 # JavaScript API
 
+> **Source Module(s):** [`src/index.js`](../src/index.js)
+
 The `window.Silcrow` object serves as the public interface for the runtime. While Silcrow's primary philosophy relies on HTML attributes, this API provides programmatical escape hatches for complex logic.
 
 ---

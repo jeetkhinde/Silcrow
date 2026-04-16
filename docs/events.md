@@ -1,5 +1,7 @@
 # Details: Events
 
+> **Source Module(s):** [`src/navigator.js`](../src/navigator.js), [`src/live.js`](../src/live.js)
+
 Silcrow uses standard DOM CustomEvents to coordinate logic. All events bubble and most are dispatched on the `document` (with the exception of `silcrow:patched` which fires directly on the root element being updated).
 
 ---

@@ -1,5 +1,7 @@
 # HTTP Headers
 
+> **Source Module(s):** [`src/navigator.js`](../src/navigator.js)
+
 Silcrow leverages custom HTTP headers to coordinate UI orchestrations, caching, and state transitions directly from the server, eliminating the need for client-side JavaScript controllers.
 
 ---

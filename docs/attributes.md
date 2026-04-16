@@ -1,5 +1,7 @@
 # HTML Attributes and Keywords
 
+> **Source Module(s):** [`src/patcher.js`](../src/patcher.js), [`src/navigator.js`](../src/navigator.js), [`src/live.js`](../src/live.js)
+
 Silcrow is fundamentally driven by custom HTML attributes, allowing you to declare routing, data-binding, and real-time connectivity directly in your templates.
 
 ---
