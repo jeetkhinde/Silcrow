@@ -1,0 +1,59 @@
+{
+  "id": "runtime-patching",
+  "title": "Runtime Patching",
+  "summary": "Bind JSON data into DOM elements with colon-prefixed attributes and Silcrow.patch().",
+  "content": "Silcrow runtime patching updates DOM text, properties, visibility, classes, and attributes from JSON data. Bindings are declared with colon-prefixed attributes like :text, :value, :show, and :disabled. The patch root can be a CSS selector or DOM element, limiting updates to a specific subtree.",
+  "sections": [
+    {
+      "id": "runtime-patching/bind-json-data",
+      "title": "Bind JSON Data",
+      "level": 2,
+      "summary": "Bind JSON data into a scoped DOM subtree.",
+      "content": "Declare colon-prefixed attributes in HTML, then call Silcrow.patch() with matching JSON data and a root selector.",
+      "examples": {
+        "html": [
+          {
+            "title": "Bind user fields",
+            "description": "A heading, email input, status block, and button update from the user object.",
+            "code": "<section id=\"profile\">\n  <h1 :text=\"user.name\"></h1>\n  <input :value=\"user.email\" />\n  <div :show=\"user.is_online\">Online Now</div>\n  <button :disabled=\"user.banned\">Action</button>\n</section>"
+          }
+        ],
+        "json": [
+          {
+            "title": "Patch profile data",
+            "description": "Patch data into the #profile subtree.",
+            "code": "{\n  \"user\": {\n    \"name\": \"Alice\",\n    \"email\": \"alice@example.com\",\n    \"is_online\": true,\n    \"banned\": false\n  }\n}"
+          }
+        ]
+      }
+    }
+  ],
+  "examples": {
+    "html": [
+      {
+        "title": "Bind user fields",
+        "description": "A heading, email input, status block, and button update from the user object.",
+        "code": "<section id=\"profile\">\n  <h1 :text=\"user.name\"></h1>\n  <input :value=\"user.email\" />\n  <div :show=\"user.is_online\">Online Now</div>\n  <button :disabled=\"user.banned\">Action</button>\n</section>"
+      }
+    ],
+    "json": [
+      {
+        "title": "Patch profile data",
+        "description": "Patch data into the #profile subtree.",
+        "code": "{\n  \"user\": {\n    \"name\": \"Alice\",\n    \"email\": \"alice@example.com\",\n    \"is_online\": true,\n    \"banned\": false\n  }\n}"
+      }
+    ]
+  },
+  "tags": [
+    "runtime",
+    "patch",
+    "data-binding",
+    "colon-bindings",
+    "Silcrow.patch"
+  ],
+  "use_cases": [
+    "Render server-returned JSON without writing component glue code.",
+    "Update one widget by passing a CSS selector root to Silcrow.patch().",
+    "Toggle form state and visibility from backend-controlled data."
+  ]
+}

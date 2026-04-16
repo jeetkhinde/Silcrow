@@ -5,6 +5,8 @@
   "main": "dist/silcrow.js",
   "scripts": {
     "build": "node build.js",
+    "build:docs": "node mcp/scripts/build-docs.js",
+    "test:docs": "node mcp/scripts/test-docs.js",
     "watch": "node build.js --watch"
   },
   "devDependencies": {
