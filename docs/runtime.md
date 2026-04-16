@@ -75,7 +75,7 @@ Render collections of objects into a container using the `<template s-for>` dire
   <template s-for="task in tasks" :key="task.id">
     <dt :text="task.title"></dt>
     <dd>
-      <button s-action="/tasks/:key/done" POST>Complete</button>
+      <button s-post="/tasks/:key/done">Complete</button>
     </dd>
   </template>
 </dl>
@@ -139,7 +139,7 @@ The item with `id` "2" is removed from the DOM. All other items are untouched. T
 **Direct targeting:** `s-target` can point directly to the `[s-for]` container:
 
 ```html
-<form s-action="/todos" POST s-target="#todo-list">...</form>
+<form s-post="/todos" s-target="#todo-list">...</form>
 <ul id="todo-list" s-for="todo in todos" :key="todo.id">...</ul>
 
 ```

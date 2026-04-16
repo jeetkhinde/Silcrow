@@ -3,7 +3,10 @@
 // Navigator — client-side routing, history, caching
 // ════════════════════════════════════════════════════════════
 
-const HTTP_METHODS = ["DELETE", "PUT", "POST", "PATCH", "GET"];
+// Verb attributes: s-get, s-post, s-put, s-delete, s-patch
+const VERB_ATTRS = ["s-get", "s-post", "s-put", "s-delete", "s-patch"];
+const VERB_SELECTOR = VERB_ATTRS.map(function(a) { return "[" + a + "]"; }).join(",");
+const FORM_VERB_SELECTOR = VERB_ATTRS.map(function(a) { return "form[" + a + "]"; }).join(",");
 const DEFAULT_TIMEOUT = 30000;
 
 const CACHE_TTL = 5 * 60 * 1000;
@@ -14,38 +17,31 @@ let errorHandler = null;
 const responseCache = new Map();
 const preloadInflight = new Map();
 
-// ── HTTP Method Detection ──────────────────────────────────
-function getMethod(el) {
-  if (el.tagName === "FORM") {
-    return (el.getAttribute("method") || "POST").toUpperCase();
-  }
-  for (const method of HTTP_METHODS) {
-    if (el.hasAttribute(method) || el.hasAttribute(method.toLowerCase())) {
-      return method;
+// ── Verb Resolution ────────────────────────────────────────
+// Returns {url, method} or null if no verb attribute is found.
+function resolveVerb(el) {
+  for (var i = 0; i < VERB_ATTRS.length; i++) {
+    var raw = el.getAttribute(VERB_ATTRS[i]);
+    if (raw !== null) {
+      // Unified placeholder: Replaces :key with the printed attribute value
+      if (raw.includes(":key")) {
+        var closest = el.closest("[:key]");
+        if (closest) {
+          var id = closest.getAttribute(":key");
+          raw = raw.replace(/:key/g, id);
+        }
+      }
+      try {
+        return {
+          url: new URL(raw, location.origin).href,
+          method: VERB_ATTRS[i].slice(2).toUpperCase()
+        };
+      } catch (e) {
+        return null;
+      }
     }
   }
-  return "GET";
-}
-
-// ── URL Resolution ─────────────────────────────────────────
-function resolveUrl(el) {
-  let raw = el.getAttribute("s-action");
-  if (!raw) return null;
-
-  // Unified placeholder: Replaces :key with the printed attribute value
-  if (raw.includes(":key")) {
-    const closest = el.closest("[:key]");
-    if (closest) {
-      const id = closest.getAttribute(":key");
-      raw = raw.replace(/:key/g, id);
-    }
-  }
-
-  try {
-    return new URL(raw, location.origin).href;
-  } catch (e) {
-    return null;
-  }
+  return null;
 }
 // ── Target Resolution ──────────────────────────────────────
 /**
@@ -458,25 +454,25 @@ async function navigate(url, options = {}) {
   }
 }
 
-// ── Click Handler (opt-in: only [s-action]) ────────────────
+// ── Click Handler (opt-in: verb attributes) ────────────────
 async function onClick(e) {
   if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
   if (e.button !== 0) return;
 
   if (!e.target || typeof e.target.closest !== "function") return;
-  const el = e.target.closest("[s-action]");
+  const el = e.target.closest(VERB_SELECTOR);
   if (!el || el.tagName === "FORM") return;
 
   e.preventDefault();
 
-  const fullUrl = resolveUrl(el);
-  if (!fullUrl) return;
+  const verb = resolveVerb(el);
+  if (!verb) return;
 
-  const inflight = preloadInflight.get(fullUrl);
+  const inflight = preloadInflight.get(verb.url);
   if (inflight) await inflight;
 
-  navigate(fullUrl, {
-    method: getMethod(el),
+  navigate(verb.url, {
+    method: verb.method,
     target: getTarget(el),
     skipHistory: el.hasAttribute("s-skip-history"),
     sourceEl: el,
@@ -484,24 +480,26 @@ async function onClick(e) {
   });
 }
 
-// ── Form Handler (opt-in: only form[s-action]) ─────────────
+// ── Form Handler (opt-in: verb attributes on form) ─────────
 function onSubmit(e) {
   if (!e.target || typeof e.target.closest !== "function") return;
-  const form = e.target.closest("form[s-action]");
+  const form = e.target.closest(FORM_VERB_SELECTOR);
   if (!form) return;
 
   e.preventDefault();
 
-  const method = getMethod(form);
+  const verb = resolveVerb(form);
+  if (!verb) return;
+
   const formData = new FormData(form);
 
-  if (method === "GET") {
-    const actionUrl = new URL(form.getAttribute("s-action"), location.origin);
+  if (verb.method === "GET") {
+    const actionUrl = new URL(verb.url, location.origin);
     for (const [k, v] of formData) {
       actionUrl.searchParams.append(k, v);
     }
     navigate(actionUrl.href, {
-      method,
+      method: verb.method,
       target: getTarget(form),
       sourceEl: form,
       trigger: "submit",
@@ -509,8 +507,8 @@ function onSubmit(e) {
   } else {
     const hasFiles = [...formData.values()].some(v => v instanceof File);
 
-    navigate(form.getAttribute("s-action"), {
-      method,
+    navigate(verb.url, {
+      method: verb.method,
       body: hasFiles ? formData : new URLSearchParams(formData),
       target: getTarget(form),
       sourceEl: form,
@@ -545,11 +543,11 @@ function onMouseEnter(e) {
   const el = e.target.closest("[s-preload]");
   if (!el) return;
 
-  const fullUrl = resolveUrl(el);
-  if (!fullUrl || responseCache.has(fullUrl) || preloadInflight.has(fullUrl)) return;
+  const verb = resolveVerb(el);
+  if (!verb || responseCache.has(verb.url) || preloadInflight.has(verb.url)) return;
   const controller = new AbortController();
   const wantsHTML = el.hasAttribute("s-html");
-  const promise = fetch(fullUrl, {
+  const promise = fetch(verb.url, {
     headers: {"silcrow-target": "true", "Accept": wantsHTML ? "text/html" : "application/json"},
     signal: controller.signal,
   })
@@ -561,11 +559,11 @@ function onMouseEnter(e) {
     })
     .then(({text, contentType, cacheControl}) => {
       if (cacheControl !== "no-cache") {
-        cacheSet(fullUrl, {text, contentType, ts: Date.now()});
+        cacheSet(verb.url, {text, contentType, ts: Date.now()});
       }
     })
     .catch(() => {})
-    .finally(() => preloadInflight.delete(fullUrl));
+    .finally(() => preloadInflight.delete(verb.url));
 
-  preloadInflight.set(fullUrl, promise);
+  preloadInflight.set(verb.url, promise);
 }

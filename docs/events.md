@@ -96,10 +96,10 @@ document.addEventListener("silcrow:sse:custom-alert", (e) => {
 Silcrow listens at the `document` level to automatically intercept standard browser behaviors.
 
 ### `click`
-Intercepts clicks on elements possessing an `s-action` attribute to perform an AJAX or fetch navigation instead of a standard browser page load.
+Intercepts clicks on elements possessing a verb attribute (`s-get`, `s-post`, `s-put`, `s-patch`, `s-delete`) to perform an AJAX or fetch navigation instead of a standard browser page load.
 
 ### `submit`
-Intercepts form submissions globally for `form[s-action]`, preventing standard request behaviors, serializing the inputs into a `FormData` object, and sending them via `fetch`.
+Intercepts form submissions globally for forms with a verb attribute (`form[s-get]`, `form[s-post]`, etc.), preventing standard request behaviors, serializing the inputs into a `FormData` object, and sending them via `fetch`.
 
 ### `mouseenter`
 Listens globally to trigger background background prefetching for any elements holding the `s-preload` attribute.

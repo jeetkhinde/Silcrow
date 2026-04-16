@@ -39,7 +39,7 @@ Place the `s-for` attribute on a `<template>` inside a container element:
 
 ### `:key`
 **Why to use:** To provide stable identity to items in an `s-for` loop, preventing unnecessary DOM destruction and rebuilding.
-**When to use:** Always use this on your `<template>` element when rendering lists. It also acts as a placeholder string `/:key/` inside `s-action` to let buttons automatically resolve their context ID.
+**When to use:** Always use this on your `<template>` element when rendering lists. It also acts as a placeholder string `/:key/` inside verb attributes to let buttons automatically resolve their context ID.
 **How to use:**
 ```html
 <template s-for="task in tasks" :key="task.uuid">...
@@ -49,14 +49,15 @@ Place the `s-for` attribute on a `<template>` inside a container element:
 
 ## 2. Navigation & Fetching
 
-### `s-action`
-**Why to use:** To fetch a URL on interaction and mutate the DOM with the response.
+### `s-get`, `s-post`, `s-put`, `s-patch`, `s-delete`
+**Why to use:** To fetch a URL on interaction and mutate the DOM with the response. The attribute name declares the HTTP method.
 **When to use:** Instead of standard `<a href>` links or traditional `<form action>` attributes for a Single-Page App feel.
 **How to use:**
 ```html
-<a s-action="/dashboard">Dashboard</a>
+<a s-get="/dashboard">Dashboard</a>
 <!-- With implicit :key interpolation: -->
-<button s-action="/api/tasks/:key/complete" POST>✓</button>
+<button s-post="/api/tasks/:key/complete">✓</button>
+<button s-delete="/items/:key" s-target="#notifications">Remove</button>
 ```
 
 ### `s-target`
@@ -65,7 +66,7 @@ Place the `s-for` attribute on a `<template>` inside a container element:
 **How to use:**
 Provide a valid CSS selector:
 ```html
-<button s-action="/stats" s-target="#stats-panel">Load Stats</button>
+<button s-get="/stats" s-target="#stats-panel">Load Stats</button>
 ```
 
 ### `s-html`
@@ -73,7 +74,7 @@ Provide a valid CSS selector:
 **When to use:** When your endpoint can return both, but this specific interaction requires the HTML string representation.
 **How to use:**
 ```html
-<button s-action="/reports/1" s-html s-target="#view">View Draft</button>
+<button s-get="/reports/1" s-html s-target="#view">View Draft</button>
 ```
 
 ### `s-skip-history`
@@ -81,7 +82,7 @@ Provide a valid CSS selector:
 **When to use:** For transient views like tabs or filters that you don't want the user to navigate back into using the browser's Back button.
 **How to use:**
 ```html
-<a s-action="/dashboard?tab=analytics" s-skip-history>Analytics</a>
+<a s-get="/dashboard?tab=analytics" s-skip-history>Analytics</a>
 ```
 
 ### `s-preload`
@@ -89,7 +90,7 @@ Provide a valid CSS selector:
 **When to use:** For high-traffic links to make navigation feel instantaneous.
 **How to use:**
 ```html
-<a s-action="/heavy-page" s-preload>Load Page</a>
+<a s-get="/heavy-page" s-preload>Load Page</a>
 ```
 
 ### `s-timeout`
@@ -98,16 +99,7 @@ Provide a valid CSS selector:
 **How to use:**
 Specify milliseconds:
 ```html
-<button s-action="/generate" s-timeout="60000" POST>Generate Report</button>
-```
-
-### HTTP Verbs (`DELETE`, `PUT`, `POST`, `PATCH`, `GET`)
-**Why to use:** To assign the HTTP method directly to an element without needing a `<form>` tag.
-**When to use:** Whenever you have a "Pure Button" that performs a state mutation and doesn't require user input fields (like a delete button).
-**How to use:**
-Just add the capitalized verb as a standalone attribute:
-```html
-<button s-action="/item/5" DELETE>Delete</button>
+<button s-post="/generate" s-timeout="60000">Generate Report</button>
 ```
 
 ---

@@ -1,7 +1,7 @@
 # **Silcrow.js**
 
 A lightweight client-side runtime for building hypermedia-driven applications. Silcrow handles DOM patching, client-side navigation, response caching, live SSE and WebSocket connections, optimistic updates, and server-driven UI orchestration — all from declarative HTML attributes.  
-Silcrow.js is the frontend counterpart to [Pilcrow](https://www.google.com/search?q=readme.md) but operates independently as a standalone library. Any backend that speaks HTTP and returns HTML or JSON can drive it.
+Silcrow.js is the frontend counterpart to Pilcrow but operates independently as a standalone library. Any backend that speaks HTTP and returns HTML or JSON can drive it.
 
 ## **Table of Contents**
 
@@ -34,7 +34,7 @@ Silcrow.js has three independent systems exposed through a single window.Silcrow
 
 1. **[Runtime](docs/runtime.md)** — Reactive data binding via colon-shorthands (`:text`, `:value`, `:show`), spread binding with `s-use`, and fragment-aware `s-for` loops with keyed reconciliation. Data flows through middleware → toast extraction → smart unwrapping before patching.
 
-2. **[Navigator](docs/navigator.md)** — Client-side routing, history management, and response caching via `s-action` attributes. Supports implicit targeting, `:key` interpolation, server-driven headers, preloading, and form serialization.
+2. **[Navigator](docs/navigator.md)** — Client-side routing, history management, and response caching via verb attributes (`s-get`, `s-post`, `s-put`, `s-patch`, `s-delete`). Supports implicit targeting, `:key` interpolation, server-driven headers, preloading, and form serialization.
 
 3. **[Live](docs/live.md)** — SSE and WebSocket connections via `s-sse` and `s-ws` attributes. Hub-based connection sharing, automatic reconnection with exponential backoff, and structured message formats for patches, HTML swaps, invalidation, and navigation.
 

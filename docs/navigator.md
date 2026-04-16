@@ -1,25 +1,25 @@
 # **Navigator: Client-Side Routing**
 
-## **Declarative Navigation with s-action**
+## **Declarative Navigation with Verb Attributes**
 
-Add `s-action` to any element to enable client-side navigation or mutations. Silcrow standardizes on the colon-prefix (`:`) for dynamic URL parameters.
+Add `s-get`, `s-post`, `s-put`, `s-patch`, or `s-delete` to any element to enable client-side navigation or mutations. The attribute name declares the HTTP method, and its value is the URL. Silcrow standardizes on the colon-prefix (`:`) for dynamic URL parameters.
 
 ```html
-<a s-action="/dashboard">Dashboard</a>
-<button s-action="/api/save" POST>Save</button>
-<button s-action="/items/5" DELETE s-target="#item-5">Remove</button>
+<a s-get="/dashboard">Dashboard</a>
+<button s-post="/api/save">Save</button>
+<button s-delete="/items/5" s-target="#item-5">Remove</button>
 
 ```
 
 ```html
-<a s-action="/dashboard">Dashboard</a>
-<button s-action="/tasks/:key/complete" POST>Complete</button>
-<button s-action="/items/:key" DELETE s-target="#notifications">Remove</button>
+<a s-get="/dashboard">Dashboard</a>
+<button s-post="/tasks/:key/complete">Complete</button>
+<button s-delete="/items/:key" s-target="#notifications">Remove</button>
 ```
 
 ## The `:key` Placeholder**
 
-When an action is placed inside an `s-for` loop, Silcrow provides automatic context discovery. Any `:key` placeholder in an `s-action` or `s-target` is automatically replaced with the stable ID of the nearest loop block.
+When an action is placed inside an `s-for` loop, Silcrow provides automatic context discovery. Any `:key` placeholder in a verb attribute or `s-target` is automatically replaced with the stable ID of the nearest loop block.
 
 * **Discovery**: The Navigator looks for the nearest printed `:key` attribute in the DOM.
 
@@ -42,9 +42,9 @@ Silcrow eliminates the need for `<form>` wrappers for simple, binary actions.
 * **Forms**: Use only when sending user input (e.g., text fields, file uploads). Silcrow automatically serializes the form into a `FormData` body.
 
 ```html
-<button s-action="/tasks/:key/star" POST>Star Task</button>
+<button s-post="/tasks/:key/star">Star Task</button>
 
-<form s-action="/tasks/:key/rename" PATCH>
+<form s-patch="/tasks/:key/rename">
   <input name="new_name" placeholder="Enter name..." />
   <button type="submit">Rename</button>
 </form>
@@ -54,13 +54,16 @@ Silcrow eliminates the need for `<form>` wrappers for simple, binary actions.
 
 | **Attribute** | **Purpose** | **Default** |
 | --- | --- | --- |
-| `s-action` | URL to request (supports `/:key` interpolation) | *(required)* |
+| `s-get` | GET request to the specified URL | — |
+| `s-post` | POST request to the specified URL | — |
+| `s-put` | PUT request to the specified URL | — |
+| `s-patch` | PATCH request to the specified URL | — |
+| `s-delete` | DELETE request to the specified URL | — |
 | `s-target` | CSS selector for the swap target | Closest loop block or self |
 | `s-html` | Force request to expect `text/html` | `application/json` |
 | `s-skip-history` | Don't push to browser history | Push for full-page GETs |
 | `s-preload` | Preload on `mouseenter` | Off |
 | `s-timeout` | Request timeout in ms | 30000 |
-| `GET`, `POST`, `PUT`, `PATCH`, `DELETE` | HTTP method (as attribute) | `GET` (or `POST` for forms) |
 
 ### **Forms vs. Pure Buttons for Mutations**
 
@@ -69,7 +72,7 @@ Because of `:key` interpolation and implicit targeting, you have two distinct to
 **1. When you NEED a body → Use a `<form>`** If the user is submitting new data (like typing a task title), you must use a form. Silcrow relies on the form boundary to serialize inputs into a FormData request body.
 
 ```html
-<form s-action="/tasks/:key/edit" method="PUT">  
+<form s-put="/tasks/:key/edit">  
   <input type="text" name="title" :value=".title" /> 
   <button type="submit">Save</button>  
 </form>
@@ -81,15 +84,15 @@ Because of `:key` interpolation and implicit targeting, you have two distinct to
 If the action is binary and the URL itself contains all the required context (via the ID), you don't need a body. You can use form-less buttons for POST, PUT, and PATCH just like you do for DELETE.
 
 ```html
-<button s-action="/tasks/:key/toggle" PATCH>Toggle Complete</button>  
-<button s-action="/tasks/:key/upvote" POST>Upvote</button>
+<button s-patch="/tasks/:key/toggle">Toggle Complete</button>  
+<button s-post="/tasks/:key/upvote">Upvote</button>
 ```
 
 **The Architect's Rule of Thumb:**
 
-* Use `DELETE` (pure button) to destroy a resource.
-* Use `POST` / `PUT` / `PATCH` (pure button) to trigger a specific, parameter-less action (like "star", "archive", "toggle").
-* Use `<form method="...">` only when sending user input fields.
+* Use `s-delete` to destroy a resource.
+* Use `s-post` / `s-put` / `s-patch` (pure button) to trigger a specific, parameter-less action (like "star", "archive", "toggle").
+* Use `<form s-post="...">` (or other verb) only when sending user input fields.
 
 **Server-Side Example (Axum):**
 
@@ -118,10 +121,10 @@ pub async fn upvote_task(
 
 ## **Forms**
 
-Forms with `s-action` are intercepted automatically. GET forms append FormData as query params. Other methods send FormData as the body.
+Forms with a verb attribute (`s-get`, `s-post`, etc.) are intercepted automatically. GET forms append FormData as query params. Other methods send FormData as the body.
 
 ```html
-<form s-action="/search" GET s-target="#results">
+<form s-get="/search" s-target="#results">
   <input name="q" />
   <button>Search</button>
 </form>
@@ -189,7 +192,7 @@ Silcrow.cache.clear();             // clear all
 Elements with `s-preload` fire a background fetch on `mouseenter`. The response is cached so the subsequent click is instant.
 
 ```html
-<a s-action="/settings" s-preload>Settings</a>
+<a s-get="/settings" s-preload>Settings</a>
 ```
 
 ## **History & Scroll**
