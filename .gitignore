@@ -2,6 +2,7 @@
 /target/
 node_modules/
 package-lock.json
+!mcp/server/package-lock.json
 
 # IDE / Editor files
 .idea/
