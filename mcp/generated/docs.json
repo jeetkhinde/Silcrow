@@ -5,7 +5,7 @@
     "name": "Silcrow.js",
     "version": "1.0.0"
   },
-  "generated_at": "2026-04-16T20:26:06.899Z",
+  "generated_at": "2026-04-25T11:08:02.031Z",
   "docs": [
     {
       "id": "attributes",
@@ -400,7 +400,6 @@
         "s-for",
         "s-get",
         "s-html",
-        "s-panel",
         "s-patch",
         "s-post",
         "s-preload",
@@ -928,6 +927,8 @@
       },
       "tags": [
         "documentation",
+        "hypermedia",
+        "hypermedia-driven",
         "index",
         "overview",
         "Silcrow.js"
@@ -1667,6 +1668,7 @@
         "forms",
         "headers",
         "history",
+        "hypermedia",
         "implicit",
         "key",
         "loading",
@@ -2011,7 +2013,6 @@
         "root",
         "runtime",
         "s-for",
-        "s-is",
         "s-key",
         "s-list",
         "s-post",

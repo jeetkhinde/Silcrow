@@ -8,9 +8,10 @@ const TOPIC_TAGS = {
   attributes: ["attributes", "html", "binding", "navigation", "live"],
   events: ["events", "custom-events", "lifecycle"],
   "http-headers": ["headers", "http", "server-driven-ui"],
+  index: ["overview", "hypermedia", "hypermedia-driven"],
   "javascript-api": ["javascript-api", "window.Silcrow", "programmatic-api"],
   live: ["live", "sse", "websocket", "real-time"],
-  navigator: ["navigator", "routing", "fetch", "history"],
+  navigator: ["navigator", "routing", "fetch", "history", "hypermedia"],
   optimistic: ["optimistic", "snapshot", "revert"],
   runtime: ["runtime", "patch", "data-binding"],
 };
@@ -231,7 +232,7 @@ function addInlineCodeTags(tags, value) {
     tags.add(match[1]);
   }
 
-  for (const token of String(value).match(/s-[a-z-]+|silcrow:[a-z:-]+|Silcrow\.[A-Za-z]+|:[a-z-]+/g) || []) {
+  for (const token of String(value).match(/\bs-[a-z-]+|silcrow:[a-z:-]+|Silcrow\.[A-Za-z]+|:[a-z-]+/g) || []) {
     tags.add(token);
   }
 }
