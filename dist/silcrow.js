@@ -1,5 +1,5 @@
 // Silcrow.js — Hypermedia Runtime
-// Built: 2026-04-30T21:30:55.152Z
+// Built: 2026-04-30T22:39:36.402Z
 (function(){
 "use strict";
 // /debug.js
@@ -855,7 +855,7 @@ function patch(data, root, options = {}) {
 
   element.dispatchEvent(new CustomEvent("silcrow:patched", {
     bubbles: true,
-    detail: {paths: Array.from(instance.scalars.keys())},
+    detail: {paths: Array.from(instance.scalars.keys()), target: element},
   }));
 }
 

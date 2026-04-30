@@ -347,7 +347,7 @@ function patch(data, root, options = {}) {
 
   element.dispatchEvent(new CustomEvent("silcrow:patched", {
     bubbles: true,
-    detail: {paths: Array.from(instance.scalars.keys())},
+    detail: {paths: Array.from(instance.scalars.keys()), target: element},
   }));
 }
 

@@ -19,6 +19,10 @@ const SOURCE_ORDER = [
 
 const srcDir = path.join(__dirname, "src");
 const distDir = path.join(__dirname, "dist");
+const pilcrowRuntimeAssetsDir = path.resolve(
+  __dirname,
+  "../pilcrow/crates/runtime/assets"
+);
 
 // ── Concatenate sources ────────────────────────────────────
 const parts = SOURCE_ORDER.map((file) => {
@@ -72,6 +76,12 @@ const zlib = require("zlib");
   const brKb = (zlib.brotliCompressSync(minified).length / 1024).toFixed(1);
 
   console.log(`✓ dist/silcrow.min.js (${rawKb} KB raw | ${gzKb} KB gzip | ${brKb} KB brotli)`);
+
+  // ── Mirror minified runtime into Pilcrow assets ────────────
+  fs.mkdirSync(pilcrowRuntimeAssetsDir, { recursive: true });
+  const pilcrowAssetFile = path.join(pilcrowRuntimeAssetsDir, "silcrow.js");
+  fs.copyFileSync(minFile, pilcrowAssetFile);
+  console.log(`✓ ${path.relative(__dirname, pilcrowAssetFile)} (from dist/silcrow.min.js)`);
 
   // ── Watch mode ─────────────────────────────────────────────
   if (process.argv.includes("--watch")) {
