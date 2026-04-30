@@ -8,6 +8,7 @@ const SOURCE_ORDER = [
   "url-safety.js",
   "safety.js",
   "toasts.js",
+  "atoms.js",
   "patcher.js",
   "live.js",
   "ws.js",

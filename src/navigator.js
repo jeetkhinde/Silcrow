@@ -115,6 +115,9 @@ function cacheGet(url) {
 
 function bustCacheOnMutation() {
   responseCache.clear();
+  // Prefetch promises must also clear so subsequent use() calls observe fresh data.
+  // Atoms keep their last-known value (consumers read snapshots until refetch).
+  prefetchPromises.clear();
 }
 
 // ── Side-Effect Header Processing ──────────────────────────
@@ -407,6 +410,16 @@ async function navigate(url, options = {}) {
 
     if (!document.dispatchEvent(beforeSwap)) return;
     if (!swapExecuted) proceed();
+
+    // Mirror top-level GET JSON into the route atom for headless consumers.
+    // Skip fragment swaps (s-target set), non-GET, and HTML responses.
+    if (isJSON && method === "GET" && !targetSelector) {
+      try {
+        const pathKey = new URL(finalUrl).pathname;
+        getOrCreateAtom(routeAtoms, pathKey, undefined).set(swapContent);
+        prefetchPromises.set(pathKey, Promise.resolve(swapContent));
+      } catch (e) {}
+    }
 
     // Finalize: side-effects, history, scroll, load event
     finalizeNavigation({

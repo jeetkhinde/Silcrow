@@ -1,9 +1,10 @@
 /**
- * Ground-truth catalog derived from mcp/generated/docs.json.
+ * Ground-truth catalog aligned with mcp/docs.json and src/index.js.
  * Each entry maps a construct to the doc page that documents it.
  */
 
 export const KNOWN_ATTRIBUTES = new Map([
+  ['s-bind',         'atoms'],
   ['s-debug',        'attributes'],
   ['s-delete',       'navigator'],
   ['s-for',          'runtime'],
@@ -46,10 +47,15 @@ export const KNOWN_API_METHODS = new Map([
   ['Silcrow.onToast',    'javascript-api'],
   ['Silcrow.optimistic', 'optimistic'],
   ['Silcrow.patch',      'javascript-api'],
+  ['Silcrow.prefetch',   'atoms'],
+  ['Silcrow.publish',    'atoms'],
   ['Silcrow.reconnect',  'javascript-api'],
   ['Silcrow.revert',     'optimistic'],
   ['Silcrow.send',       'live'],
+  ['Silcrow.snapshot',   'atoms'],
   ['Silcrow.stream',     'live'],
+  ['Silcrow.submit',     'atoms'],
+  ['Silcrow.subscribe',  'atoms'],
   ['Silcrow.use',        'javascript-api'],
 ]);
 

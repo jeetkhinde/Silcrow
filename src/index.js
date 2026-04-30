@@ -17,12 +17,21 @@ function init() {
     history.replaceState({silcrow: true, url: location.href}, "", location.href);
   }
 
+  // 0. SSR hydration seed — populates route atoms + prefetch cache
+  // before any framework adapter subscribes, so React's getServerSnapshot
+  // returns real data and use() sees a stable resolved promise.
+  seedAtomsFromSSR();
+
   // 1. Unified Live Initialization
   initLiveElements();
 
+  // 1b. Vanilla scope bindings (s-bind="scope")
+  initScopeBindings();
+
   // 2. Fragment-Aware Mutation Observer
-  // Updated to track elements by our stable identity (:key)
- liveObserver = new MutationObserver(function (mutations) {
+  // Tracks live connections AND atom subscriptions for removed nodes,
+  // so that detaching an element releases all its references.
+  liveObserver = new MutationObserver(function (mutations) {
     function cleanupLiveNode(node) {
       const state = liveConnections.get(node);
       if (!state) return;
@@ -40,18 +49,20 @@ function init() {
         if (removed.nodeType !== 1) continue;
 
         cleanupLiveNode(removed);
+        unbindElementAtoms(removed);
 
-        // Track nested connections using explicit selectors
         if (removed.querySelectorAll) {
-          const selector = "[s-sse], [s-ws], [s-wss]";
-          for (const child of removed.querySelectorAll(selector)) {
+          for (const child of removed.querySelectorAll("[s-sse], [s-ws], [s-wss]")) {
             cleanupLiveNode(child);
+          }
+          for (const child of removed.querySelectorAll("[s-bind]")) {
+            unbindElementAtoms(child);
           }
         }
       }
     }
   });
-  
+
   liveObserver.observe(document.body, {childList: true, subtree: true});
 
   // Fix 6: Lock middleware pipeline after initialization
@@ -73,6 +84,11 @@ function destroy() {
   responseCache.clear();
   preloadInflight.clear();
   destroyAllLive();
+
+  routeAtoms.clear();
+  streamAtoms.clear();
+  scopeAtoms.clear();
+  prefetchPromises.clear();
 }
 
 window.Silcrow = {
@@ -97,6 +113,22 @@ window.Silcrow = {
   send: sendWs,       // Unified WebSocket sender
   disconnect: disconnectLive,
   reconnect: reconnectLive,
+
+  // --- Headless Store (framework-agnostic; powers React/Solid/Vue/Svelte) ---
+  prefetch: prefetchRoute,   // memoized; returns identity-stable Promise<data>
+  submit: submitAction,      // async fetch returning {ok, status, data, html, headers}
+  subscribe(scope, fn) {
+    const atom = resolveAtomByScope(scope, true);
+    return atom ? atom.subscribe(fn) : function () {};
+  },
+  snapshot(scope) {
+    const atom = resolveAtomByScope(scope, false);
+    return atom ? atom.get() : undefined;
+  },
+  publish(scope, data) {
+    const atom = resolveAtomByScope(scope, true);
+    if (atom) atom.patch(data);
+  },
 
   // --- Feedback Systems ---
   optimistic: optimisticPatch,

@@ -5,8 +5,250 @@
     "name": "Silcrow.js",
     "version": "1.0.0"
   },
-  "generated_at": "2026-04-25T11:08:02.031Z",
   "docs": [
+    {
+      "id": "atoms",
+      "title": "Atoms — Headless Reactive Store",
+      "summary": "Overview The atom layer is a framework-agnostic reactive store that lives alongside the DOM patcher.",
+      "content": "Overview\nThe atom layer is a framework-agnostic reactive store that lives alongside the DOM patcher. SSE messages, WebSocket patches, and top-level GET responses are mirrored into atoms keyed by scope, so framework adapters (React 19, Solid, Vue, Svelte) can subscribe to the same data the DOM consumes — without coupling Silcrow to any one framework.\nThe DOM patcher and the atom store are independent consumers of the same network sink. Existing s- attributes, colon bindings, and Silcrow.patch() calls keep working unchanged; the atom writes are purely additive.\n---\n1. Scope Naming Convention\nAtoms are addressed by a string scope. The prefix selects the underlying map:\n- route:/path — populated by top-level GET JSON responses and Silcrow.prefetch()\n- stream:<url> — populated by SSE messages and WebSocket { type: \"patch\" } frames for the given hub URL\n- <anything-else> — a user-named scope, written to by Silcrow.publish() or Silcrow.submit({ scope })\n---\n2. JavaScript API\nSilcrow.subscribe(scope, fn)\nWhy to use: To observe an atom from a framework adapter or vanilla JS.\nWhen to use: Power React's useSyncExternalStore, Solid's createStore source, Vue's customRef, or any custom subscriber. Returns an unsubscribe function.\nHow to use:\nSilcrow.snapshot(scope)\nWhy to use: To read the current value of an atom synchronously.\nWhen to use: From getServerSnapshot / getSnapshot in useSyncExternalStore, or any place that needs a non-reactive read. Returns undefined if the atom does not exist yet.\nHow to use:\nSilcrow.publish(scope, data)\nWhy to use: To write to an atom imperatively (structural-sharing merge).\nWhen to use: When a custom event source needs to feed data into the store, or to seed a user-named scope from local state. Patches via mergePath so unchanged subtrees keep referential identity.\nHow to use:\nSilcrow.prefetch(path)\nWhy to use: To fetch a route ahead of navigation and memoize the resulting Promise.\nWhen to use: Together with React 19's use() hook, or in route preloading flows. Returns the same Promise instance for repeated calls until error, mutation, or explicit invalidation — so use() will not enter a suspense loop.\nHow to use:\nSilcrow.submit(url, body, options?)\nWhy to use: Async form/action submit returning the parsed result.\nWhen to use: Backing implementation for useActionState-style flows. Returns { ok, status, data, html, headers }. On non-GET methods it busts the response cache and any matching prefetch promise; respects the silcrow-invalidate response header.\nHow to use:\n---\n3. HTML Attribute\ns-bind\nWhy to use: To declaratively subscribe a vanilla DOM element to an atom.\nWhen to use: When a non-React component should re-render through Silcrow.patch() whenever the named atom updates. Setup runs at boot and on dynamically-added subtrees; teardown runs automatically when the element is removed (no detached-DOM leaks).\nHow to use:\n---\n4. SSR Hydration Seed\nA host can inject a serialized seed before silcrow.js boots:\nSilcrow seeds the corresponding route: atoms and the prefetch cache before any subscriber registers, so React's getServerSnapshot returns real data and use() resolves synchronously on first paint — no network roundtrip.\nFor backwards compatibility, window.pilcrowprops is accepted as an alias.\n---\n5. Wiring Summary\n| Source | Sink |\n| --------------------------- | ----------------------------------- |\n| SSE onmessage | streamAtoms[hub.url].patch(data) |\n| SSE patch event | streamAtoms[hub.url].patch(data) |\n| WS { type: \"patch\" } | streamAtoms[hub.url].patch(data) |\n| Top-level GET JSON nav | routeAtoms[pathname].set(data) + prefetch cache |\n| bustCacheOnMutation() | clears prefetchPromises |\n| MutationObserver removal | unbindElementAtoms(el) for s-bind |\n| init() | seedAtomsFromSSR() + initScopeBindings() |\n| destroy() | clears all atom maps + prefetch cache |\n---\n6. Invariants (load-bearing — do not break)\n1. mergePath returns the same reference as prev when nothing changed. Required so React's useSyncExternalStore (which uses Object.is) and use() (which keys on Promise identity) don't tear or thrash.\n2. Silcrow.prefetch(path) returns the same Promise instance across repeated calls until error, mutation, or silcrow-invalidate header. Required so React 19's use() does not enter an infinite suspense loop.\n3. The MutationObserver cleanup runs unbindElementAtoms on removed nodes and their [s-bind] descendants, preventing detached-DOM memory leaks from atom subscriptions.",
+      "sections": [
+        {
+          "id": "atoms/overview",
+          "title": "Overview",
+          "level": 2,
+          "summary": "The atom layer is a framework-agnostic reactive store that lives alongside the DOM patcher.",
+          "content": "The atom layer is a framework-agnostic reactive store that lives alongside the DOM patcher. SSE messages, WebSocket patches, and top-level GET responses are mirrored into atoms keyed by scope, so framework adapters (React 19, Solid, Vue, Svelte) can subscribe to the same data the DOM consumes — without coupling Silcrow to any one framework.\nThe DOM patcher and the atom store are independent consumers of the same network sink. Existing s- attributes, colon bindings, and Silcrow.patch() calls keep working unchanged; the atom writes are purely additive.\n---",
+          "examples": {
+            "html": [],
+            "json": []
+          }
+        },
+        {
+          "id": "atoms/1-scope-naming-convention",
+          "title": "1. Scope Naming Convention",
+          "level": 2,
+          "summary": "Atoms are addressed by a string scope.",
+          "content": "Atoms are addressed by a string scope. The prefix selects the underlying map:\n- route:/path — populated by top-level GET JSON responses and Silcrow.prefetch()\n- stream:<url> — populated by SSE messages and WebSocket { type: \"patch\" } frames for the given hub URL\n- <anything-else> — a user-named scope, written to by Silcrow.publish() or Silcrow.submit({ scope })\n---",
+          "examples": {
+            "html": [],
+            "json": []
+          }
+        },
+        {
+          "id": "atoms/2-javascript-api",
+          "title": "2. JavaScript API",
+          "level": 2,
+          "summary": "Silcrow.subscribe(scope, fn) Why to use: To observe an atom from a framework adapter or vanilla JS.",
+          "content": "Silcrow.subscribe(scope, fn)\nWhy to use: To observe an atom from a framework adapter or vanilla JS.\nWhen to use: Power React's useSyncExternalStore, Solid's createStore source, Vue's customRef, or any custom subscriber. Returns an unsubscribe function.\nHow to use:\nSilcrow.snapshot(scope)\nWhy to use: To read the current value of an atom synchronously.\nWhen to use: From getServerSnapshot / getSnapshot in useSyncExternalStore, or any place that needs a non-reactive read. Returns undefined if the atom does not exist yet.\nHow to use:\nSilcrow.publish(scope, data)\nWhy to use: To write to an atom imperatively (structural-sharing merge).\nWhen to use: When a custom event source needs to feed data into the store, or to seed a user-named scope from local state. Patches via mergePath so unchanged subtrees keep referential identity.\nHow to use:\nSilcrow.prefetch(path)\nWhy to use: To fetch a route ahead of navigation and memoize the resulting Promise.\nWhen to use: Together with React 19's use() hook, or in route preloading flows. Returns the same Promise instance for repeated calls until error, mutation, or explicit invalidation — so use() will not enter a suspense loop.\nHow to use:\nSilcrow.submit(url, body, options?)\nWhy to use: Async form/action submit returning the parsed result.\nWhen to use: Backing implementation for useActionState-style flows. Returns { ok, status, data, html, headers }. On non-GET methods it busts the response cache and any matching prefetch promise; respects the silcrow-invalidate response header.\nHow to use:\n---",
+          "examples": {
+            "html": [],
+            "json": []
+          }
+        },
+        {
+          "id": "atoms/silcrow-subscribescope-fn",
+          "title": "Silcrow.subscribe(scope, fn)",
+          "level": 3,
+          "summary": "Why to use: To observe an atom from a framework adapter or vanilla JS.",
+          "content": "Why to use: To observe an atom from a framework adapter or vanilla JS.\nWhen to use: Power React's useSyncExternalStore, Solid's createStore source, Vue's customRef, or any custom subscriber. Returns an unsubscribe function.\nHow to use:",
+          "examples": {
+            "html": [],
+            "json": []
+          }
+        },
+        {
+          "id": "atoms/silcrow-snapshotscope",
+          "title": "Silcrow.snapshot(scope)",
+          "level": 3,
+          "summary": "Why to use: To read the current value of an atom synchronously.",
+          "content": "Why to use: To read the current value of an atom synchronously.\nWhen to use: From getServerSnapshot / getSnapshot in useSyncExternalStore, or any place that needs a non-reactive read. Returns undefined if the atom does not exist yet.\nHow to use:",
+          "examples": {
+            "html": [],
+            "json": []
+          }
+        },
+        {
+          "id": "atoms/silcrow-publishscope-data",
+          "title": "Silcrow.publish(scope, data)",
+          "level": 3,
+          "summary": "Why to use: To write to an atom imperatively (structural-sharing merge).",
+          "content": "Why to use: To write to an atom imperatively (structural-sharing merge).\nWhen to use: When a custom event source needs to feed data into the store, or to seed a user-named scope from local state. Patches via mergePath so unchanged subtrees keep referential identity.\nHow to use:",
+          "examples": {
+            "html": [],
+            "json": []
+          }
+        },
+        {
+          "id": "atoms/silcrow-prefetchpath",
+          "title": "Silcrow.prefetch(path)",
+          "level": 3,
+          "summary": "Why to use: To fetch a route ahead of navigation and memoize the resulting Promise.",
+          "content": "Why to use: To fetch a route ahead of navigation and memoize the resulting Promise.\nWhen to use: Together with React 19's use() hook, or in route preloading flows. Returns the same Promise instance for repeated calls until error, mutation, or explicit invalidation — so use() will not enter a suspense loop.\nHow to use:",
+          "examples": {
+            "html": [],
+            "json": []
+          }
+        },
+        {
+          "id": "atoms/silcrow-submiturl-body-options",
+          "title": "Silcrow.submit(url, body, options?)",
+          "level": 3,
+          "summary": "Why to use: Async form/action submit returning the parsed result.",
+          "content": "Why to use: Async form/action submit returning the parsed result.\nWhen to use: Backing implementation for useActionState-style flows. Returns { ok, status, data, html, headers }. On non-GET methods it busts the response cache and any matching prefetch promise; respects the silcrow-invalidate response header.\nHow to use:\n---",
+          "examples": {
+            "html": [],
+            "json": []
+          }
+        },
+        {
+          "id": "atoms/3-html-attribute",
+          "title": "3. HTML Attribute",
+          "level": 2,
+          "summary": "s-bind Why to use: To declaratively subscribe a vanilla DOM element to an atom.",
+          "content": "s-bind\nWhy to use: To declaratively subscribe a vanilla DOM element to an atom.\nWhen to use: When a non-React component should re-render through Silcrow.patch() whenever the named atom updates. Setup runs at boot and on dynamically-added subtrees; teardown runs automatically when the element is removed (no detached-DOM leaks).\nHow to use:\n---",
+          "examples": {
+            "html": [],
+            "json": []
+          }
+        },
+        {
+          "id": "atoms/s-bind",
+          "title": "s-bind",
+          "level": 3,
+          "summary": "Why to use: To declaratively subscribe a vanilla DOM element to an atom.",
+          "content": "Why to use: To declaratively subscribe a vanilla DOM element to an atom.\nWhen to use: When a non-React component should re-render through Silcrow.patch() whenever the named atom updates. Setup runs at boot and on dynamically-added subtrees; teardown runs automatically when the element is removed (no detached-DOM leaks).\nHow to use:\n---",
+          "examples": {
+            "html": [
+              {
+                "title": "HTML example",
+                "description": "Example from the canonical Silcrow MCP documentation.",
+                "code": "<div s-bind=\"route:/products\" :text=\"title\"></div>\n<aside s-bind=\"cart\" :text=\"count\"></aside>"
+              }
+            ],
+            "json": []
+          }
+        },
+        {
+          "id": "atoms/4-ssr-hydration-seed",
+          "title": "4. SSR Hydration Seed",
+          "level": 2,
+          "summary": "A host can inject a serialized seed before silcrow.js boots: Silcrow seeds the corresponding route: atoms and the prefetch cache before any subscriber registers, so React's getServerSnapshot returns real data and use() resolves synchronously on first paint — no network roundtrip.",
+          "content": "A host can inject a serialized seed before silcrow.js boots:\nSilcrow seeds the corresponding route: atoms and the prefetch cache before any subscriber registers, so React's getServerSnapshot returns real data and use() resolves synchronously on first paint — no network roundtrip.\nFor backwards compatibility, window.pilcrowprops is accepted as an alias.\n---",
+          "examples": {
+            "html": [
+              {
+                "title": "HTML example",
+                "description": "Example from the canonical Silcrow MCP documentation.",
+                "code": "<script>\n  window.__silcrow_seed = {\n    \"/products\": { items: [...] },\n    \"/cart\":     { count: 3 }\n  };\n</script>\n<script src=\"/silcrow.js\" defer></script>"
+              }
+            ],
+            "json": []
+          }
+        },
+        {
+          "id": "atoms/5-wiring-summary",
+          "title": "5. Wiring Summary",
+          "level": 2,
+          "summary": "| Source | Sink | | --------------------------- | ----------------------------------- | | SSE onmessage | streamAtoms[hub.url].patch(data) | | SSE patch event | streamAtoms[hub.url].patch(data) | | WS { type: \"patch\" } | streamAtoms[hub.url",
+          "content": "| Source | Sink |\n| --------------------------- | ----------------------------------- |\n| SSE onmessage | streamAtoms[hub.url].patch(data) |\n| SSE patch event | streamAtoms[hub.url].patch(data) |\n| WS { type: \"patch\" } | streamAtoms[hub.url].patch(data) |\n| Top-level GET JSON nav | routeAtoms[pathname].set(data) + prefetch cache |\n| bustCacheOnMutation() | clears prefetchPromises |\n| MutationObserver removal | unbindElementAtoms(el) for s-bind |\n| init() | seedAtomsFromSSR() + initScopeBindings() |\n| destroy() | clears all atom maps + prefetch cache |\n---",
+          "examples": {
+            "html": [],
+            "json": []
+          }
+        },
+        {
+          "id": "atoms/6-invariants-load-bearing-do-not-break",
+          "title": "6. Invariants (load-bearing — do not break)",
+          "level": 2,
+          "summary": "1.",
+          "content": "1. mergePath returns the same reference as prev when nothing changed. Required so React's useSyncExternalStore (which uses Object.is) and use() (which keys on Promise identity) don't tear or thrash.\n2. Silcrow.prefetch(path) returns the same Promise instance across repeated calls until error, mutation, or silcrow-invalidate header. Required so React 19's use() does not enter an infinite suspense loop.\n3. The MutationObserver cleanup runs unbindElementAtoms on removed nodes and their [s-bind] descendants, preventing detached-DOM memory leaks from atom subscriptions.",
+          "examples": {
+            "html": [],
+            "json": []
+          }
+        }
+      ],
+      "examples": {
+        "html": [
+          {
+            "title": "HTML example",
+            "description": "Example from the canonical Silcrow MCP documentation.",
+            "code": "<div s-bind=\"route:/products\" :text=\"title\"></div>\n<aside s-bind=\"cart\" :text=\"count\"></aside>"
+          },
+          {
+            "title": "HTML example",
+            "description": "Example from the canonical Silcrow MCP documentation.",
+            "code": "<script>\n  window.__silcrow_seed = {\n    \"/products\": { items: [...] },\n    \"/cart\":     { count: 3 }\n  };\n</script>\n<script src=\"/silcrow.js\" defer></script>"
+          }
+        ],
+        "json": []
+      },
+      "tags": [
+        ":text",
+        "api",
+        "atoms",
+        "attribute",
+        "body",
+        "break",
+        "convention",
+        "data",
+        "headless",
+        "headless-store",
+        "html",
+        "hydration",
+        "invariants",
+        "javascript",
+        "load-bearing",
+        "naming",
+        "not",
+        "options",
+        "overview",
+        "prefetch",
+        "publish",
+        "react",
+        "reactive",
+        "s-bind",
+        "scope",
+        "seed",
+        "silcrow-prefetchpath",
+        "silcrow-publishscope",
+        "silcrow-snapshotscope",
+        "silcrow-submiturl",
+        "silcrow-subscribescope",
+        "Silcrow.patch",
+        "Silcrow.prefetch",
+        "Silcrow.publish",
+        "Silcrow.snapshot",
+        "Silcrow.submit",
+        "Silcrow.subscribe",
+        "snapshot",
+        "solid",
+        "ssr",
+        "ssr-seed",
+        "store",
+        "submit",
+        "subscribe",
+        "summary",
+        "svelte",
+        "useSyncExternalStore",
+        "vue",
+        "wiring"
+      ],
+      "use_cases": [
+        "To observe an atom from a framework adapter or vanilla JS.",
+        "Power React's useSyncExternalStore, Solid's createStore source, Vue's customRef, or any custom subscriber. Returns an unsubscribe function.",
+        "To read the current value of an atom synchronously.",
+        "From getServerSnapshot / getSnapshot in useSyncExternalStore, or any place that needs a non-reactive read. Returns undefined if the atom does not exist yet.",
+        "To write to an atom imperatively (structural-sharing merge).",
+        "When a custom event source needs to feed data into the store, or to seed a user-named scope from local state. Patches via mergePath so unchanged subtrees keep referential identity.",
+        "To fetch a route ahead of navigation and memoize the resulting Promise.",
+        "Together with React 19's use() hook, or in route preloading flows. Returns the same Promise instance for repeated calls until error, mutation, or explicit invalidation — so use() will not enter a suspense loop.",
+        "Async form/action submit returning the parsed result.",
+        "Backing implementation for useActionState-style flows. Returns { ok, status, data, html, headers }. On non-GET methods it busts the response cache and any matching prefetch promise; respects the silcrow-invalidate response header.",
+        "To declaratively subscribe a vanilla DOM element to an atom.",
+        "When a non-React component should re-render through Silcrow.patch() whenever the named atom updates. Setup runs at boot and on dynamically-added subtrees; teardown runs automatically when the element is removed (no detached-DOM leaks)."
+      ]
+    },
     {
       "id": "attributes",
       "title": "HTML Attributes and Keywords",
@@ -34,7 +276,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<div class=\"user-card\" s-use=\"user\"></div>"
               }
             ],
@@ -51,7 +293,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<h1 :text=\"user.name\"></h1>\n<button :disabled=\"user.isBanned\">Submit</button>"
               }
             ],
@@ -68,7 +310,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<ul>\n  <template s-for=\"user in users\" :key=\"user.id\">\n    <li :text=\"user.name\"></li>\n  </template>\n</ul>"
               }
             ],
@@ -85,7 +327,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<template s-for=\"task in tasks\" :key=\"task.uuid\">..."
               }
             ],
@@ -113,7 +355,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<a s-get=\"/dashboard\">Dashboard</a>\n<!-- With implicit :key interpolation: -->\n<button s-post=\"/api/tasks/:key/complete\">✓</button>\n<button s-delete=\"/items/:key\" s-target=\"#notifications\">Remove</button>"
               }
             ],
@@ -130,7 +372,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<button s-get=\"/stats\" s-target=\"#stats-panel\">Load Stats</button>"
               }
             ],
@@ -147,7 +389,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<button s-get=\"/reports/1\" s-html s-target=\"#view\">View Draft</button>"
               }
             ],
@@ -164,7 +406,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<a s-get=\"/dashboard?tab=analytics\" s-skip-history>Analytics</a>"
               }
             ],
@@ -181,7 +423,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<a s-get=\"/heavy-page\" s-preload>Load Page</a>"
               }
             ],
@@ -198,7 +440,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<button s-post=\"/generate\" s-timeout=\"60000\">Generate Report</button>"
               }
             ],
@@ -226,7 +468,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<div s-sse=\"/api/notifications/stream\"></div>"
               }
             ],
@@ -243,7 +485,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<div s-wss=\"wss://api.example.com/chat\"></div>"
               }
             ],
@@ -260,7 +502,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<body s-debug>"
               }
             ],
@@ -305,67 +547,67 @@
         "html": [
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<div class=\"user-card\" s-use=\"user\"></div>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<h1 :text=\"user.name\"></h1>\n<button :disabled=\"user.isBanned\">Submit</button>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<ul>\n  <template s-for=\"user in users\" :key=\"user.id\">\n    <li :text=\"user.name\"></li>\n  </template>\n</ul>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<template s-for=\"task in tasks\" :key=\"task.uuid\">..."
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<a s-get=\"/dashboard\">Dashboard</a>\n<!-- With implicit :key interpolation: -->\n<button s-post=\"/api/tasks/:key/complete\">✓</button>\n<button s-delete=\"/items/:key\" s-target=\"#notifications\">Remove</button>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<button s-get=\"/stats\" s-target=\"#stats-panel\">Load Stats</button>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<button s-get=\"/reports/1\" s-html s-target=\"#view\">View Draft</button>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<a s-get=\"/dashboard?tab=analytics\" s-skip-history>Analytics</a>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<a s-get=\"/heavy-page\" s-preload>Load Page</a>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<button s-post=\"/generate\" s-timeout=\"60000\">Generate Report</button>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<div s-sse=\"/api/notifications/stream\"></div>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<div s-wss=\"wss://api.example.com/chat\"></div>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<body s-debug>"
           }
         ],
@@ -907,14 +1149,14 @@
       "id": "index",
       "title": "Documentation Index",
       "summary": "Welcome to the Silcrow (or SilcrowJS, Silcrow.js) documentation.",
-      "content": "Welcome to the Silcrow (or SilcrowJS, Silcrow.js) documentation. Use this map to find the correct file for your needs:\n- For HTML Attributes and Keywords, read attributes.md (Source: Across modules, primarily src/patcher.js, src/navigator.js, src/live.js)\n- For Events (DOM CustomEvents), read events.md (Source: Primarily src/navigator.js and src/live.js)\n- For HTTP Headers (Requests/Responses/Side-effects), read http-headers.md (Source: src/navigator.js)\n- For the JavaScript API, read javascript-api.md (Source: src/index.js)\n- For Live Updates (SSE, WebSocket & Real-Time), read live.md (Source: src/live.js, src/ws.js)\n- For Client-Side Routing (Navigator), read navigator.md (Source: src/navigator.js)\n- For Optimistic Updates, read optimistic.md (Source: src/optimistic.js)\n- For Data Binding & DOM Patching (Runtime), read runtime.md (Source: src/patcher.js)",
+      "content": "Welcome to the Silcrow (or SilcrowJS, Silcrow.js) documentation. Use this map to find the correct file for your needs:\n- For HTML Attributes and Keywords, read attributes.md (Source: Across modules, primarily src/patcher.js, src/navigator.js, src/live.js)\n- For the Headless Atom Store (framework-agnostic state, React/Solid/Vue/Svelte adapters), read atoms.md (Source: src/atoms.js)\n- For Events (DOM CustomEvents), read events.md (Source: Primarily src/navigator.js and src/live.js)\n- For HTTP Headers (Requests/Responses/Side-effects), read http-headers.md (Source: src/navigator.js)\n- For the JavaScript API, read javascript-api.md (Source: src/index.js)\n- For Live Updates (SSE, WebSocket & Real-Time), read live.md (Source: src/live.js, src/ws.js)\n- For Client-Side Routing (Navigator), read navigator.md (Source: src/navigator.js)\n- For Optimistic Updates, read optimistic.md (Source: src/optimistic.js)\n- For Data Binding & DOM Patching (Runtime), read runtime.md (Source: src/patcher.js)",
       "sections": [
         {
           "id": "index/overview",
           "title": "Overview",
           "level": 2,
           "summary": "Welcome to the Silcrow (or SilcrowJS, Silcrow.js) documentation.",
-          "content": "Welcome to the Silcrow (or SilcrowJS, Silcrow.js) documentation. Use this map to find the correct file for your needs:\n- For HTML Attributes and Keywords, read attributes.md (Source: Across modules, primarily src/patcher.js, src/navigator.js, src/live.js)\n- For Events (DOM CustomEvents), read events.md (Source: Primarily src/navigator.js and src/live.js)\n- For HTTP Headers (Requests/Responses/Side-effects), read http-headers.md (Source: src/navigator.js)\n- For the JavaScript API, read javascript-api.md (Source: src/index.js)\n- For Live Updates (SSE, WebSocket & Real-Time), read live.md (Source: src/live.js, src/ws.js)\n- For Client-Side Routing (Navigator), read navigator.md (Source: src/navigator.js)\n- For Optimistic Updates, read optimistic.md (Source: src/optimistic.js)\n- For Data Binding & DOM Patching (Runtime), read runtime.md (Source: src/patcher.js)",
+          "content": "Welcome to the Silcrow (or SilcrowJS, Silcrow.js) documentation. Use this map to find the correct file for your needs:\n- For HTML Attributes and Keywords, read attributes.md (Source: Across modules, primarily src/patcher.js, src/navigator.js, src/live.js)\n- For the Headless Atom Store (framework-agnostic state, React/Solid/Vue/Svelte adapters), read atoms.md (Source: src/atoms.js)\n- For Events (DOM CustomEvents), read events.md (Source: Primarily src/navigator.js and src/live.js)\n- For HTTP Headers (Requests/Responses/Side-effects), read http-headers.md (Source: src/navigator.js)\n- For the JavaScript API, read javascript-api.md (Source: src/index.js)\n- For Live Updates (SSE, WebSocket & Real-Time), read live.md (Source: src/live.js, src/ws.js)\n- For Client-Side Routing (Navigator), read navigator.md (Source: src/navigator.js)\n- For Optimistic Updates, read optimistic.md (Source: src/optimistic.js)\n- For Data Binding & DOM Patching (Runtime), read runtime.md (Source: src/patcher.js)",
           "examples": {
             "html": [],
             "json": []
@@ -939,7 +1181,7 @@
       "id": "javascript-api",
       "title": "JavaScript API",
       "summary": "1.",
-      "content": "1. Runtime Binding\nSilcrow.patch(data, root, options?)\nWhy to use: To manually inject a JSON logic update into the DOM.\nWhen to use: You might receive data from an external library (like a map callback or a third-party SDK) and want to bind its results into the DOM.\nHow to use:\nSilcrow.invalidate(root)\nWhy to use: To clear internal binding caches for a DOM tree.\nWhen to use: If you manually modify the DOM (e.g., adding classes or appending new HTML nodes with Vanilla JS) and need Silcrow to re-scan the new tree for : binding attributes.\nHow to use:\nSilcrow.stream(root)\nWhy to use: Returns a microtask-batched version of patch().\nWhen to use: Ideal for high-frequency updates (e.g. mouse tracking, constant websocket messages) so that Silcrow only updates the DOM once per animation frame, taking the absolute latest data.\nHow to use:\n---\n2. Navigation\nSilcrow.go(path, options?)\nWhy to use: To programmatically execute a client-side route or mutation.\nWhen to use: You want to trigger a save or navigation programmatically, perhaps following a setTimeout or an internal game-engine event, rather than a user click.\nHow to use:\n---\n3. Real-time (Live)\nSilcrow.live(root, url)\nWhy to use: To programmatically open an SSE connection.\nWhen to use: You don't want to use the declarative s-sse attribute in the DOM, but want to strictly control when a user connects to a stream from JavaScript.\nHow to use:\nSilcrow.send(data, root)\nWhy to use: To send data over an active WebSocket to the server.\nWhen to use: Used to push events in bidirectional apps (e.g. typing indicators, chat messages) into a WebSocket connection previously opened by s-ws.\nHow to use:\nSilcrow.disconnect(root) & Silcrow.reconnect(root)\nWhy to use: To pause and resume live connections explicitly.\nWhen to use: You want to disconnect a stream manually when the user backgrounds the tab, or reconnect when they return, to save on resources.\nHow to use:\n---\n4. Feedback & Systems\nSilcrow.optimistic(data, root) & Silcrow.revert(root)\nWhy to use: To immediately show a UI state while waiting for the server.\nWhen to use: When you have a slow API endpoint (e.g., toggling a \"Like\" button), use optimistic to patch the counter instantly. If the network fails, use revert to restore the pre-patched DOM snapshot.\nHow to use:\nSilcrow.onToast(handler)\nWhy to use: Plugs your UI notification library into Silcrow.\nWhen to use: Run once on page load to map server-sent toasts into your visualization tool of choice (e.g., Toastify, sweetalert).\nSilcrow.use(fn)\nWhy to use: To register global middleware that transforms data before it reaches the DOM.\nWhen to use: Formatting dates, currency, or translating localization strings across the entire application immediately before they hit a binding. Note: must be called before page load.\nHow to use:\nSilcrow.onRoute(handler) & Silcrow.onError(handler)\nWhy to use: To intercept navigating and error operations globally.\nWhen to use: Hook in custom authorization logic, or send crash analytics to an error tracking service.\nHow to use:\nSilcrow.destroy()\nWhy to use: To completely dismantle Silcrow.\nWhen to use: Used strictly if you are unmounting Silcrow in a complex Micro-Frontend architecture. It removes all event listeners, clears caches, and terminates active SSE/WS connections.\nHow to use:",
+      "content": "1. Runtime Binding\nSilcrow.patch(data, root, options?)\nWhy to use: To manually inject a JSON logic update into the DOM.\nWhen to use: You might receive data from an external library (like a map callback or a third-party SDK) and want to bind its results into the DOM.\nHow to use:\nSilcrow.invalidate(root)\nWhy to use: To clear internal binding caches for a DOM tree.\nWhen to use: If you manually modify the DOM (e.g., adding classes or appending new HTML nodes with Vanilla JS) and need Silcrow to re-scan the new tree for : binding attributes.\nHow to use:\nSilcrow.stream(root)\nWhy to use: Returns a microtask-batched version of patch().\nWhen to use: Ideal for high-frequency updates (e.g. mouse tracking, constant websocket messages) so that Silcrow only updates the DOM once per animation frame, taking the absolute latest data.\nHow to use:\n---\n2. Navigation\nSilcrow.go(path, options?)\nWhy to use: To programmatically execute a client-side route or mutation.\nWhen to use: You want to trigger a save or navigation programmatically, perhaps following a setTimeout or an internal game-engine event, rather than a user click.\nHow to use:\n---\n3. Real-time (Live)\nSilcrow.live(root, url)\nWhy to use: To programmatically open an SSE connection.\nWhen to use: You don't want to use the declarative s-sse attribute in the DOM, but want to strictly control when a user connects to a stream from JavaScript.\nHow to use:\nSilcrow.send(data, root)\nWhy to use: To send data over an active WebSocket to the server.\nWhen to use: Used to push events in bidirectional apps (e.g. typing indicators, chat messages) into a WebSocket connection previously opened by s-ws.\nHow to use:\nHeadless Atom Store\nThe atom store (Silcrow.subscribe, snapshot, publish, prefetch, submit) is the framework-agnostic reactive sink for SSE/WebSocket/route data. See atoms.md for the full API reference, scope-naming convention (route: / stream: / user-named), the s-bind HTML attribute, and the SSR seed (window.silcrowseed).\nSilcrow.disconnect(root) & Silcrow.reconnect(root)\nWhy to use: To pause and resume live connections explicitly.\nWhen to use: You want to disconnect a stream manually when the user backgrounds the tab, or reconnect when they return, to save on resources.\nHow to use:\n---\n4. Feedback & Systems\nSilcrow.optimistic(data, root) & Silcrow.revert(root)\nWhy to use: To immediately show a UI state while waiting for the server.\nWhen to use: When you have a slow API endpoint (e.g., toggling a \"Like\" button), use optimistic to patch the counter instantly. If the network fails, use revert to restore the pre-patched DOM snapshot.\nHow to use:\nSilcrow.onToast(handler)\nWhy to use: Plugs your UI notification library into Silcrow.\nWhen to use: Run once on page load to map server-sent toasts into your visualization tool of choice (e.g., Toastify, sweetalert).\nSilcrow.use(fn)\nWhy to use: To register global middleware that transforms data before it reaches the DOM.\nWhen to use: Formatting dates, currency, or translating localization strings across the entire application immediately before they hit a binding. Note: must be called before page load.\nHow to use:\nSilcrow.onRoute(handler) & Silcrow.onError(handler)\nWhy to use: To intercept navigating and error operations globally.\nWhen to use: Hook in custom authorization logic, or send crash analytics to an error tracking service.\nHow to use:\nSilcrow.destroy()\nWhy to use: To completely dismantle Silcrow.\nWhen to use: Used strictly if you are unmounting Silcrow in a complex Micro-Frontend architecture. It removes all event listeners, clears caches, and terminates active SSE/WS connections.\nHow to use:",
       "sections": [
         {
           "id": "javascript-api/1-runtime-binding",
@@ -1012,7 +1254,7 @@
           "title": "3. Real-time (Live)",
           "level": 2,
           "summary": "Silcrow.live(root, url) Why to use: To programmatically open an SSE connection.",
-          "content": "Silcrow.live(root, url)\nWhy to use: To programmatically open an SSE connection.\nWhen to use: You don't want to use the declarative s-sse attribute in the DOM, but want to strictly control when a user connects to a stream from JavaScript.\nHow to use:\nSilcrow.send(data, root)\nWhy to use: To send data over an active WebSocket to the server.\nWhen to use: Used to push events in bidirectional apps (e.g. typing indicators, chat messages) into a WebSocket connection previously opened by s-ws.\nHow to use:\nSilcrow.disconnect(root) & Silcrow.reconnect(root)\nWhy to use: To pause and resume live connections explicitly.\nWhen to use: You want to disconnect a stream manually when the user backgrounds the tab, or reconnect when they return, to save on resources.\nHow to use:\n---",
+          "content": "Silcrow.live(root, url)\nWhy to use: To programmatically open an SSE connection.\nWhen to use: You don't want to use the declarative s-sse attribute in the DOM, but want to strictly control when a user connects to a stream from JavaScript.\nHow to use:\nSilcrow.send(data, root)\nWhy to use: To send data over an active WebSocket to the server.\nWhen to use: Used to push events in bidirectional apps (e.g. typing indicators, chat messages) into a WebSocket connection previously opened by s-ws.\nHow to use:\nHeadless Atom Store\nThe atom store (Silcrow.subscribe, snapshot, publish, prefetch, submit) is the framework-agnostic reactive sink for SSE/WebSocket/route data. See atoms.md for the full API reference, scope-naming convention (route: / stream: / user-named), the s-bind HTML attribute, and the SSR seed (window.silcrowseed).\nSilcrow.disconnect(root) & Silcrow.reconnect(root)\nWhy to use: To pause and resume live connections explicitly.\nWhen to use: You want to disconnect a stream manually when the user backgrounds the tab, or reconnect when they return, to save on resources.\nHow to use:\n---",
           "examples": {
             "html": [],
             "json": []
@@ -1035,6 +1277,17 @@
           "level": 3,
           "summary": "Why to use: To send data over an active WebSocket to the server.",
           "content": "Why to use: To send data over an active WebSocket to the server.\nWhen to use: Used to push events in bidirectional apps (e.g. typing indicators, chat messages) into a WebSocket connection previously opened by s-ws.\nHow to use:",
+          "examples": {
+            "html": [],
+            "json": []
+          }
+        },
+        {
+          "id": "javascript-api/headless-atom-store",
+          "title": "Headless Atom Store",
+          "level": 3,
+          "summary": "The atom store (Silcrow.subscribe, snapshot, publish, prefetch, submit) is the framework-agnostic reactive sink for SSE/WebSocket/route data.",
+          "content": "The atom store (Silcrow.subscribe, snapshot, publish, prefetch, submit) is the framework-agnostic reactive sink for SSE/WebSocket/route data. See atoms.md for the full API reference, scope-naming convention (route: / stream: / user-named), the s-bind HTML attribute, and the SSR seed (window.silcrowseed).",
           "examples": {
             "html": [],
             "json": []
@@ -1125,8 +1378,10 @@
       "tags": [
         "and",
         "api",
+        "atom",
         "binding",
         "feedback",
+        "headless",
         "javascript",
         "javascript-api",
         "live",
@@ -1136,6 +1391,7 @@
         "real-time",
         "root",
         "runtime",
+        "s-bind",
         "s-sse",
         "s-ws",
         "silcrow-destroy",
@@ -1167,7 +1423,9 @@
         "Silcrow.revert",
         "Silcrow.send",
         "Silcrow.stream",
+        "Silcrow.subscribe",
         "Silcrow.use",
+        "store",
         "systems",
         "url",
         "window.Silcrow"
@@ -1211,12 +1469,12 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<div id=\"feed\" s-sse=\"/events/feed\">\n  <span :text=\"count\"></span> items\n</div>"
               },
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<div id=\"chat\" s-ws=\"/ws/chat\">\n  <span :text=\"messages\"></span>\n</div>"
               }
             ],
@@ -1333,7 +1591,7 @@
             "json": [
               {
                 "title": "JSON example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "{\"type\": \"patch\", \"target\": \"#stats\", \"data\": {\"count\": 42}}\n{\"type\": \"html\", \"target\": \"#slot\", \"markup\": \"<p>Updated</p>\"}\n{\"type\": \"navigate\", \"path\": \"/dashboard\"}\n{\"type\": \"custom\", \"event\": \"refresh\", \"data\": {\"section\": \"sidebar\"}}"
               }
             ]
@@ -1344,19 +1602,19 @@
         "html": [
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<div id=\"feed\" s-sse=\"/events/feed\">\n  <span :text=\"count\"></span> items\n</div>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<div id=\"chat\" s-ws=\"/ws/chat\">\n  <span :text=\"messages\"></span>\n</div>"
           }
         ],
         "json": [
           {
             "title": "JSON example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "{\"type\": \"patch\", \"target\": \"#stats\", \"data\": {\"count\": 42}}\n{\"type\": \"html\", \"target\": \"#slot\", \"markup\": \"<p>Updated</p>\"}\n{\"type\": \"navigate\", \"path\": \"/dashboard\"}\n{\"type\": \"custom\", \"event\": \"refresh\", \"data\": {\"section\": \"sidebar\"}}"
           }
         ]
@@ -1416,12 +1674,12 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<a s-get=\"/dashboard\">Dashboard</a>\n<button s-post=\"/api/save\">Save</button>\n<button s-delete=\"/items/5\" s-target=\"#item-5\">Remove</button>"
               },
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<a s-get=\"/dashboard\">Dashboard</a>\n<button s-post=\"/tasks/:key/complete\">Complete</button>\n<button s-delete=\"/items/:key\" s-target=\"#notifications\">Remove</button>"
               }
             ],
@@ -1460,7 +1718,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<button s-post=\"/tasks/:key/star\">Star Task</button>\n\n<form s-patch=\"/tasks/:key/rename\">\n  <input name=\"new_name\" placeholder=\"Enter name...\" />\n  <button type=\"submit\">Rename</button>\n</form>"
               }
             ],
@@ -1488,12 +1746,12 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<form s-put=\"/tasks/:key/edit\">  \n  <input type=\"text\" name=\"title\" :value=\".title\" /> \n  <button type=\"submit\">Save</button>  \n</form>"
               },
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<button s-patch=\"/tasks/:key/toggle\">Toggle Complete</button>  \n<button s-post=\"/tasks/:key/upvote\">Upvote</button>"
               }
             ],
@@ -1510,7 +1768,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<form s-get=\"/search\" s-target=\"#results\">\n  <input name=\"q\" />\n  <button>Search</button>\n</form>"
               }
             ],
@@ -1571,7 +1829,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<a s-get=\"/settings\" s-preload>Settings</a>"
               }
             ],
@@ -1616,37 +1874,37 @@
         "html": [
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<a s-get=\"/dashboard\">Dashboard</a>\n<button s-post=\"/api/save\">Save</button>\n<button s-delete=\"/items/5\" s-target=\"#item-5\">Remove</button>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<a s-get=\"/dashboard\">Dashboard</a>\n<button s-post=\"/tasks/:key/complete\">Complete</button>\n<button s-delete=\"/items/:key\" s-target=\"#notifications\">Remove</button>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<button s-post=\"/tasks/:key/star\">Star Task</button>\n\n<form s-patch=\"/tasks/:key/rename\">\n  <input name=\"new_name\" placeholder=\"Enter name...\" />\n  <button type=\"submit\">Rename</button>\n</form>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<form s-put=\"/tasks/:key/edit\">  \n  <input type=\"text\" name=\"title\" :value=\".title\" /> \n  <button type=\"submit\">Save</button>  \n</form>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<button s-patch=\"/tasks/:key/toggle\">Toggle Complete</button>  \n<button s-post=\"/tasks/:key/upvote\">Upvote</button>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<form s-get=\"/search\" s-target=\"#results\">\n  <input name=\"q\" />\n  <button>Search</button>\n</form>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<a s-get=\"/settings\" s-preload>Settings</a>"
           }
         ],
@@ -1787,7 +2045,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<h1 :text=\"user.name\"></h1>\n<div :show=\"user.is_online\">Online Now</div>\n<div :class=\"user.status_flags\"></div>\n<input :value=\"user.email\" />\n<button :disabled=\"user.banned\">Action</button>"
               }
             ],
@@ -1804,17 +2062,17 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<div s-use=\"user\"></div>"
               },
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<div :name=\"user.name\" :email=\"user.email\" :avatar=\"user.avatar\" :banned=\"user.banned\" :status_flags=\"user.status_flags\"></div>"
               },
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<div class=\"card\" s-use=\"taskUI\"></div>"
               }
             ],
@@ -1831,7 +2089,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<dl>\n  <template s-for=\"task in tasks\" :key=\"task.id\">\n    <dt :text=\"task.title\"></dt>\n    <dd>\n      <button s-post=\"/tasks/:key/done\">Complete</button>\n    </dd>\n  </template>\n</dl>"
               }
             ],
@@ -1870,7 +2128,7 @@
             "html": [
               {
                 "title": "HTML example",
-                "description": "Example extracted from the Silcrow markdown documentation.",
+                "description": "Example from the canonical Silcrow MCP documentation.",
                 "code": "<form s-post=\"/todos\" s-target=\"#todo-list\">...</form>\n<ul id=\"todo-list\" s-for=\"todo in todos\" :key=\"todo.id\">...</ul>"
               }
             ],
@@ -1948,32 +2206,32 @@
         "html": [
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<h1 :text=\"user.name\"></h1>\n<div :show=\"user.is_online\">Online Now</div>\n<div :class=\"user.status_flags\"></div>\n<input :value=\"user.email\" />\n<button :disabled=\"user.banned\">Action</button>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<div s-use=\"user\"></div>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<div :name=\"user.name\" :email=\"user.email\" :avatar=\"user.avatar\" :banned=\"user.banned\" :status_flags=\"user.status_flags\"></div>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<div class=\"card\" s-use=\"taskUI\"></div>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<dl>\n  <template s-for=\"task in tasks\" :key=\"task.id\">\n    <dt :text=\"task.title\"></dt>\n    <dd>\n      <button s-post=\"/tasks/:key/done\">Complete</button>\n    </dd>\n  </template>\n</dl>"
           },
           {
             "title": "HTML example",
-            "description": "Example extracted from the Silcrow markdown documentation.",
+            "description": "Example from the canonical Silcrow MCP documentation.",
             "code": "<form s-post=\"/todos\" s-target=\"#todo-list\">...</form>\n<ul id=\"todo-list\" s-for=\"todo in todos\" :key=\"todo.id\">...</ul>"
           }
         ],
@@ -2031,5 +2289,10 @@
       ],
       "use_cases": []
     }
-  ]
+  ],
+  "source": {
+    "type": "canonical-json",
+    "path": "mcp/docs.json",
+    "note": "Authoritative Silcrow MCP documentation source. Edit this file directly; do not regenerate from Markdown."
+  }
 }

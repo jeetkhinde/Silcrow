@@ -6,10 +6,10 @@ const path = require("path");
 const { validateDocsManifest } = require("../lib/validate-docs");
 
 const projectRoot = path.resolve(__dirname, "../..");
-const docsJsonPath = path.join(projectRoot, "mcp", "generated", "docs.json");
+const docsJsonPath = path.join(projectRoot, "mcp", "docs.json");
 
 if (!fs.existsSync(docsJsonPath)) {
-  console.error("mcp/generated/docs.json is missing. Run npm run build:docs.");
+  console.error("mcp/docs.json is missing. Restore the canonical MCP docs manifest.");
   process.exit(1);
 }
 

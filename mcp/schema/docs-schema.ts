@@ -5,8 +5,12 @@ export interface SilcrowDocsManifest {
     name: string;
     version: string;
   };
-  generated_at: string;
   docs: SilcrowDoc[];
+  source?: {
+    type: string;
+    path: string;
+    note?: string;
+  };
 }
 
 export interface SilcrowDoc {

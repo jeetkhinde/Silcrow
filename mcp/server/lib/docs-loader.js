@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { buildSearchIndex } from './search-index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_DOCS_PATH = resolve(__dirname, '../../generated/docs.json');
+const DEFAULT_DOCS_PATH = resolve(__dirname, '../../docs.json');
 
 const SUPPORTED_SCHEMA_VERSION = 1;
 

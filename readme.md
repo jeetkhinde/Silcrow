@@ -1,14 +1,8 @@
 # **Silcrow.js**
 
-A lightweight client-side runtime for building hypermedia-driven applications. Silcrow handles DOM patching, client-side navigation, response caching, live SSE and WebSocket connections, optimistic updates, and server-driven UI orchestration — all from declarative HTML attributes.  
+A lightweight client-side runtime for building hypermedia-driven applications. Silcrow handles DOM patching, client-side navigation, response caching, live SSE and WebSocket connections, optimistic updates, a headless atom store, and server-driven UI orchestration from declarative HTML attributes.
+
 Silcrow.js is the frontend counterpart to Pilcrow but operates independently as a standalone library. Any backend that speaks HTTP and returns HTML or JSON can drive it.
-
-## **Table of Contents**
-
-* [Loading](#loading)  
-* [Three Systems](#three-systems)  
-* [Reference Documentation](#reference-documentation)
-* [Compatibility](#compatibility)
 
 ## **Loading**
 
@@ -28,26 +22,27 @@ Enable debug mode by adding `s-debug` to the body:
 
 This enables console warnings and throws on template validation errors.
 
-## **Three Systems**
+## **Systems**
 
-Silcrow.js has three independent systems exposed through a single window.Silcrow API:
+**Runtime** updates DOM text, properties, visibility, classes, attributes, and keyed fragments through colon bindings, `s-use`, and `s-for`.
 
-1. **[Runtime](docs/runtime.md)** — Reactive data binding via colon-shorthands (`:text`, `:value`, `:show`), spread binding with `s-use`, and fragment-aware `s-for` loops with keyed reconciliation. Data flows through middleware → toast extraction → smart unwrapping before patching.
+**Atoms** provide a framework-agnostic reactive store for route data, stream data, user-named scopes, SSR seeds, and `s-bind` DOM subscriptions.
 
-2. **[Navigator](docs/navigator.md)** — Client-side routing, history management, and response caching via verb attributes (`s-get`, `s-post`, `s-put`, `s-patch`, `s-delete`). Supports implicit targeting, `:key` interpolation, server-driven headers, preloading, and form serialization.
+**Navigator** handles client-side routing, mutations, response caching, history, forms, preloading, `:key` URL interpolation, and server-driven response headers through `s-get`, `s-post`, `s-put`, `s-patch`, and `s-delete`.
 
-3. **[Live](docs/live.md)** — SSE and WebSocket connections via `s-sse` and `s-ws` attributes. Hub-based connection sharing, automatic reconnection with exponential backoff, and structured message formats for patches, HTML swaps, invalidation, and navigation.
+**Live** manages SSE and WebSocket connections through `s-sse`, `s-ws`, and `s-wss`, including connection sharing, reconnection, patches, swaps, invalidation, navigation, and custom events.
 
-**[Optimistic Updates](docs/optimistic.md)** — Snapshot & revert for instant UI feedback. Works with the Live and Navigator systems.
+**Optimistic** stages instant UI updates and can revert them if the server request fails.
 
 ## **Reference Documentation**
 
-Silcrow's complete feature set is documented in the following reference guides:
+The canonical Silcrow reference is the structured MCP manifest at `mcp/docs.json`. The MCP server exposes it through `searchDocs`, `getDoc`, `getSection`, `getExamples`, and `analyzeSilcrowUsage`.
 
-* **[HTML Attributes & Keywords](docs/attributes.md)** — Data-binding, fetch triggers, loops, and visual indicators.
-* **[HTTP Headers](docs/http-headers.md)** — Server-sent headers for orchestrating UI patches, invalidations, navigation, and live streams.
-* **[Events](docs/events.md)** — All custom lifecycle events dispatched and consumed by the runtime.
-* **[JavaScript API](docs/javascript-api.md)** — The public methods on `window.Silcrow` to execute logic programmatically.
+Validate the manifest with:
+
+```bash
+npm run test:docs
+```
 
 ## **Compatibility**
 

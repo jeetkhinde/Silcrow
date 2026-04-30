@@ -241,6 +241,15 @@ function connectSseHub(hub) {
         ? hub.subscribers.values().next().value
         : document.body;
       applyLivePatchPayload(payload, fallback);
+
+      // Mirror into stream atom for headless subscribers (React/Solid/etc.)
+      const atomData =
+        payload && typeof payload === "object" && !Array.isArray(payload) &&
+        Object.prototype.hasOwnProperty.call(payload, "target") &&
+        Object.prototype.hasOwnProperty.call(payload, "data")
+          ? payload.data
+          : payload;
+      getOrCreateAtom(streamAtoms, hub.url, undefined).patch(atomData);
     } catch (err) {
       warn("Failed to parse SSE message: " + err.message);
     }
@@ -263,6 +272,10 @@ function connectSseHub(hub) {
       }
 
       if (target && data !== undefined) patch(data, target);
+
+      if (data !== undefined) {
+        getOrCreateAtom(streamAtoms, hub.url, undefined).patch(data);
+      }
     } catch (err) {
       warn("Failed to parse SSE patch event: " + err.message);
     }

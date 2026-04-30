@@ -150,6 +150,7 @@ function dispatchWsMessage(hub, rawData) {
         for (const el of targets) {
           patch(msg.data, el);
         }
+        getOrCreateAtom(streamAtoms, hub.url, undefined).patch(msg.data);
       }
     } else if (type === "html") {
       for (const el of targets) {
