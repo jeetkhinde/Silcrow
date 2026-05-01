@@ -4,16 +4,7 @@
   "description": "A lightweight client-side runtime for hypermedia-driven applications",
   "main": "dist/silcrow.js",
   "scripts": {
-    "postinstall": "npm install --prefix mcp/server --no-fund --silent",
-    "build": "node build.js",
-    "build:docs": "node mcp/scripts/test-docs.js",
-    "test:docs": "node mcp/scripts/test-docs.js",
-    "watch": "node build.js --watch",
-    "mcp": "node mcp/server/server.js",
-    "mcp:reload": "pkill -SIGHUP -f 'mcp/server/server.js' && echo 'MCP server reloaded' || echo 'No running MCP server found'",
-    "mcp:redoc": "npm run test:docs && npm run mcp:reload",
-    "mcp:test": "node mcp/server/test/smoke.js && node mcp/server/test/tools.js && node mcp/server/test/analyze.js",
-    "validate:docs": "node mcp/scripts/test-docs.js"
+    "build": "node build.js"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",

@@ -1,102 +1,73 @@
 
 const fs = require("fs");
 const path = require("path");
+const {minify} = require("terser");
+const zlib = require("zlib");
 
-// ── Source files in dependency order ────────────────────────
-const SOURCE_ORDER = [
-  "debug.js",
-  "url-safety.js",
-  "safety.js",
-  "toasts.js",
-  "atoms.js",
-  "patcher.js",
-  "live.js",
-  "ws.js",
-  "navigator.js",
-  "optimistic.js",
-  "index.js",
-];
 
 const srcDir = path.join(__dirname, "src");
+const srcFile = path.join(srcDir, "silcrow.js");
 const distDir = path.join(__dirname, "dist");
+const distFile = path.join(distDir, "silcrow.js");
+const minFile = path.join(distDir, "silcrow.min.js");
 const pilcrowRuntimeAssetsDir = path.resolve(
   __dirname,
   "../pilcrow/crates/runtime/assets"
 );
 
-// ── Concatenate sources ────────────────────────────────────
-const parts = SOURCE_ORDER.map((file) => {
-  const filePath = path.join(srcDir, file);
-  if (!fs.existsSync(filePath)) {
-    console.error(`Missing source file: ${file}`);
-    process.exit(1);
-  }
-  return fs.readFileSync(filePath, "utf8");
-});
+async function build() {
+  const source = fs.readFileSync(srcFile, "utf8");
 
-const banner = `// Silcrow.js — Hypermedia Runtime\n// Built: ${new Date().toISOString()}\n`;
-const concatenated = parts.join("\n");
-const wrapped = `${banner}(function(){\n"use strict";\n${concatenated}\n})();\n`;
+  const banner = `// Silcrow.js — Hypermedia Runtime\n// Built: ${new Date().toISOString()}`;
 
-// ── Ensure dist/ exists ────────────────────────────────────
-fs.mkdirSync(distDir, { recursive: true });
-
-// ── Write unminified bundle ────────────────────────────────
-const outFile = path.join(distDir, "silcrow.js");
-fs.writeFileSync(outFile, wrapped);
-console.log(`✓ dist/silcrow.js (${(Buffer.byteLength(wrapped) / 1024).toFixed(1)} KB)`);
-
-// ── Write minified bundle via Terser ──────────────────────
-const { minify } = require("terser");
-const zlib = require("zlib");
-
-(async function finalize() {
-  const minResult = await minify(wrapped, {
+  const minResult = await minify(source, {
     ecma: 2020,
     compress: {
-      passes:2,
+      passes: 2,
       unsafe: false,
-      drop_console: true
+      drop_console: true,
     },
     mangle: {
       toplevel: true,
     },
     format: {
-      preamble: banner.trim(),
-      comments: false
-    }
+      preamble: banner,
+      comments: false,
+    },
   });
 
+  fs.copyFileSync(srcFile, distFile);
+
   const minified = minResult.code;
-  const minFile = path.join(distDir, "silcrow.min.js");
   fs.writeFileSync(minFile, minified);
 
   const rawKb = (Buffer.byteLength(minified) / 1024).toFixed(1);
   const gzKb = (zlib.gzipSync(minified).length / 1024).toFixed(1);
   const brKb = (zlib.brotliCompressSync(minified).length / 1024).toFixed(1);
 
-  console.log(`✓ dist/silcrow.min.js (${rawKb} KB raw | ${gzKb} KB gzip | ${brKb} KB brotli)`);
+  // Log results
+  // copied file from src to dist as it is, then log the minified file size and the gzipped/brotli sizes
+  console.log(`✓ ${path.relative(__dirname, distFile)} ${rawKb} KB  (copied from ${path.relative(__dirname, srcFile)})`);
 
-  // ── Mirror minified runtime into Pilcrow assets ────────────
-  fs.mkdirSync(pilcrowRuntimeAssetsDir, { recursive: true });
-  const pilcrowAssetFile = path.join(pilcrowRuntimeAssetsDir, "silcrow.js");
-  fs.copyFileSync(minFile, pilcrowAssetFile);
-  console.log(`✓ ${path.relative(__dirname, pilcrowAssetFile)} (from dist/silcrow.min.js)`);
+  console.log(`✓ ${path.relative(__dirname, minFile)} (${rawKb} KB raw | ${gzKb} KB gzip | ${brKb} KB brotli)`);
 
-  // ── Watch mode ─────────────────────────────────────────────
+  // Mirror minified runtime into Pilcrow assets
+  if (fs.existsSync(pilcrowRuntimeAssetsDir)) {
+    const pilcrowAssetFile = path.join(pilcrowRuntimeAssetsDir, "silcrow.js");
+    fs.copyFileSync(minFile, pilcrowAssetFile);
+    console.log(`✓ ${path.relative(__dirname, pilcrowAssetFile)} (from dist/silcrow.min.js)`);
+  }
+}
+
+build().then(() => {
   if (process.argv.includes("--watch")) {
-    console.log("\nWatching src/ for changes...");
-    fs.watch(srcDir, { recursive: true }, (event, filename) => {
-      if (!filename?.endsWith(".js")) return;
-      console.log(`\n⟳ ${filename} changed, rebuilding...`);
-      try {
-        require("child_process").execSync("node build.js", {
-          stdio: "inherit",
-          cwd: __dirname,
-        });
-      } catch (e) {
-        console.error("Build failed:", e.message);
-      }
+    console.log("\nWatching dist/silcrow.js for changes...");
+    fs.watch(srcFile, () => {
+      console.log("\n⟳ silcrow.js changed, rebuilding...");
+      build().catch(console.error);
     });
   }
-})().catch(err => { console.error("Minification failed:", err); process.exit(1); });
+}).catch(err => {
+  console.error("Build failed:", err);
+  process.exit(1);
+});

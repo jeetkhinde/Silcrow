@@ -1,88 +1,86 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code (claude.ai/code) when working in this repository.
 
-## Setup
+> **Before writing any Silcrow code, read [`docs/silcrow-api.md`](docs/silcrow-api.md).** It contains the complete directive, attribute, header, event, and API surface. Treat it as authoritative — do not infer behavior from the source when the reference covers it.
+
+---
+
+## Project at a glance
+
+Silcrow.js is a zero-dependency, single-file client-side library for hypermedia-driven UIs. It ships as an IIFE via `<script src="silcrow.js" defer>` and exposes `window.Silcrow`. The canonical source is `src/silcrow.js` — a self-contained strict-mode IIFE.
+
+**Five subsystems, usable independently:**
+
+- **Runtime** — DOM patching via colon bindings (`:text`, `:class`, etc.), `s-use` spread, `s-for` keyed lists
+- **Atoms** — framework-agnostic reactive store with `route:`, `stream:`, and custom scopes; powers React/Solid/Vue/Svelte adapters
+- **Navigator** — client-side routing via `s-get`/`s-post`/`s-put`/`s-patch`/`s-delete`, response caching, history, preloading
+- **Live** — SSE (`s-sse`) and WebSocket (`s-ws`/`s-wss`) with hub-based connection sharing and exponential backoff
+- **Optimistic** — DOM snapshot/revert for instant UI feedback
+
+Bootstrap auto-runs on `DOMContentLoaded`: registers global listeners (click, submit, popstate, mouseenter), seeds atoms from SSR data, initializes live elements and `s-bind` subscriptions, starts a MutationObserver for cleanup, and assembles the public `window.Silcrow` API. Middleware registration is locked after init.
+
+---
+
+## Commands
 
 ```bash
-npm install          # also installs mcp/server deps via postinstall
+npm install
+
+npm run build       # src/silcrow.js -> dist/silcrow.js + dist/silcrow.min.js
+npm run watch       # rebuild on src/ changes
 ```
 
-## Build Commands
+`build.js` reads `src/silcrow.js` and emits both `dist/silcrow.js` (unminified) and `dist/silcrow.min.js` (Terser, ES2020).
 
-```bash
-npm run build        # Bundle src/ -> dist/silcrow.js + dist/silcrow.min.js
-npm run watch        # Rebuild on source changes
-npm run build:docs   # Compatibility alias: validate canonical mcp/docs.json
-npm run test:docs    # Validate canonical mcp/docs.json
-npm run mcp          # Start the MCP server (stdio transport)
-npm run mcp:reload   # Send SIGHUP to reload docs without restarting
-npm run mcp:redoc    # test:docs then mcp:reload in one step
-npm run mcp:test     # Run all MCP server tests
-```
+**Edit `src/silcrow.js` as the single source of truth.** Do not edit anything in `dist/` — it is generated.
 
-The build (`build.js`) concatenates source files in strict dependency order, wraps them in a strict-mode IIFE, and produces both unminified and minified bundles with Terser at ES2020 target.
+---
 
-## Architecture
-
-Silcrow is a zero-dependency, single-file client-side library for hypermedia-driven UIs. It ships as an IIFE via `<script src="silcrow.js" defer>` and exposes `window.Silcrow`. The source is split into orthogonal systems that are concatenated at build time.
-
-### Source dependency order (critical for build)
+## Repo layout
 
 ```
-debug.js -> url-safety.js -> safety.js -> toasts.js
--> patcher.js -> atoms.js -> live.js -> ws.js -> navigator.js -> optimistic.js -> index.js
+src/
+  silcrow.js            ← canonical source (edit here)
+dist/
+  silcrow.js            ← generated, committed
+  silcrow.min.js        ← generated, committed
+docs/
+  silcrow-api.md        ← full API surface — READ FIRST
+build.js
+CLAUDE.md
+README.md
 ```
 
-### Main systems
+---
 
-**Runtime** (`src/patcher.js`)  
-DOM patching and reactive data binding. Drives colon-shorthand attributes (`:text`, `:value`, `:show`, `:class`), spread binding via `s-use`, and keyed list reconciliation via `s-for`. Protects against prototype pollution by blocking `__proto__`, `constructor`, and `prototype` keys.
+## Conventions
 
-**Atoms** (`src/atoms.js`)  
-Framework-agnostic reactive store used by route, stream, and user-named scopes. Exposes `Silcrow.prefetch`, `submit`, `subscribe`, `snapshot`, and `publish`, plus `s-bind` for vanilla DOM subscriptions.
+- **Attribute-first.** Behavior is declared in HTML, not configured in JS. New features should expose an attribute before exposing a JS method.
+- **Subsystem independence.** Runtime, Atoms, Navigator, Live, and Optimistic must each remain usable without the others.
+- **Single source of truth.** `src/silcrow.js` is canonical. The files in `dist/` are generated build artifacts. When you add or remove a public API (any `s-*` attribute, `:binding`, response header, event, or `Silcrow.*` method), update `docs/silcrow-api.md` in the same change.
+- **Security defaults are not optional.** Sanitization, URL protocol validation, prototype-pollution blocking, same-origin Live, and `_blank` rel hardening are part of the contract. Do not bypass them for convenience.
+- **No dependencies in `src/silcrow.js`.** It must remain a self-contained IIFE.
 
-**Navigator** (`src/navigator.js`)  
-Client-side routing and history management. Driven by HTTP verb attributes: `s-get`, `s-post`, `s-put`, `s-patch`, `s-delete`. Handles form serialization, `:key` URL interpolation, implicit target resolution, response caching, mouseenter preloading, and server-driven response headers.
+---
 
-**Live** (`src/live.js` + `src/ws.js`)  
-Real-time communication. `s-sse` drives SSE connections; `s-ws` and `s-wss` drive bidirectional WebSocket. Both use hub-based connection sharing and exponential backoff reconnection. Incoming messages may carry patches, HTML swaps, invalidation signals, navigation instructions, or custom events.
+## Known issues
 
-**Optimistic** (`src/optimistic.js`)  
-Snapshot/revert for instant UI feedback. Works alongside Navigator and Live to stage changes before server confirmation and roll back on failure.
+### WebSocket path is broken — avoid until fixed
 
-### Bootstrap (`src/index.js`)
+`registerLiveState` and `unregisterLiveState` are called in four places in `src/silcrow.js` (in `openWsLive`, `unsubscribeWs`, the SSE→WS switching path, and the MutationObserver cleanup) but are **never defined**. Any code path that touches WebSocket subscription will throw a `ReferenceError`.
 
-Auto-initializes on `DOMContentLoaded`. Registers global event listeners (click, submit, popstate, mouseenter), seeds atoms from SSR data, initializes live elements and `s-bind` subscriptions, and starts a MutationObserver for live/atom cleanup. This is the only place where the public `window.Silcrow` API surface is assembled.
+**When working on Silcrow:**
 
-## MCP Server
+- Do not write examples, tests, or docs that exercise `s-ws`, `s-wss`, or `Silcrow.send` until these helpers are added.
+- If asked to fix the WS path, the missing functions need to register/unregister a state object in `liveConnections` and `liveConnectionsByUrl` — mirror the SSE bookkeeping in `openLive`/`unsubscribeSse`.
+- SSE (`s-sse`) is unaffected and works.
 
-`mcp/server/` is a production MCP server that exposes the canonical Silcrow docs as a queryable API.
+This bug is **not** documented in the user-facing README or `docs/silcrow-api.md` — keep it that way until fixed.
 
-**Canonical docs source:** `mcp/docs.json`. Edit this structured JSON directly when docs change. The old Markdown docs pipeline has been removed to prevent source drift.
+---
 
-**Tools:** `searchDocs(query)`, `getDoc(id)`, `getSection(id)`, `getExamples(topic)`, `analyzeSilcrowUsage(code)`
+## When in doubt
 
-**Architecture:**
-- `lib/docs-loader.js` — loads `mcp/docs.json` once at startup, builds two Fuse.js indices (docs + flattened sections), exposes a frozen singleton store
-- `lib/search-index.js` — Fuse index construction; docs weighted title 35% / tags 25% / summary 20%
-- `lib/silcrow-catalog.js` — maps every known `s-*` attribute, `:binding`, and `Silcrow.*` API method to a doc ID; keep aligned with `src/index.js`
-- `lib/code-parser.js` — regex extractor for Silcrow constructs in HTML/JS (returns `Map<name, count>`)
-- `lib/analysis-rules.js` — static analysis rules for unknown attrs, deprecated patterns, missing `:key`, multiple HTTP verbs, security notes, and unknown APIs
-- `tools/` — one file per MCP tool; each exports `definition` (MCP schema) and `handler(args, store)`
-
-**Docs path override** (for multi-project reuse):
-```bash
-node mcp/server/server.js --docs /path/to/other/docs.json
-# or
-SILCROW_DOCS_PATH=/path/to/other/docs.json npm run mcp
-```
-
-When `mcp/docs.json` changes, run `npm run test:docs` before reloading the server.
-
-## Key conventions
-
-- Features are attribute-first: behavior is declared in HTML, not configured in JS.
-- Runtime, Atoms, Navigator, Live, and Optimistic are designed to be used independently.
-- Dist files are committed (`dist/silcrow.js`, `dist/silcrow.min.js`); always rebuild before committing source changes.
-- Keep `mcp/docs.json`, `mcp/server/lib/silcrow-catalog.js`, and `src/index.js` aligned whenever public APIs change.
+1. Read `docs/silcrow-api.md` for the surface.
+2. Check `src/silcrow.js` for actual behavior.
