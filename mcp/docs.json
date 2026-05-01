@@ -52,7 +52,13 @@
           "summary": "Why to use: To observe an atom from a framework adapter or vanilla JS.",
           "content": "Why to use: To observe an atom from a framework adapter or vanilla JS.\nWhen to use: Power React's useSyncExternalStore, Solid's createStore source, Vue's customRef, or any custom subscriber. Returns an unsubscribe function.\nHow to use:",
           "examples": {
-            "html": [],
+            "html": [
+              {
+                "title": "React useSyncExternalStore adapter",
+                "description": "The core adapter shape for React hooks. Pilcrow React islands provide this as useSilcrowAtom from pilcrow/react.",
+                "code": "import { useSyncExternalStore } from \"react\";\n\nexport function useSilcrowAtom(scope, initialValue) {\n  return useSyncExternalStore(\n    (notify) => window.Silcrow?.subscribe(scope, notify) ?? (() => {}),\n    () => window.Silcrow?.snapshot(scope) ?? initialValue,\n    () => window.Silcrow?.snapshot(scope) ?? initialValue,\n  );\n}"
+              }
+            ],
             "json": []
           }
         },
@@ -85,7 +91,13 @@
           "summary": "Why to use: To fetch a route ahead of navigation and memoize the resulting Promise.",
           "content": "Why to use: To fetch a route ahead of navigation and memoize the resulting Promise.\nWhen to use: Together with React 19's use() hook, or in route preloading flows. Returns the same Promise instance for repeated calls until error, mutation, or explicit invalidation — so use() will not enter a suspense loop.\nHow to use:",
           "examples": {
-            "html": [],
+            "html": [
+              {
+                "title": "React 19 use() with Silcrow.prefetch",
+                "description": "Framework adapters can pass Silcrow.prefetch(path) to React 19 use(). In Pilcrow React islands, prefer the built-in hooks from pilcrow/react.",
+                "code": "import { Suspense, use, useMemo } from \"react\";\n\nfunction ProductRows({ promise }) {\n  const data = use(promise);\n  return <ul>{data.items.map((item) => <li key={item.id}>{item.name}</li>)}</ul>;\n}\n\nexport default function ProductPanel({ path = \"/products\" }) {\n  const promise = useMemo(() => window.Silcrow.prefetch(path), [path]);\n  return <Suspense fallback={<p>Loading...</p>}><ProductRows promise={promise} /></Suspense>;\n}"
+              }
+            ],
             "json": []
           }
         },
@@ -96,7 +108,13 @@
           "summary": "Why to use: Async form/action submit returning the parsed result.",
           "content": "Why to use: Async form/action submit returning the parsed result.\nWhen to use: Backing implementation for useActionState-style flows. Returns { ok, status, data, html, headers }. On non-GET methods it busts the response cache and any matching prefetch promise; respects the silcrow-invalidate response header.\nHow to use:\n---",
           "examples": {
-            "html": [],
+            "html": [
+              {
+                "title": "React action wrapper over Silcrow.submit",
+                "description": "React adapters can wrap Silcrow.submit in useActionState. Pilcrow React islands expose this as useSilcrowAction from pilcrow/react.",
+                "code": "import { useActionState } from \"react\";\n\nfunction useSubmitAction(url, initialState) {\n  return useActionState(async (prev, formData) => {\n    const result = await window.Silcrow.submit(url, formData, { method: \"POST\" });\n    return result.data ?? prev;\n  }, initialState);\n}"
+              }
+            ],
             "json": []
           }
         },
