@@ -951,6 +951,25 @@ function applyLivePatchPayload(payload, fallbackTarget) {
 
 
 
+function registerLiveState(state) {
+  liveConnections.set(state.element, state);
+  let byUrl = liveConnectionsByUrl.get(state.url);
+  if (!byUrl) {
+    byUrl = new Set();
+    liveConnectionsByUrl.set(state.url, byUrl);
+  }
+  byUrl.add(state);
+}
+
+function unregisterLiveState(state) {
+  if (liveConnections.get(state.element) === state) liveConnections.delete(state.element);
+  const byUrl = liveConnectionsByUrl.get(state.url);
+  if (byUrl) {
+    byUrl.delete(state);
+    if (byUrl.size === 0) liveConnectionsByUrl.delete(state.url);
+  }
+}
+
 function pauseLiveState(state) {
   state.paused = true;
   if (state.protocol !== "ws" && state.hub) {
@@ -1665,6 +1684,29 @@ function getTarget(el) {
   return el; // Ultimate fallback: target the triggering element
 }
 
+// ── Boost helpers ──────────────────────────────────────────
+function isSafeBoostHref(anchor) {
+  const href = anchor.getAttribute("href");
+  if (!href || href.startsWith("#")) return false;
+  if (anchor.hasAttribute("download")) return false;
+  if (anchor.getAttribute("target") === "_blank") return false;
+  try {
+    const url = new URL(href, location.origin);
+    return url.origin === location.origin;
+  } catch (e) {
+    return false;
+  }
+}
+
+function getBoostTarget(boostEl) {
+  const sel = boostEl.getAttribute("s-target");
+  if (sel) {
+    const t = document.querySelector(sel);
+    if (t) return t;
+  }
+  return document.body;
+}
+
 // ── Timeout Resolution ─────────────────────────────────────
 function getTimeout(el) {
   const val = el?.getAttribute("s-timeout");
@@ -2055,28 +2097,46 @@ async function navigate(url, options = {}) {
   }
 }
 
-// ── Click Handler (opt-in: verb attributes) ────────────────
+// ── Click Handler (opt-in: verb attributes + s-boost) ──────
 async function onClick(e) {
   if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
   if (e.button !== 0) return;
-
   if (!e.target || typeof e.target.closest !== "function") return;
+
+  // 1. Opt-in verb attribute elements (s-get, s-post, etc.)
   const el = e.target.closest(VERB_SELECTOR);
-  if (!el || el.tagName === "FORM") return;
+  if (el && el.tagName !== "FORM") {
+    e.preventDefault();
+    const verb = resolveVerb(el);
+    if (!verb) return;
+    const inflight = preloadInflight.get(verb.url);
+    if (inflight) await inflight;
+    navigate(verb.url, {
+      method: verb.method,
+      target: getTarget(el),
+      skipHistory: el.hasAttribute("s-skip-history"),
+      sourceEl: el,
+      trigger: "click",
+    });
+    return;
+  }
+
+  // 2. s-boost: intercept plain <a href> inside boosted containers
+  const anchor = e.target.closest("a[href]");
+  if (!anchor || !isSafeBoostHref(anchor)) return;
+  const boostEl = anchor.closest("[s-boost]");
+  if (!boostEl) return;
 
   e.preventDefault();
-
-  const verb = resolveVerb(el);
-  if (!verb) return;
-
-  const inflight = preloadInflight.get(verb.url);
+  const boostedUrl = new URL(anchor.getAttribute("href"), location.origin).href;
+  const inflight = preloadInflight.get(boostedUrl);
   if (inflight) await inflight;
 
-  navigate(verb.url, {
-    method: verb.method,
-    target: getTarget(el),
-    skipHistory: el.hasAttribute("s-skip-history"),
-    sourceEl: el,
+  navigate(boostedUrl, {
+    method: "GET",
+    target: getBoostTarget(boostEl),
+    skipHistory: anchor.hasAttribute("s-skip-history"),
+    sourceEl: anchor,
     trigger: "click",
   });
 }
@@ -2139,16 +2199,10 @@ function onPopState(e) {
 }
 
 // ── Preload Handler ────────────────────────────────────────
-function onMouseEnter(e) {
-  if (!e.target || typeof e.target.closest !== "function") return;
-  const el = e.target.closest("[s-preload]");
-  if (!el) return;
-
-  const verb = resolveVerb(el);
-  if (!verb || responseCache.has(verb.url) || preloadInflight.has(verb.url)) return;
+function startPreload(url, wantsHTML) {
+  if (responseCache.has(url) || preloadInflight.has(url)) return;
   const controller = new AbortController();
-  const wantsHTML = el.hasAttribute("s-html");
-  const promise = fetch(verb.url, {
+  const promise = fetch(url, {
     headers: {"silcrow-target": "true", "Accept": wantsHTML ? "text/html" : "application/json"},
     signal: controller.signal,
   })
@@ -2160,13 +2214,30 @@ function onMouseEnter(e) {
     })
     .then(({text, contentType, cacheControl}) => {
       if (cacheControl !== "no-cache") {
-        cacheSet(verb.url, {text, contentType, ts: Date.now()});
+        cacheSet(url, {text, contentType, ts: Date.now()});
       }
     })
     .catch(() => {})
-    .finally(() => preloadInflight.delete(verb.url));
+    .finally(() => preloadInflight.delete(url));
+  preloadInflight.set(url, promise);
+}
 
-  preloadInflight.set(verb.url, promise);
+function onMouseEnter(e) {
+  if (!e.target || typeof e.target.closest !== "function") return;
+  const el = e.target.closest("[s-preload]");
+  if (!el) return;
+
+  const verb = resolveVerb(el);
+  if (verb) {
+    startPreload(verb.url, el.hasAttribute("s-html"));
+    return;
+  }
+
+  // s-boost: preload plain anchors with s-preload inside boosted containers
+  if (el.tagName === "A" && isSafeBoostHref(el) && el.closest("[s-boost]")) {
+    const url = new URL(el.getAttribute("href"), location.origin).href;
+    startPreload(url, el.hasAttribute("s-html"));
+  }
 }
 
 // /optimistic.js
