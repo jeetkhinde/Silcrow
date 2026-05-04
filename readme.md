@@ -120,6 +120,7 @@ GET responses are cached for 5 minutes (max 50 entries); mutations bust the cach
 | `silcrow-trigger` | JSON `{eventName: detail, ...}` dispatched on document |
 | `silcrow-sse` / `silcrow-ws` | Open a live connection after this response |
 | `silcrow-cache` | `no-cache` to skip caching |
+| `silcrow-full-reload` | `true` to make top-level boosted GETs fall back to browser navigation |
 
 ### 3. Live — SSE and WebSockets
 

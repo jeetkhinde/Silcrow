@@ -1971,6 +1971,15 @@ async function navigate(url, options = {}) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
+      if (
+        method === "GET" &&
+        !targetSelector &&
+        response.headers.get("silcrow-full-reload") === "true"
+      ) {
+        window.location.assign(response.url || fullUrl);
+        return;
+      }
+
       const headerResult = processResponseHeaders(response, fullUrl);
       redirected = headerResult.redirected;
       finalUrl = headerResult.finalUrl;
@@ -2208,11 +2217,14 @@ function startPreload(url, wantsHTML) {
   })
     .then((r) => {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      if (r.headers.get("silcrow-full-reload") === "true") return null;
       const contentType = r.headers.get("Content-Type") || "";
       const cacheControl = r.headers.get("silcrow-cache");
       return r.text().then((text) => ({text, contentType, cacheControl}));
     })
-    .then(({text, contentType, cacheControl}) => {
+    .then((entry) => {
+      if (!entry) return;
+      const {text, contentType, cacheControl} = entry;
       if (cacheControl !== "no-cache") {
         cacheSet(url, {text, contentType, ts: Date.now()});
       }

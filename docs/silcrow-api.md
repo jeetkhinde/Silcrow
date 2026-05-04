@@ -60,6 +60,7 @@
 - `silcrow-retarget`
 - `silcrow-push`
 - `silcrow-cache`
+- `silcrow-full-reload`
 
 ---
 
