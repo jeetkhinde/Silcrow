@@ -124,8 +124,9 @@ function hardenBlankTargets(node) {
   node.setAttribute("rel", Array.from(relTokens).join(" "));
 }
 
-function sanitizeTree(root) {
+function sanitizeTree(root, options = {}) {
   for (const tag of FORBIDDEN_HTML_TAGS) {
+    if (tag === "style" && options.allowStyleTags) continue;
     for (const node of root.querySelectorAll(tag)) {
       node.remove();
     }
@@ -163,20 +164,20 @@ function sanitizeTree(root) {
   }
 
   for (const tpl of root.querySelectorAll("template")) {
-    sanitizeTree(tpl.content);
+    sanitizeTree(tpl.content, options);
   }
 }
 
-function safeSetHTML(el, raw) {
+function safeSetHTML(el, raw, options = {}) {
   const markup = raw == null ? "" : String(raw);
 
-  if (el.setHTML) {
+  if (el.setHTML && !options.allowStyleTags) {
     el.setHTML(markup);
     return;
   }
 
   const doc = new DOMParser().parseFromString(markup, "text/html");
-  sanitizeTree(doc.body);
+  sanitizeTree(doc.body, options);
 
   el.innerHTML = doc.body.innerHTML;
 }
@@ -1912,6 +1913,15 @@ function finalizeNavigation(ctx) {
       detail: {url: finalUrl, target: targetEl, redirected},
     })
   );
+
+  // Re-initialize any [s-sse] elements that arrived in the swapped content.
+  // The MutationObserver cleans up removed elements; this connects the new ones.
+  if (targetEl) {
+    targetEl.querySelectorAll("[s-sse]").forEach(function (el) {
+      const url = el.getAttribute("s-sse");
+      if (url) openLive(el, url);
+    });
+  }
 }
 
 // ── Core Navigate ──────────────────────────────────────────
@@ -2037,7 +2047,9 @@ async function navigate(url, options = {}) {
       if (isJSON) {
         patch(swapContent, targetEl);
       } else {
-        safeSetHTML(targetEl, swapContent);
+        safeSetHTML(targetEl, swapContent, {
+          allowStyleTags: method === "GET" && !targetSelector && targetEl === document.body,
+        });
       }
     };
 
@@ -2334,6 +2346,24 @@ function init() {
   // 1b. Vanilla scope bindings (s-bind="scope")
   initScopeBindings();
 
+  // 1c. Pilcrow live-prop patch events — updates [data-pilcrow-live-field] text nodes.
+  // Delegates to window.__pilcrow_live_patch if defined (injected by Pilcrow's head shim),
+  // otherwise falls back to direct DOM patching so s-boost navigation also works.
+  document.addEventListener("silcrow:sse:live", function (e) {
+    const data = e.detail && e.detail.data;
+    if (!data || typeof data !== "object" || Array.isArray(data)) return;
+    if (typeof window.__pilcrow_live_patch === "function") {
+      window.__pilcrow_live_patch(data);
+    } else {
+      Object.keys(data).forEach(function (k) {
+        const v = data[k];
+        document.querySelectorAll('[data-pilcrow-live-field="' + k + '"]').forEach(function (n) {
+          n.textContent = v == null ? "" : String(v);
+        });
+      });
+    }
+  });
+
   // 2. Fragment-Aware Mutation Observer
   // Tracks live connections AND atom subscriptions for removed nodes,
   // so that detaching an element releases all its references.
@@ -2370,6 +2400,12 @@ function init() {
   });
 
   liveObserver.observe(document.body, {childList: true, subtree: true});
+
+  // Drain any streaming patch data that arrived before Silcrow loaded (defer timing).
+  if (window.__psData) {
+    patch(window.__psData, document.body);
+    delete window.__psData;
+  }
 
   // Fix 6: Lock middleware pipeline after initialization
   middlewareLocked = true;
